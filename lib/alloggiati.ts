@@ -176,8 +176,8 @@ export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
     const dataNascita = formatDataIT(a.data_nascita);
 
     const statoNascitaCode = codicePaeseSanitizzato(a.stato_nascita);
-    // Nato in Italia: stato blank, comune = codice ISTAT, provincia = 2 char
-    // Nato all'estero: stato = Z-code, comune blank, provincia blank
+    // Nato in Italia: stato = 100000100, comune = codice ISTAT, provincia = 2 char
+    // Nato all'estero: stato = codice paese, comune blank, provincia blank
     const isBornInItaly = !statoNascitaCode || statoNascitaCode === '100000100';
 
     let comuneNascita: string;
@@ -185,7 +185,7 @@ export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
     let statoNascita: string;
 
     if (isBornInItaly) {
-      statoNascita = pad('', 9);
+      statoNascita = pad('100000100', 9);
       const comuneNascitaClean = a.comune_nascita.trim().replace(/\s*\([A-Z]{1,3}\)\s*$/i, '').trim();
       const rawComune = /^\d{9}$/.test(a.comune_nascita.trim())
         ? a.comune_nascita.trim()
