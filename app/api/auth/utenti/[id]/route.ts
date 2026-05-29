@@ -6,14 +6,19 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { password } = await request.json();
+  const body = await request.json();
 
   const utenti = await leggiUtenti();
   const u = utenti.find((u) => u.id === id);
   if (!u) return NextResponse.json({ error: 'Non trovato' }, { status: 404 });
 
-  u.salt = nuovoSalt();
-  u.hash = hashPassword(password, u.salt);
+  if (body.password) {
+    u.salt = nuovoSalt();
+    u.hash = hashPassword(body.password, u.salt);
+  }
+  if ('solo_calendario' in body) {
+    u.solo_calendario = body.solo_calendario;
+  }
   await salvaUtenti(utenti);
 
   return NextResponse.json({ ok: true });

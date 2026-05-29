@@ -4,9 +4,11 @@ import { leggiPrenotazioni, scriviPrenotazioni } from './db';
 import sql from './postgres';
 import { randomUUID } from 'crypto';
 
+const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
+
 export async function leggiImpostazioni(): Promise<Impostazioni> {
   const rows = await sql`SELECT tipo, chiave, valore FROM impostazioni`;
-  const imp: Impostazioni = { ical_urls: {}, nomi_camere: {} };
+  const imp: Impostazioni = { ical_urls: {}, nomi_camere: {}, prezzi_camere: {}, colori_camere: {}, num_camere: 5 };
   for (const row of rows) {
     const id = Number(row.chiave);
     if (row.tipo === 'ical' && !isNaN(id)) imp.ical_urls[id] = row.valore as string;
@@ -14,6 +16,20 @@ export async function leggiImpostazioni(): Promise<Impostazioni> {
     else if (row.tipo === 'sync' && row.chiave === 'ultimo_sync') imp.ultimo_sync = row.valore as string;
     else if (row.tipo === 'config' && row.chiave === 'google_sheets_abilitato') imp.google_sheets_abilitato = row.valore === 'true';
     else if (row.tipo === 'config' && row.chiave === 'google_sheet_id') imp.google_sheet_id = row.valore as string;
+    else if (row.tipo === 'config' && row.chiave === 'nome_app') imp.nome_app = row.valore as string;
+    else if (row.tipo === 'config' && row.chiave === 'logo_url') imp.logo_url = row.valore as string;
+    else if (row.tipo === 'config' && row.chiave === 'num_camere') imp.num_camere = Number(row.valore);
+    else if (row.tipo === 'camera_price' && !isNaN(id)) imp.prezzi_camere[id] = Number(row.valore);
+    else if (row.tipo === 'camera_color' && !isNaN(id)) imp.colori_camere[id] = row.valore as string;
+  }
+  // Se num_camere non ancora in DB, derivalo dai nomi_camere configurati
+  const maxId = Math.max(0, ...Object.keys(imp.nomi_camere).map(Number));
+  if (!rows.some(r => r.tipo === 'config' && r.chiave === 'num_camere')) {
+    imp.num_camere = maxId > 0 ? maxId : 5;
+  }
+  // Fallback prezzi da default se non in DB
+  for (let i = 1; i <= imp.num_camere; i++) {
+    if (imp.prezzi_camere[i] === undefined) imp.prezzi_camere[i] = DEFAULT_PREZZI[i] ?? 60;
   }
   return imp;
 }
@@ -46,6 +62,36 @@ export async function scriviImpostazioni(imp: Impostazioni): Promise<void> {
   if (imp.google_sheet_id !== undefined) {
     await sql`
       INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('config', 'google_sheet_id', ${imp.google_sheet_id})
+      ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+    `;
+  }
+  if (imp.nome_app !== undefined) {
+    await sql`
+      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('config', 'nome_app', ${imp.nome_app})
+      ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+    `;
+  }
+  if (imp.logo_url !== undefined) {
+    await sql`
+      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('config', 'logo_url', ${imp.logo_url})
+      ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+    `;
+  }
+  if (imp.num_camere !== undefined) {
+    await sql`
+      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('config', 'num_camere', ${String(imp.num_camere)})
+      ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+    `;
+  }
+  for (const [id, prezzo] of Object.entries(imp.prezzi_camere ?? {})) {
+    await sql`
+      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('camera_price', ${id}, ${String(prezzo)})
+      ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+    `;
+  }
+  for (const [id, colore] of Object.entries(imp.colori_camere ?? {})) {
+    await sql`
+      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('camera_color', ${id}, ${colore})
       ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
     `;
   }
@@ -125,7 +171,8 @@ export interface SyncResult {
 
 export async function sincronizzaCalendario(
   cameraId: number,
-  url: string
+  url: string,
+  strutturaId: string
 ): Promise<SyncResult> {
   let testo: string;
 
@@ -133,7 +180,7 @@ export async function sincronizzaCalendario(
     const res = await fetch(url, {
       signal: AbortSignal.timeout(15000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CalendarBot/1.0; +https://affitti-palermo.vercel.app)',
+        'User-Agent': 'Mozilla/5.0 (compatible; CalendarBot/1.0; +https://affitti-brevi.vercel.app)',
         'Accept': 'text/calendar, text/plain, */*',
       },
     });
@@ -148,12 +195,11 @@ export async function sincronizzaCalendario(
   }
 
   const eventiRemoti = parseIcal(testo);
-  const prenotazioni = await leggiPrenotazioni();
+  const prenotazioni = await leggiPrenotazioni(strutturaId);
   const esistentiIcal = prenotazioni.filter(
     (p) => p.camera_id === cameraId && p.fonte === 'ical'
   );
 
-  const uidsRemoti = new Set(eventiRemoti.map((e) => e.uid));
   const daAggiungere: Prenotazione[] = [];
 
   for (const ev of eventiRemoti) {
@@ -171,6 +217,7 @@ export async function sincronizzaCalendario(
 
     daAggiungere.push({
       id: randomUUID(),
+      struttura_id: strutturaId,
       camera_id: cameraId,
       ospite_nome: ospiteNome,
       ospite_telefono: '',
@@ -187,7 +234,7 @@ export async function sincronizzaCalendario(
   }
 
   const aggiornate = [...prenotazioni, ...daAggiungere];
-  await scriviPrenotazioni(aggiornate);
+  await scriviPrenotazioni(aggiornate, strutturaId);
 
   return {
     camera_id: cameraId,
@@ -196,17 +243,17 @@ export async function sincronizzaCalendario(
   };
 }
 
-export async function sincronizzaTutti(): Promise<SyncResult[]> {
-  const imp = await leggiImpostazioni();
+export async function sincronizzaTutti(icalUrls: Record<number, string>, strutturaId: string): Promise<SyncResult[]> {
   const risultati: SyncResult[] = [];
 
-  for (const [idStr, url] of Object.entries(imp.ical_urls)) {
+  for (const [idStr, url] of Object.entries(icalUrls)) {
     if (!url?.trim()) continue;
-    const res = await sincronizzaCalendario(Number(idStr), url);
+    const res = await sincronizzaCalendario(Number(idStr), url, strutturaId);
     risultati.push(res);
   }
 
   try {
+    const imp = await leggiImpostazioni();
     imp.ultimo_sync = new Date().toISOString();
     await scriviImpostazioni(imp);
   } catch {

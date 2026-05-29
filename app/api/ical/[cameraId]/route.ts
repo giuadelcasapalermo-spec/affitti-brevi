@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { leggiPrenotazioni } from '@/lib/db';
-import { CAMERE } from '@/lib/types';
+import { leggiImpostazioni } from '@/lib/ical';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,19 +28,23 @@ export async function GET(
   const { cameraId } = await params;
   // Accetta sia /api/ical/1 che /api/ical/1.ics
   const cameraIdNum = parseInt(cameraId.replace(/\.ics$/i, ''));
-  const camera = CAMERE.find((c) => c.id === cameraIdNum);
 
-  if (!camera) {
+  const imp = await leggiImpostazioni();
+  const numCamere = imp.num_camere ?? 5;
+
+  if (isNaN(cameraIdNum) || cameraIdNum < 1 || cameraIdNum > numCamere) {
     return new NextResponse('Camera non trovata', { status: 404 });
   }
+
+  const cameraNome = imp.nomi_camere[cameraIdNum] ?? `Camera ${cameraIdNum}`;
+  const nomeApp = imp.nome_app || 'Affitti Brevi';
 
   const prenotazioni = (await leggiPrenotazioni()).filter(
     (p) =>
       p.camera_id === cameraIdNum &&
       p.stato !== 'cancellata' &&
       p.fonte !== 'ical' &&
-      !p.note?.includes('BK:') &&
-      !p.note?.includes('Beds24')
+      !p.note?.includes('BK:')
   );
 
   const now = new Date()
@@ -49,7 +53,7 @@ export async function GET(
     .replace(/\.\d{3}/, '');
 
   const eventi = prenotazioni.map((p) => {
-    const uid = p.ical_uid ?? `${p.id}@affitti-palermo`;
+    const uid = p.ical_uid ?? `${p.id}@affitti-brevi`;
     return [
       'BEGIN:VEVENT',
       `UID:${uid}`,
@@ -68,10 +72,10 @@ export async function GET(
   const calendar = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//GiuAdel casa Palermo//IT',
+    `PRODID:-//${nomeApp}//IT`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:${camera.nome} - GiuAdel casa Palermo`,
+    `X-WR-CALNAME:${cameraNome} - ${nomeApp}`,
     `X-WR-TIMEZONE:Europe/Rome`,
     ...eventi,
     'END:VCALENDAR',

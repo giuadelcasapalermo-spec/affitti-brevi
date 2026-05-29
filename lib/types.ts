@@ -2,10 +2,31 @@ export interface Camera {
   id: number;
   nome: string;
   prezzo_notte: number;
+  colore?: string;
+}
+
+export interface AlloggiatiCredentials {
+  utente: string;
+  password: string;
+  wskey: string;
+}
+
+export interface Struttura {
+  id: string;
+  nome: string;
+  indirizzo: string;
+  num_camere: number;
+  nomi_camere: Record<number, string>;
+  prezzi_camere: Record<number, number>;
+  colori_camere: Record<number, string>;
+  ical_urls: Record<number, string>;
+  alloggiati_credentials?: AlloggiatiCredentials;
+  created_at: string;
 }
 
 export interface Prenotazione {
   id: string;
+  struttura_id?: string;
   camera_id: number;
   ospite_nome: string;
   ospite_telefono: string;
@@ -17,7 +38,7 @@ export interface Prenotazione {
   stato: 'confermata' | 'pending' | 'cancellata';
   note: string;
   created_at: string;
-  fonte: 'manuale' | 'ical';
+  fonte: 'manuale' | 'ical' | 'sheet';
   ical_uid?: string;
 }
 
@@ -67,12 +88,29 @@ export interface Entrata {
   created_at: string;
 }
 
+export interface PrezzoPerPeriodo {
+  id: string;
+  struttura_id?: string;
+  camera_id: number;
+  nome_periodo: string;
+  data_inizio: string;   // yyyy-MM-dd
+  data_fine: string;     // yyyy-MM-dd (inclusiva)
+  prezzo_notte: number;
+  created_at: string;
+}
+
 export interface Impostazioni {
   ical_urls: Record<number, string>;
   nomi_camere: Record<number, string>;
+  prezzi_camere: Record<number, number>;
+  colori_camere: Record<number, string>;
+  num_camere: number;
   ultimo_sync?: string;
   google_sheets_abilitato?: boolean;
   google_sheet_id?: string;
+  nome_app?: string;
+  logo_url?: string;
+  checkin_email_days?: number;
 }
 
 export const CAMERE: Camera[] = [
@@ -82,3 +120,33 @@ export const CAMERE: Camera[] = [
   { id: 4, nome: 'Camera 4', prezzo_notte: 65 },
   { id: 5, nome: 'Camera 5', prezzo_notte: 70 },
 ];
+
+export const TIPI_ALLOGGIATO = {
+  '16': 'Ospite Singolo',
+  '17': 'Capo Famiglia',
+  '18': 'Capo Gruppo',
+  '19': 'Familiare',
+  '20': 'Membro Gruppo',
+} as const;
+export type TipoAlloggiato = keyof typeof TIPI_ALLOGGIATO;
+
+export interface Alloggiato {
+  id: string;
+  struttura_id?: string;
+  prenotazione_id?: string;
+  tipo: TipoAlloggiato;
+  data_arrivo: string;
+  permanenza: number;
+  cognome: string;
+  nome: string;
+  sesso: 'M' | 'F';
+  data_nascita: string;
+  comune_nascita: string;
+  provincia_nascita: string;
+  stato_nascita: string;
+  cittadinanza: string;
+  tipo_documento: string;
+  numero_documento: string;
+  luogo_rilascio: string;
+  created_at: string;
+}

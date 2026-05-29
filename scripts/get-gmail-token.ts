@@ -1,12 +1,6 @@
-/**
- * Genera un nuovo refresh token Google con scope Sheets + Gmail.
- * Esegui con: npx tsx scripts/get-gmail-token.ts
- *
- * Prerequisito: Gmail API abilitata su Google Cloud Console.
- */
-
 import { google } from 'googleapis';
 import http from 'http';
+import { exec } from 'child_process';
 import * as dotenv from 'dotenv';
 import path from 'path';
 
@@ -14,11 +8,12 @@ dotenv.config({ path: path.join(process.cwd(), '.env.local') });
 
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID!;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
-const REDIRECT_URI  = 'http://localhost:8080/callback';
+const REDIRECT_URI  = 'http://localhost:4242/callback';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
 ];
 
 const oauth2 = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
@@ -29,17 +24,19 @@ const authUrl = oauth2.generateAuthUrl({
   prompt: 'consent',
 });
 
-console.log('\n1. Apri questo URL nel browser:\n');
-console.log(authUrl);
-console.log('\n2. Autorizza e aspetta...\n');
+console.log('\nApertura browser per autorizzazione Google...\n');
+exec(`start "" "${authUrl}"`);
 
-// Server locale che cattura il callback
 const server = http.createServer(async (req, res) => {
   if (!req.url?.startsWith('/callback')) return;
 
-  const code = new URL(req.url, 'http://localhost:8080').searchParams.get('code');
+  const parsed = new URL(req.url, 'http://localhost:4242');
+  const code = parsed.searchParams.get('code');
+  const error = parsed.searchParams.get('error');
   if (!code) {
-    res.end('Errore: nessun codice ricevuto.');
+    const msg = error ? `Errore Google: ${error}` : 'Nessun codice ricevuto. URL: ' + req.url;
+    console.error('\n✗', msg);
+    res.end(`<h2>Errore</h2><pre>${msg}</pre>`);
     return;
   }
 
@@ -49,8 +46,9 @@ const server = http.createServer(async (req, res) => {
   const { tokens } = await oauth2.getToken(code);
 
   console.log('\n✓ Token ottenuto!\n');
-  console.log('Aggiorna .env.local e Vercel con questo valore:\n');
   console.log(`GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}\n`);
 });
 
-server.listen(8080);
+server.listen(4242, () => {
+  console.log('In attesa su http://localhost:4242/callback ...\n');
+});

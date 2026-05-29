@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Camera, Prenotazione } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { Camera, Prenotazione, PrezzoPerPeriodo } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO } from 'date-fns';
 import VoiceInput from './VoiceInput';
+import { calcolaImporto, RigaPrezzo } from '@/lib/prezzi';
 
 interface Props {
   iniziale?: Partial<Prenotazione>;
@@ -29,9 +30,33 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
     note: iniziale.note ?? '',
   });
 
+  const [periodi, setPeriodi] = useState<PrezzoPerPeriodo[]>([]);
+  const [righeCalcolo, setRigheCalcolo] = useState<RigaPrezzo[]>([]);
+
+  useEffect(() => {
+    fetch('/api/prezzi-periodi')
+      .then(r => r.json())
+      .then(setPeriodi)
+      .catch(() => {});
+  }, []);
+
   const notti = differenceInDays(parseISO(form.check_out), parseISO(form.check_in));
   const camera = camere.find((c: Camera) => c.id === form.camera_id);
-  const suggerito = notti > 0 && camera ? notti * camera.prezzo_notte : 0;
+  const prezzoBase = camera?.prezzo_notte ?? 0;
+
+  const calcolato = notti > 0 && prezzoBase > 0
+    ? calcolaImporto(
+        form.check_in,
+        form.check_out,
+        periodi.filter(p => p.camera_id === form.camera_id),
+        prezzoBase,
+      )
+    : null;
+
+  useEffect(() => {
+    setRigheCalcolo(calcolato?.righe ?? []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.camera_id, form.check_in, form.check_out, periodi]);
 
   function set(k: string, v: string | number) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -50,16 +75,16 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
   function applicaVoce(data: Record<string, unknown>) {
     setForm(f => ({
       ...f,
-      ...(data.camera_id != null     ? { camera_id:      Number(data.camera_id) }                    : {}),
-      ...(data.ospite_nome           ? { ospite_nome:     String(data.ospite_nome) }                  : {}),
-      ...(data.ospite_telefono       ? { ospite_telefono: String(data.ospite_telefono) }              : {}),
-      ...(data.ospite_email          ? { ospite_email:    String(data.ospite_email) }                 : {}),
-      ...(data.check_in              ? { check_in:        String(data.check_in) }                     : {}),
-      ...(data.check_out             ? { check_out:       String(data.check_out) }                    : {}),
-      ...(data.importo_totale != null ? { importo_totale: Number(data.importo_totale) }               : {}),
-      ...(data.tassa_soggiorno != null ? { tassa_soggiorno: Number(data.tassa_soggiorno) }            : {}),
-      ...(data.stato                 ? { stato: data.stato as Prenotazione['stato'] }                 : {}),
-      ...(data.note != null          ? { note:            String(data.note) }                         : {}),
+      ...(data.camera_id != null      ? { camera_id:      Number(data.camera_id) }               : {}),
+      ...(data.ospite_nome            ? { ospite_nome:     String(data.ospite_nome) }             : {}),
+      ...(data.ospite_telefono        ? { ospite_telefono: String(data.ospite_telefono) }         : {}),
+      ...(data.ospite_email           ? { ospite_email:    String(data.ospite_email) }            : {}),
+      ...(data.check_in               ? { check_in:        String(data.check_in) }               : {}),
+      ...(data.check_out              ? { check_out:       String(data.check_out) }              : {}),
+      ...(data.importo_totale != null ? { importo_totale: Number(data.importo_totale) }           : {}),
+      ...(data.tassa_soggiorno != null ? { tassa_soggiorno: Number(data.tassa_soggiorno) }       : {}),
+      ...(data.stato                  ? { stato: data.stato as Prenotazione['stato'] }            : {}),
+      ...(data.note != null           ? { note:            String(data.note) }                    : {}),
     }));
   }
 
@@ -155,13 +180,13 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Importo totale (€)
-            {suggerito > 0 && (
+            {calcolato && (
               <button
                 type="button"
-                onClick={() => set('importo_totale', suggerito)}
+                onClick={() => set('importo_totale', calcolato.totale)}
                 className="ml-2 text-xs text-blue-600 underline"
               >
-                Suggerito: €{suggerito}
+                Calcolato: €{calcolato.totale}
               </button>
             )}
           </label>
@@ -174,6 +199,22 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
             className="w-full border rounded px-3 py-2 text-sm"
             required
           />
+          {righeCalcolo.length > 0 && (
+            <div className="mt-1.5 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-gray-600 space-y-0.5">
+              {righeCalcolo.map((r, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>{r.notti} notte{r.notti !== 1 ? 'i' : ''} × €{r.prezzo_notte} <span className="text-gray-400">({r.nome_periodo})</span></span>
+                  <span className="font-medium">€{r.subtotale}</span>
+                </div>
+              ))}
+              {righeCalcolo.length > 1 && (
+                <div className="flex justify-between border-t border-blue-200 pt-1 font-semibold">
+                  <span>Totale</span>
+                  <span>€{calcolato?.totale}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">

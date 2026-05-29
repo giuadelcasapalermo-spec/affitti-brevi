@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useNomeApp } from '@/hooks/useNomeApp';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { nome: nomeApp } = useNomeApp();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errore, setErrore] = useState('');
@@ -24,7 +26,9 @@ export default function LoginPage() {
     setLoading(false);
 
     if (res.ok) {
-      router.push('/');
+      const data = await res.json();
+      sessionStorage.setItem('sc', data.solo_calendario ? '1' : '0');
+      router.push(data.solo_calendario ? '/calendario' : '/');
       router.refresh();
     } else {
       const data = await res.json();
@@ -36,7 +40,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="bg-white rounded-xl shadow-md w-full max-w-sm p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">GiuAdel casa Palermo</h1>
+          <h1 className="text-2xl font-bold text-gray-800">{nomeApp}</h1>
           <p className="text-sm text-gray-500 mt-1">Accedi per continuare</p>
         </div>
 

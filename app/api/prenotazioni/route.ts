@@ -2,18 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { leggiPrenotazioni, scriviPrenotazioni } from '@/lib/db';
 import { Prenotazione } from '@/lib/types';
 import { randomUUID } from 'crypto';
+import { cookies } from 'next/headers';
+import { getStrutturaAttiva } from '@/lib/strutture';
 
 export async function GET() {
-  const prenotazioni = await leggiPrenotazioni();
+  const cookieStore = await cookies();
+  const strutturaId = cookieStore.get('struttura_id')?.value;
+  const struttura = await getStrutturaAttiva(strutturaId);
+  const prenotazioni = await leggiPrenotazioni(struttura.id);
   return NextResponse.json(prenotazioni);
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const prenotazioni = await leggiPrenotazioni();
-
+  const cookieStore = await cookies();
+  const strutturaId = cookieStore.get('struttura_id')?.value;
+  const struttura = await getStrutturaAttiva(strutturaId);
+  const prenotazioni = await leggiPrenotazioni(struttura.id);
   const nuova: Prenotazione = {
     id: randomUUID(),
+    struttura_id: struttura.id,
     camera_id: body.camera_id,
     ospite_nome: body.ospite_nome,
     ospite_telefono: body.ospite_telefono ?? '',
@@ -27,8 +35,7 @@ export async function POST(req: NextRequest) {
     created_at: new Date().toISOString(),
     fonte: 'manuale',
   };
-
   prenotazioni.push(nuova);
-  await scriviPrenotazioni(prenotazioni);
+  await scriviPrenotazioni(prenotazioni, struttura.id);
   return NextResponse.json(nuova, { status: 201 });
 }

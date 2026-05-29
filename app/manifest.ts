@@ -2,13 +2,13 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'GiuAdel casa Palermo',
-    short_name: 'GiuAdel',
+    name: 'Affitti Brevi',
+    short_name: 'Affitti Brevi',
     description: 'Gestione affitti brevi - 5 camere',
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#f9fafb',
+    background_color: '#ffffff',
     theme_color: '#1d4ed8',
     icons: [
       {

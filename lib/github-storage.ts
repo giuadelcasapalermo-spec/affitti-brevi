@@ -7,7 +7,7 @@
  */
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const GITHUB_REPO  = process.env.GITHUB_REPO ?? 'giuadelcasapalermo-spec/affitti-palermo';
+const GITHUB_REPO  = process.env.GITHUB_REPO ?? 'owner/affitti-brevi';
 const GITHUB_BRANCH = 'main';
 
 const BASE = `https://api.github.com/repos/${GITHUB_REPO}/contents`;

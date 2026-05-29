@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const oggi = () => new Date().toISOString().split('T')[0];
 
@@ -8,7 +8,7 @@ function buildPrompt(testo: string, tipo: string, camere: { id: number; nome: st
   const anno = new Date().getFullYear();
 
   if (tipo === 'prenotazione') {
-    return `Sei un assistente per una casa vacanze a Palermo. Analizza il testo dettato in italiano ed estrai i dati per una nuova prenotazione.
+    return `Sei un assistente per una struttura di affitti brevi. Analizza il testo dettato in italiano ed estrai i dati per una nuova prenotazione.
 
 Camere disponibili: ${listaCamere}
 Oggi: ${oggi()}
@@ -39,7 +39,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
   }
 
   if (tipo === 'uscita') {
-    return `Sei un assistente per una casa vacanze a Palermo. Analizza il testo dettato ed estrai i dati per una nuova uscita/spesa.
+    return `Sei un assistente per una struttura di affitti brevi. Analizza il testo dettato ed estrai i dati per una nuova uscita/spesa.
 
 Categorie disponibili: Pulizie, Utenze, Manutenzione, Forniture, Arredamento, Commissioni, Tasse, Pubblicità, Affitto, Altro
 Camere disponibili: ${listaCamere || 'nessuna'} (usa null per spese generali)
@@ -60,7 +60,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
   }
 
   if (tipo === 'entrata') {
-    return `Sei un assistente per una casa vacanze a Palermo. Analizza il testo dettato ed estrai i dati per una nuova entrata/incasso.
+    return `Sei un assistente per una struttura di affitti brevi. Analizza il testo dettato ed estrai i dati per una nuova entrata/incasso.
 
 Categorie disponibili: Booking.com, Airbnb, Privato, Altro
 Camere disponibili: ${listaCamere || 'nessuna'} (usa null per entrate generali)
@@ -90,8 +90,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ errore: 'Parametri mancanti' }, { status: 400 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ errore: 'ANTHROPIC_API_KEY non configurata' }, { status: 500 });
+  if (!process.env.GEMINI_API_KEY) {
+    return NextResponse.json({ errore: 'GEMINI_API_KEY non configurata' }, { status: 500 });
   }
 
   let prompt: string;
@@ -102,18 +102,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const client = new Anthropic();
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const text = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim().replace(/^```json\s*/i, '').replace(/```$/,'');
     const json = JSON.parse(text);
     return NextResponse.json(json);
   } catch (err) {
-    console.error('[voice/parse]', err);
-    return NextResponse.json({ errore: 'Errore elaborazione AI' }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[voice/parse]', msg);
+    return NextResponse.json({ errore: `Errore elaborazione AI: ${msg}` }, { status: 500 });
   }
 }

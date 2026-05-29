@@ -20,6 +20,6 @@
   <polyline points="100,72 100,60 106,60 106,54 112,54 112,60 118,60 118,72"/>
   <!-- Cupola destra -->
   <path d="M 104,60 Q 109,52 114,60"/>
-  <!-- Testo GiuAdel casa -->
-  <text x="60" y="94" font-family="Georgia, serif" font-size="10" text-anchor="middle" stroke="none" fill="currentColor">GiuAdel casa Palermo</text>
+  <!-- Testo app -->
+  <text x="60" y="94" font-family="Georgia, serif" font-size="10" text-anchor="middle" stroke="none" fill="currentColor">Affitti Brevi</text>
 </svg>

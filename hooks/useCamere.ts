@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Camera, CAMERE } from '@/lib/types';
+import { Camera } from '@/lib/types';
 
 export function useCamere(): Camera[] {
-  const [camere, setCamere] = useState<Camera[]>(CAMERE);
+  const [camere, setCamere] = useState<Camera[]>([]);
 
   useEffect(() => {
     fetch('/api/camere')

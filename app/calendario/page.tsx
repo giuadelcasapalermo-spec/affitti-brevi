@@ -17,21 +17,16 @@ import {
   addMonths,
   subMonths,
   addDays,
+  subDays,
   getDay,
   differenceInDays,
 } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, X, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, RefreshCw, LayoutGrid, CalendarDays } from 'lucide-react';
+import { getCameraStyle } from '@/lib/camera-colors';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
+import { useSoloCalendario } from '@/hooks/useSoloCalendario';
 
-// Colors matching room names: Rossa(1), Gialla(2), Verde(3), Bianca(4), Blue(5)
-const STILE_CAMERA: Record<number, { dot: string; pieno: string; leggero: string }> = {
-  1: { dot: 'bg-red-500',   pieno: 'bg-red-500 text-white',    leggero: 'bg-red-100 text-red-600' },    // Rossa
-  2: { dot: 'bg-amber-400', pieno: 'bg-amber-400 text-white',  leggero: 'bg-amber-100 text-amber-600' }, // Gialla
-  3: { dot: 'bg-green-500', pieno: 'bg-green-500 text-white',  leggero: 'bg-green-100 text-green-600' }, // Verde
-  4: { dot: 'bg-gray-400',  pieno: 'bg-gray-400 text-white',   leggero: 'bg-gray-100 text-gray-600' },   // Bianca
-  5: { dot: 'bg-blue-600',  pieno: 'bg-blue-600 text-white',   leggero: 'bg-blue-100 text-blue-600' },   // Blue
-};
 
 const GIORNI_SETTIMANA = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
@@ -57,6 +52,7 @@ function buildWeeks(date: Date): (Date | null)[][] {
 
 export default function CalendarioPage() {
   const camere = useCamere();
+  const soloCalendario = useSoloCalendario();
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
   const [meseStr, setMeseStr] = usePersistedState('cal-mese', format(new Date(), 'yyyy-MM-dd'));
   const [giornoStr, setGiornoStr] = usePersistedState('cal-giorno', format(new Date(), 'yyyy-MM-dd'));
@@ -66,9 +62,19 @@ export default function CalendarioPage() {
     setMeseStr(format(typeof fn === 'function' ? fn(mese) : fn, 'yyyy-MM-dd'));
   };
   const setGiornoSelezionato = (d: Date) => setGiornoStr(format(d, 'yyyy-MM-dd'));
+  const navigaGiorno = (delta: 1 | -1) => {
+    const nuovo = delta === 1 ? addDays(giornoSelezionato, 1) : subDays(giornoSelezionato, 1);
+    setGiornoSelezionato(nuovo);
+    if (nuovo.getMonth() !== mese.getMonth() || nuovo.getFullYear() !== mese.getFullYear()) {
+      setMese(nuovo);
+    }
+  };
   const [nuovaPrenotazione, setNuovaPrenotazione] = useState<{ cameraId: number; checkIn: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncOk, setSyncOk]   = useState<boolean | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [vistaCompatta, setVistaCompatta] = usePersistedState<boolean>('cal-compatta', false, { storage: 'local' });
+  const vistaEffettiva = soloCalendario ? true : vistaCompatta;
 
   function caricaPrenotazioni() {
     fetch('/api/prenotazioni').then((r) => r.json()).then(setPrenotazioni);
@@ -79,16 +85,26 @@ export default function CalendarioPage() {
   async function syncIcal() {
     setSyncing(true);
     setSyncOk(null);
+    setSyncMsg(null);
     try {
-      const res = await fetch("/api/sync", { method: "POST" });
+      const res = await fetch('/api/sync', { method: 'POST' });
       const json = await res.json();
-      setSyncOk(json.ok !== false);
+      const ok = json.ok !== false;
+      setSyncOk(ok);
+      const totIcal = (json.risultati ?? []).reduce((s: number, r: { aggiunte: number }) => s + r.aggiunte, 0);
+      const arricchite = json.prenotazioniArricchite ?? 0;
+      let msg = `iCal: +${totIcal}`;
+      if (!json.sheetsConfigurato) msg += ' · Sheet: non configurato';
+      else if (json.sheetsErrore) msg += ` · Sheet errore: ${json.sheetsErrore}`;
+      else msg += ` · Sheet: ${arricchite} aggiornate`;
+      setSyncMsg(msg);
       caricaPrenotazioni();
     } catch {
       setSyncOk(false);
+      setSyncMsg('Errore di rete');
     } finally {
       setSyncing(false);
-      setTimeout(() => setSyncOk(null), 3000);
+      setTimeout(() => { setSyncOk(null); setSyncMsg(null); }, 6000);
     }
   }
 
@@ -151,14 +167,28 @@ export default function CalendarioPage() {
   // JSX della lista prenotazioni del giorno (riusata in due posizioni)
   const listaGiornoJSX = (
     <>
-      <h2 className="font-semibold text-gray-700 text-sm mb-2 capitalize">
-        {format(giornoSelezionato, 'EEEE d MMMM yyyy', { locale: it })}
-      </h2>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => navigaGiorno(-1)} className="p-1 rounded hover:bg-gray-200">
+            <ChevronLeft size={15} />
+          </button>
+          <h2 className="font-semibold text-gray-700 text-sm capitalize text-center min-w-[180px]">
+            {format(giornoSelezionato, 'EEEE d MMMM yyyy', { locale: it })}
+          </h2>
+          <button onClick={() => navigaGiorno(1)} className="p-1 rounded hover:bg-gray-200">
+            <ChevronRight size={15} />
+          </button>
+        </div>
+        {!isSameDay(giornoSelezionato, today) && (
+          <button onClick={() => setGiornoSelezionato(today)} className="text-xs text-gray-400 hover:text-blue-600 hover:underline">
+            Oggi
+          </button>
+        )}
+      </div>
       {(() => {
         const tutti = prenotazioni
           .filter((p) => {
             if (p.stato === 'cancellata') return false;
-            // includi anche il check-out per mostrarlo nelle partenze
             return isWithinInterval(giornoSelezionato, {
               start: parseISO(p.check_in),
               end: parseISO(p.check_out),
@@ -170,19 +200,24 @@ export default function CalendarioPage() {
           return <p className="text-gray-400 text-xs">Nessun ospite presente in questo giorno</p>;
 
         const partenze = tutti.filter(p => isSameDay(giornoSelezionato, parseISO(p.check_out)));
-        const presenze = tutti.filter(p => !isSameDay(giornoSelezionato, parseISO(p.check_out)));
+        const arrivi   = tutti.filter(p => isSameDay(giornoSelezionato, parseISO(p.check_in)));
+        const presenti = tutti.filter(p =>
+          !isSameDay(giornoSelezionato, parseISO(p.check_out)) &&
+          !isSameDay(giornoSelezionato, parseISO(p.check_in))
+        );
 
         const renderRow = (p: Prenotazione) => {
           const cam  = camere.find((c) => c.id === p.camera_id);
-          const st   = STILE_CAMERA[p.camera_id] ?? STILE_CAMERA[1];
+          const st   = getCameraStyle(p.camera_id, cam?.colore);
           const ci   = parseISO(p.check_in);
           const co   = parseISO(p.check_out);
           const isCI = isSameDay(giornoSelezionato, ci);
           const isCO = isSameDay(giornoSelezionato, co);
           const notti = differenceInDays(co, ci);
+          const quotaGiorno = isCO ? 0 : (notti > 0 && p.importo_totale > 0 ? p.importo_totale / notti : 0);
           return (
             <div key={p.id} className="flex items-center justify-between py-1.5 border-b last:border-0 text-xs gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1 flex-wrap">
@@ -199,33 +234,76 @@ export default function CalendarioPage() {
                   </div>
                 </div>
               </div>
-              {p.importo_totale > 0 && (
-                <span className="font-semibold text-gray-700 flex-shrink-0">
-                  €{p.importo_totale.toFixed(0)}
-                  {p.tassa_soggiorno ? (
-                    <span className="ml-0.5 text-[10px] font-normal text-amber-600">
-                      +€{p.tassa_soggiorno.toFixed(0)}tds
-                    </span>
-                  ) : null}
-                </span>
+              {!soloCalendario && (
+                <div className="flex gap-2 flex-shrink-0 text-right">
+                  <span className="w-12 text-gray-500">
+                    {quotaGiorno > 0 ? `€${quotaGiorno.toFixed(0)}` : '—'}
+                  </span>
+                  <span className="w-14 font-semibold text-gray-700">
+                    {!isCO && p.importo_totale > 0 ? `€${p.importo_totale.toFixed(0)}` : '—'}
+                  </span>
+                  <span className="w-10 text-amber-600">
+                    {!isCO && p.tassa_soggiorno ? `€${p.tassa_soggiorno.toFixed(0)}` : '—'}
+                  </span>
+                </div>
               )}
             </div>
           );
         };
 
+        const allGuests = [...partenze, ...arrivi, ...presenti];
+        const totalQuotaGiorno = [...arrivi, ...presenti].reduce((s, p) => {
+          const n = differenceInDays(parseISO(p.check_out), parseISO(p.check_in));
+          return s + (n > 0 && p.importo_totale > 0 ? p.importo_totale / n : 0);
+        }, 0);
+        const totalAffitto = [...arrivi, ...presenti].reduce((s, p) => s + p.importo_totale, 0);
+        const totalTassa   = [...arrivi, ...presenti].reduce((s, p) => s + (p.tassa_soggiorno ?? 0), 0);
+        const hasAmounts = allGuests.some(p => p.importo_totale > 0);
+
         return (
           <>
+            {!soloCalendario && hasAmounts && (
+              <div className="flex justify-end gap-2 text-[10px] text-gray-400 pb-1 mb-1 border-b border-gray-100">
+                <span className="w-12 text-right">x giorno</span>
+                <span className="w-14 text-right">affitto</span>
+                <span className="w-10 text-right">tassa</span>
+              </div>
+            )}
             {partenze.length > 0 && (
               <>
                 <p className="text-[10px] font-semibold text-orange-500 uppercase tracking-wide mb-1">
                   Partenze ({partenze.length})
                 </p>
                 <div>{partenze.map(renderRow)}</div>
-                {presenze.length > 0 && <hr className="my-2 border-gray-200" />}
+                {(arrivi.length > 0 || presenti.length > 0) && <hr className="my-2 border-gray-200" />}
               </>
             )}
-            {presenze.length > 0 && (
-              <div>{presenze.map(renderRow)}</div>
+            {arrivi.length > 0 && (
+              <>
+                <p className="text-[10px] font-semibold text-green-600 uppercase tracking-wide mb-1">
+                  Arrivi ({arrivi.length})
+                </p>
+                <div>{arrivi.map(renderRow)}</div>
+                {presenti.length > 0 && <hr className="my-2 border-gray-200" />}
+              </>
+            )}
+            {presenti.length > 0 && (
+              <>
+                <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">
+                  Presenti ({presenti.length})
+                </p>
+                <div>{presenti.map(renderRow)}</div>
+              </>
+            )}
+            {!soloCalendario && hasAmounts && (
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-300">
+                <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wide">Totale</span>
+                <div className="flex gap-2 text-right">
+                  <span className="w-12 font-semibold text-gray-700 text-xs">€{totalQuotaGiorno.toFixed(0)}</span>
+                  <span className="w-14 font-bold text-gray-800 text-xs">€{totalAffitto.toFixed(0)}</span>
+                  <span className="w-10 font-bold text-amber-600 text-xs">{totalTassa > 0 ? `€${totalTassa.toFixed(0)}` : '—'}</span>
+                </div>
+              </div>
             )}
           </>
         );
@@ -235,51 +313,131 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-2">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-bold text-gray-800">Calendario</h1>
-        <div className="flex items-center gap-1">
-          <button onClick={() => setMese((m) => subMonths(m, 1))} className="p-1.5 rounded hover:bg-gray-200">
-            <ChevronLeft size={18} />
-          </button>
-          <span className="font-semibold text-gray-700 capitalize w-36 text-center">
-            {format(mese, 'MMMM yyyy', { locale: it })}
-          </span>
-          <button onClick={() => setMese((m) => addMonths(m, 1))} className="p-1.5 rounded hover:bg-gray-200">
-            <ChevronRight size={18} />
-          </button>
-        </div>
-        <button
-          onClick={syncIcal}
-          disabled={syncing}
-          className={`flex items-center gap-1.5 border px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-            syncOk === true  ? 'border-green-300 bg-green-50 text-green-700' :
-            syncOk === false ? 'border-red-300 bg-red-50 text-red-700' :
-            'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-          Sync iCal
-        </button>
-        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 ml-auto">
-          <span className="font-semibold text-blue-700 capitalize hidden sm:inline">
-            {format(giornoSelezionato, 'EEEE d MMMM', { locale: it })}
-          </span>
-          {!isSameDay(giornoSelezionato, today) && (
-            <button onClick={() => setGiornoSelezionato(today)} className="text-xs text-gray-400 hover:text-blue-600 hover:underline">
-              Oggi
+      {/* Row 1: title + buttons right (icon-only on mobile) */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold text-gray-800">Calendario</h1>
+        <div className="flex items-center gap-2">
+          {!soloCalendario && (
+            <>
+              {syncMsg && (
+                <span className={`hidden sm:inline text-xs px-2 py-1 rounded ${
+                  syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
+                }`}>{syncMsg}</span>
+              )}
+            <button
+              onClick={syncIcal}
+              disabled={syncing}
+              className={`flex items-center gap-1.5 border px-2.5 py-1.5 rounded text-sm font-medium transition-colors ${
+                syncOk === true  ? 'border-green-300 bg-green-50 text-green-700' :
+                syncOk === false ? 'border-red-300 bg-red-50 text-red-700' :
+                'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Sync iCal</span>
+            </button>
+            </>
+          )}
+          {!soloCalendario && (
+            <button
+              onClick={() => setVistaCompatta(v => !v)}
+              title={vistaCompatta ? 'Vista estesa' : 'Vista compatta'}
+              className={`flex items-center gap-1.5 border px-2.5 py-1.5 rounded text-sm font-medium transition-colors ${
+                vistaCompatta
+                  ? 'border-blue-400 bg-blue-50 text-blue-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {vistaCompatta ? <CalendarDays size={14} /> : <LayoutGrid size={14} />}
+              <span className="hidden sm:inline">{vistaCompatta ? 'Esteso' : 'Compatto'}</span>
             </button>
           )}
-          <span>Entrate: <strong className="text-green-700">€{entrateDelMese.toFixed(2)}</strong></span>
-          <span><strong className="text-blue-700">{camereDelGiorno}</strong> <span className="text-gray-400">cam</span></span>
-          <span><strong className="text-purple-700">{ospititDelGiorno}</strong> <span className="text-gray-400">osp</span></span>
         </div>
       </div>
 
-      {/* Griglia mini-calendari */}
+      {/* Row 2: month navigation */}
+      <div className="flex items-center gap-1">
+        <button onClick={() => setMese((m) => subMonths(m, 1))} className="p-1.5 rounded hover:bg-gray-200">
+          <ChevronLeft size={18} />
+        </button>
+        <span className="font-semibold text-gray-700 capitalize w-36 text-center">
+          {format(mese, 'MMMM yyyy', { locale: it })}
+        </span>
+        <button onClick={() => setMese((m) => addMonths(m, 1))} className="p-1.5 rounded hover:bg-gray-200">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+        {!soloCalendario && (
+          <span>Prenotazioni: <strong className="text-green-700">€{entrateDelMese.toFixed(2)}</strong></span>
+        )}
+        <span><strong className="text-blue-700">{camereDelGiorno}</strong> <span className="text-gray-400">cam</span></span>
+        <span><strong className="text-purple-700">{ospititDelGiorno}</strong> <span className="text-gray-400">osp</span></span>
+      </div>
+
+      {/* Vista compatta: 2 colonne, cerchi colorati sui giorni */}
+      {vistaEffettiva && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+          {camere.map(camera => {
+            const stile = getCameraStyle(camera.id, camera.colore);
+            return (
+              <div key={camera.id} className="bg-white rounded-xl shadow-sm px-2 pt-2 pb-2">
+                <div className="grid grid-cols-7 mb-0.5">
+                  {GIORNI_SETTIMANA.map((g, i) => (
+                    <div key={i} className="flex items-center justify-center">
+                      <span className="text-[8px] font-semibold text-gray-400">{g}</span>
+                    </div>
+                  ))}
+                </div>
+                {settimane.map((settimana, si) => (
+                  <div key={si} className="grid grid-cols-7">
+                    {settimana.map((day, di) => {
+                      if (!day) return <div key={di} className="h-[18px]" />;
+                      const { occupied } = getDayInfo(day, camera.id);
+                      const isToday    = isSameDay(day, today);
+                      const isSelected = isSameDay(day, giornoSelezionato);
+                      return (
+                        <div key={di} className="flex items-center justify-center py-[1px]">
+                          <div
+                            onClick={() => setGiornoSelezionato(day)}
+                            onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
+                            className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-medium cursor-pointer select-none
+                              ${occupied ? `${stile.pieno}` : 'text-gray-600 hover:bg-black/5'}
+                              ${isToday    ? 'ring-1 ring-blue-400 ring-offset-0' : ''}
+                              ${isSelected && !occupied ? 'outline outline-1 outline-gray-400' : ''}
+                            `}
+                          >
+                            {format(day, 'd')}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                <div className="flex items-center gap-1 mt-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stile.dot}`} />
+                  <span className="text-[9px] font-semibold text-gray-700 truncate">{camera.nome}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Lista giorno visibile sotto la vista compatta */}
+      {vistaEffettiva && (
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          {listaGiornoJSX}
+        </div>
+      )}
+
+      {/* Vista estesa: griglia mini-calendari con pill bar */}
+      {!vistaEffettiva && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 xl:grid-cols-3">
         {camere.map((camera, idx) => {
-          const stile = STILE_CAMERA[camera.id] ?? STILE_CAMERA[1];
+          const stile = getCameraStyle(camera.id, camera.colore);
           return (
             <Fragment key={camera.id}>
             <div className="bg-white rounded-xl shadow-sm px-2 pt-2 pb-1">
@@ -287,7 +445,7 @@ export default function CalendarioPage() {
               <div className="flex items-center gap-1.5 mb-1">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${stile.dot}`} />
                 <span className="font-semibold text-gray-800 text-xs">{camera.nome}</span>
-                <span className="text-[10px] text-gray-400 ml-auto">€{camera.prezzo_notte.toFixed(2)}/n</span>
+                {!soloCalendario && <span className="text-[10px] text-gray-400 ml-auto">€{camera.prezzo_notte.toFixed(2)}/n</span>}
               </div>
 
               {/* Intestazione giorni settimana */}
@@ -412,10 +570,14 @@ export default function CalendarioPage() {
         })}
       </div>
 
-      {/* Lista prenotazioni del giorno — solo mobile */}
-      <div className="md:hidden bg-white rounded-lg shadow-sm p-5">
-        {listaGiornoJSX}
-      </div>
+      )}
+
+      {/* Lista prenotazioni del giorno — solo mobile, solo vista estesa */}
+      {!soloCalendario && !vistaEffettiva && (
+        <div className="md:hidden bg-white rounded-lg shadow-sm p-5">
+          {listaGiornoJSX}
+        </div>
+      )}
 
       {/* Modale nuova prenotazione */}
       {nuovaPrenotazione && (() => {

@@ -1,5 +1,5 @@
 /**
- * Genera icon-192.png e icon-512.png con il logo GiuAdel su sfondo blu.
+ * Genera icon-192.png e icon-512.png con il logo su sfondo blu.
  * Esegui con: npx tsx scripts/generate-icons.ts
  */
 
@@ -27,7 +27,7 @@ const logoShapes = `
 
 const logoText = `
   <text x="60" y="97" font-family="serif" font-size="9.5" text-anchor="middle"
-        stroke="none" fill="white" font-style="italic">GiuAdel casa Palermo</text>
+        stroke="none" fill="white" font-style="italic">Affitti Brevi</text>
 `;
 
 function makeSvg(size: number): string {

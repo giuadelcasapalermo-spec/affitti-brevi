@@ -1,16 +1,22 @@
 'use client';
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Prenotazione, Uscita, Entrata } from '@/lib/types';
+import { Prenotazione } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
-import { differenceInDays, parseISO, format, startOfMonth, endOfMonth, isToday, isTomorrow } from 'date-fns';
+import { differenceInDays, parseISO, format, startOfMonth, endOfMonth, addMonths, isToday, isTomorrow } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { fData } from '@/lib/utils';
-import { Pencil, Trash2, Plus, X, Euro, TrendingDown, TrendingUp, BookOpen, Landmark, Check, Sparkles, Moon, User, CalendarRange, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, Mail, MessageCircle, Loader2 } from 'lucide-react';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
+
+type CheckinStatus = {
+  linkInviato: boolean;
+  linkCreatedAt: string | null;
+  alloggiatiCount: number;
+};
 
 function statoColore(stato: Prenotazione['stato']) {
   if (stato === 'confermata') return 'bg-green-100 text-green-800';
@@ -43,8 +49,6 @@ function PrenotazioniInner() {
   const searchParams = useSearchParams();
   const camere = useCamere();
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
-  const [uscite,  setUscite]  = useState<Uscita[]>([]);
-  const [entrate, setEntrate] = useState<Entrata[]>([]);
   const [loading, setLoading] = useState(true);
   const [mostraForm, setMostraForm] = useState(searchParams.get('nuova') === '1');
   const [editingId, setEditingId]     = useState<string | null>(null);
@@ -56,7 +60,11 @@ function PrenotazioniInner() {
   const [filtroAl,  setFiltroAl]  = usePersistedState('pren-al',  DEFAULT_AL);
   const [syncing, setSyncing] = useState(false);
   const [syncOk, setSyncOk]   = useState<boolean | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [checkinStatus, setCheckinStatus] = useState<Record<string, CheckinStatus>>({});
   const [editingCard, setEditingCard] = useState<Prenotazione | null>(null);
+  const [invioWA, setInvioWA] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({});
+  const [invioIstr, setInvioIstr] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({});
 
   const carica = useCallback(() => {
     fetch('/api/prenotazioni').then(r => r.json()).then(data => {
@@ -65,26 +73,91 @@ function PrenotazioniInner() {
       ));
       setLoading(false);
     });
-    fetch('/api/uscite').then(r => r.json()).then(setUscite);
-    fetch('/api/entrate').then(r => r.json()).then(setEntrate);
   }, []);
 
   useEffect(() => { carica(); }, [carica]);
 
+  useEffect(() => {
+    if (prenotazioni.length === 0) return;
+    const ids = prenotazioni.map(p => p.id).join(',');
+    fetch(`/api/alloggiati/checkin-status?ids=${ids}`)
+      .then(r => r.json())
+      .then(setCheckinStatus)
+      .catch(() => {});
+  }, [prenotazioni]);
+
   async function syncIcal() {
     setSyncing(true);
     setSyncOk(null);
+    setSyncMsg(null);
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
       const json = await res.json();
-      setSyncOk(json.ok !== false);
+      const ok = json.ok !== false;
+      setSyncOk(ok);
+      const totIcal = (json.risultati ?? []).reduce((s: number, r: { aggiunte: number }) => s + r.aggiunte, 0);
+      const arricchite = json.prenotazioniArricchite ?? 0;
+      const sheetsOff = !json.sheetsConfigurato;
+      const sheetsErr = json.sheetsErrore;
+      let msg = `iCal: +${totIcal}`;
+      if (sheetsOff)  msg += ' · Sheet: non configurato';
+      else if (sheetsErr) msg += ` · Sheet errore: ${sheetsErr}`;
+      else msg += ` · Sheet: ${arricchite} aggiornate`;
+      setSyncMsg(msg);
       carica();
     } catch {
       setSyncOk(false);
+      setSyncMsg('Errore di rete');
     } finally {
       setSyncing(false);
-      setTimeout(() => setSyncOk(null), 3000);
+      setTimeout(() => { setSyncOk(null); setSyncMsg(null); }, 6000);
     }
+  }
+
+  async function inviaLinkWhatsApp(prenotazioneId: string, telefono: string) {
+    setInvioWA(prev => ({ ...prev, [prenotazioneId]: 'loading' }));
+    try {
+      const res = await fetch('/api/alloggiati/invia-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prenotazione_id: prenotazioneId, canale: 'whatsapp_link' }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.errore ?? 'Errore');
+      const num = telefono.trim().replace(/[\s\-().]/g, '');
+      const waNum = num.startsWith('+') ? num.slice(1)
+                  : num.startsWith('00') ? num.slice(2)
+                  : num.startsWith('3') && num.length === 10 ? '39' + num
+                  : num;
+      window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(json.testo)}`, '_blank');
+      setInvioWA(prev => ({ ...prev, [prenotazioneId]: 'ok' }));
+    } catch {
+      setInvioWA(prev => ({ ...prev, [prenotazioneId]: 'error' }));
+    }
+    setTimeout(() => setInvioWA(prev => ({ ...prev, [prenotazioneId]: 'idle' })), 5000);
+  }
+
+  async function inviaIstruzioni(prenotazioneId: string, telefono: string) {
+    setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'loading' }));
+    try {
+      const res = await fetch('/api/alloggiati/invia-istruzioni', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prenotazione_id: prenotazioneId }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.errore ?? 'Errore');
+      const num = telefono.trim().replace(/[\s\-().]/g, '');
+      const waNum = num.startsWith('+') ? num.slice(1)
+                  : num.startsWith('00') ? num.slice(2)
+                  : num.startsWith('3') && num.length === 10 ? '39' + num
+                  : num;
+      window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(json.testo)}`, '_blank');
+      setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'ok' }));
+    } catch {
+      setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'error' }));
+    }
+    setTimeout(() => setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'idle' })), 5000);
   }
 
   async function crea(data: Partial<Prenotazione>) {
@@ -129,6 +202,13 @@ function PrenotazioniInner() {
     });
   }
 
+  function spostaMese(delta: number) {
+    const base = startOfMonth(parseISO(filtroDal));
+    const nuovoMese = addMonths(base, delta);
+    setFiltroDal(format(startOfMonth(nuovoMese), 'yyyy-MM-dd'));
+    setFiltroAl(format(endOfMonth(nuovoMese), 'yyyy-MM-dd'));
+  }
+
   const nomiOspiti = Array.from(new Set(prenotazioni.map(p => p.ospite_nome))).sort();
 
   const filtrate = prenotazioni.filter(p => {
@@ -155,10 +235,22 @@ function PrenotazioniInner() {
   const kpiPrenotazioni = confermate.length;
   const kpiImporto      = confermate.reduce((s, p) => s + p.importo_totale, 0);
   const kpiTassa        = confermate.reduce((s, p) => s + (p.tassa_soggiorno ?? 0), 0);
-  const kpiUscite       = uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl).reduce((s, u) => s + u.importo, 0);
-  const kpiEntrate      = entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl).reduce((s, e) => s + e.importo, 0);
-  const kpiSaldo        = kpiEntrate - kpiUscite;
   const filtroModificato = filtroDal !== DEFAULT_DAL || filtroAl !== DEFAULT_AL;
+
+  function checkinBadge(prenId: string, email: string) {
+    const s = checkinStatus[prenId];
+    if (!s && !email) return null;
+    if (s?.alloggiatiCount > 0) {
+      return <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold whitespace-nowrap"><Check size={9} /> Documenti caricati</span>;
+    }
+    if (s?.linkInviato) {
+      return <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">In attesa risposta</span>;
+    }
+    if (email) {
+      return <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium whitespace-nowrap">Email da inviare</span>;
+    }
+    return null;
+  }
 
   if (loading) return <div className="text-gray-400 py-10 text-center">Caricamento...</div>;
 
@@ -166,33 +258,32 @@ function PrenotazioniInner() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Prenotazioni</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {syncMsg && (
+            <span className={`hidden sm:inline text-xs px-2 py-1 rounded ${
+              syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {syncMsg}
+            </span>
+          )}
           <button
             onClick={syncIcal}
             disabled={syncing}
-            className={`flex items-center gap-1.5 border px-4 py-2 rounded text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 border px-2.5 py-1.5 rounded text-sm font-medium transition-colors sm:px-4 sm:py-2 ${
               syncOk === true  ? 'border-green-300 bg-green-50 text-green-700' :
               syncOk === false ? 'border-red-300 bg-red-50 text-red-700' :
               'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
             <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
-            Sync iCal
-          </button>
-          <button
-            onClick={() => {
-              const url = `/api/pulizie?dal=${filtroDal}&al=${filtroAl}`;
-              window.open(url, '_blank');
-            }}
-            className="flex items-center gap-1.5 border border-purple-300 bg-purple-50 text-purple-700 px-4 py-2 rounded text-sm font-medium hover:bg-purple-100"
-          >
-            <Sparkles size={15} /> Pulizia
+            <span className="hidden sm:inline">Sync iCal</span>
           </button>
           <button
             onClick={() => setMostraForm(true)}
-            className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700"
+            className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-sm font-medium hover:bg-blue-700 sm:px-4 sm:py-2"
           >
-            <Plus size={15} /> Nuova
+            <Plus size={15} />
+            <span className="hidden sm:inline">Nuova</span>
           </button>
         </div>
       </div>
@@ -211,22 +302,10 @@ function PrenotazioniInner() {
           <div className="text-[11px] text-gray-400">Tassa sogg.</div>
           <div className="text-base font-bold text-amber-600">€{kpiTassa.toFixed(0)}</div>
         </div>
-        <div className="text-center pt-2">
-          <div className="text-[11px] text-gray-400">Uscite</div>
-          <div className="text-base font-bold text-red-600">-€{kpiUscite.toFixed(0)}</div>
-        </div>
-        <div className="text-center pt-2">
-          <div className="text-[11px] text-gray-400">Entrate</div>
-          <div className="text-base font-bold text-green-700">+€{kpiEntrate.toFixed(0)}</div>
-        </div>
-        <div className="text-center pt-2">
-          <div className="text-[11px] text-gray-400">Saldo</div>
-          <div className={`text-base font-bold ${kpiSaldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{kpiSaldo.toFixed(0)}</div>
-        </div>
       </div>
 
       {/* KPI cards desktop */}
-      <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="hidden sm:grid sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-blue-100 rounded-full p-2"><BookOpen size={20} className="text-blue-600" /></div>
           <div><div className="text-sm text-gray-500">Prenotazioni</div><div className="text-lg font-bold text-gray-800">{kpiPrenotazioni}</div></div>
@@ -238,23 +317,6 @@ function PrenotazioniInner() {
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-amber-100 rounded-full p-2"><Landmark size={20} className="text-amber-600" /></div>
           <div><div className="text-sm text-gray-500">Tassa soggiorno</div><div className="text-lg font-bold text-amber-600">€{kpiTassa.toFixed(2)}</div></div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
-          <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
-          <div><div className="text-sm text-gray-500">Uscite del periodo</div><div className="text-lg font-bold text-red-600">-€{kpiUscite.toFixed(2)}</div></div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
-          <div className="bg-green-100 rounded-full p-2"><TrendingUp size={20} className="text-green-600" /></div>
-          <div><div className="text-sm text-gray-500">Entrate effettive</div><div className="text-lg font-bold text-green-700">+€{kpiEntrate.toFixed(2)}</div></div>
-        </div>
-        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${kpiSaldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
-          <div className={`rounded-full p-2 ${kpiSaldo >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-            <TrendingUp size={20} className={kpiSaldo >= 0 ? 'text-green-600' : 'text-red-600'} />
-          </div>
-          <div>
-            <div className="text-sm text-gray-500">Saldo effettivo</div>
-            <div className={`text-lg font-bold ${kpiSaldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{kpiSaldo.toFixed(2)}</div>
-          </div>
         </div>
       </div>
 
@@ -270,15 +332,27 @@ function PrenotazioniInner() {
       )}
 
       {/* Filtri */}
-      <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <select value={filtroStato} onChange={e => setFiltroStato(e.target.value)} className="border rounded px-3 py-1.5 text-sm">
-            <option value="tutti">Tutti gli stati</option>
+      <div className="bg-white rounded-lg shadow-sm p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100" title="Mese precedente"><ChevronLeft size={16} /></button>
+          <div className="flex items-center gap-1">
+            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-1.5 py-1 text-xs" />
+            <span className="text-gray-400 text-xs">→</span>
+            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1.5 py-1 text-xs" />
+          </div>
+          <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100" title="Mese successivo"><ChevronRight size={16} /></button>
+          {filtroModificato && (
+            <button onClick={() => { setFiltroDal(DEFAULT_DAL); setFiltroAl(DEFAULT_AL); }} className="text-xs text-blue-600 hover:underline">
+              Reset
+            </button>
+          )}
+          <select value={filtroStato} onChange={e => setFiltroStato(e.target.value)} className="border rounded px-2 py-1 text-xs">
+            <option value="tutti">Tutti</option>
             <option value="confermata">Confermata</option>
             <option value="pending">In attesa</option>
             <option value="cancellata">Cancellata</option>
           </select>
-          <select value={filtroCamera} onChange={e => setFiltroCamera(e.target.value)} className="border rounded px-3 py-1.5 text-sm">
+          <select value={filtroCamera} onChange={e => setFiltroCamera(e.target.value)} className="border rounded px-2 py-1 text-xs">
             <option value="tutte">Tutte le camere</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
@@ -288,35 +362,22 @@ function PrenotazioniInner() {
               list="ospiti-list"
               value={filtroOspite}
               onChange={e => setFiltroOspite(e.target.value)}
-              placeholder="Cerca ospite..."
-              className="border rounded px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Ospite..."
+              className="border rounded px-2 py-1 text-xs w-32 focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
             {filtroOspite && (
               <button
                 onClick={() => setFiltroOspite('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                <X size={14} />
+                <X size={12} />
               </button>
             )}
             <datalist id="ospiti-list">
               {nomiOspiti.map(n => <option key={n} value={n} />)}
             </datalist>
           </div>
-          <span className="text-sm text-gray-500 ml-auto">{filtrate.length} prenotazioni trovate</span>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap border-t pt-3">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Periodo check-in</span>
-          <div className="flex items-center gap-2">
-            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-2 py-1 text-sm" />
-            <span className="text-gray-400 text-sm">→</span>
-            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-2 py-1 text-sm" />
-          </div>
-          {filtroModificato && (
-            <button onClick={() => { setFiltroDal(DEFAULT_DAL); setFiltroAl(DEFAULT_AL); }} className="text-sm text-blue-600 hover:underline">
-              Mese corrente
-            </button>
-          )}
+          <span className="text-xs text-gray-500 ml-auto">{filtrate.length} trovate</span>
         </div>
       </div>
 
@@ -421,11 +482,55 @@ function PrenotazioniInner() {
                         <span className="truncate">{p.ospite_telefono || p.note}</span>
                       </div>
                     )}
+                    {/* Email + check-in status + WhatsApp */}
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      {p.ospite_email && (
+                        <div className="flex items-center gap-1.5">
+                          <Mail size={13} className="text-gray-400 flex-shrink-0" />
+                          <span className="truncate text-blue-600 text-xs">{p.ospite_email}</span>
+                        </div>
+                      )}
+                      {checkinBadge(p.id, p.ospite_email)}
+                      {p.ospite_telefono && (
+                        <>
+                          <button
+                            onClick={() => inviaLinkWhatsApp(p.id, p.ospite_telefono)}
+                            disabled={invioWA[p.id] === 'loading'}
+                            title="Invia link registrazione documenti"
+                            className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                              invioWA[p.id] === 'ok' ? 'border-green-300 text-green-700 bg-green-50'
+                              : invioWA[p.id] === 'error' ? 'border-red-300 text-red-600'
+                              : 'border-green-300 text-green-700 bg-white'
+                            }`}
+                          >
+                            {invioWA[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
+                            : invioWA[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
+                            : invioWA[p.id] === 'error' ? '✗ WA'
+                            : <><MessageCircle size={10} /> Documenti</>}
+                          </button>
+                          <button
+                            onClick={() => inviaIstruzioni(p.id, p.ospite_telefono)}
+                            disabled={invioIstr[p.id] === 'loading'}
+                            title="Invia istruzioni check-in"
+                            className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                              invioIstr[p.id] === 'ok' ? 'border-blue-300 text-blue-700 bg-blue-50'
+                              : invioIstr[p.id] === 'error' ? 'border-red-300 text-red-600'
+                              : 'border-blue-300 text-blue-700 bg-white'
+                            }`}
+                          >
+                            {invioIstr[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
+                            : invioIstr[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
+                            : invioIstr[p.id] === 'error' ? '✗'
+                            : <><MessageCircle size={10} /> Check-in</>}
+                          </button>
+                        </>
+                      )}
+                    </div>
 
                     {/* Separatore */}
                     <div className="border-t border-gray-100 mt-2.5 pt-2.5 flex items-center justify-between">
                       {/* Camera */}
-                      <span className="text-xs text-gray-400">{cam?.nome ?? 'GiuAdel casa Palermo'}</span>
+                      <span className="text-xs text-gray-400">{cam?.nome ?? `Camera ${p.camera_id}`}</span>
                       {/* Valore economico */}
                       <div className="flex items-center gap-2">
                         {p.tassa_soggiorno ? (
@@ -465,7 +570,7 @@ function PrenotazioniInner() {
                 <th className="text-right px-3 py-3 font-medium text-gray-600">Notti</th>
                 <th className="text-right px-3 py-3 font-medium text-gray-600">Importo</th>
                 <th className="text-right px-3 py-3 font-medium text-gray-600">T.d.S.</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-600">Stato</th>
+                <th className="text-center px-3 py-3 font-medium text-gray-600">Check-in</th>
                 <th className="px-3 py-3 w-20"></th>
               </tr>
             </thead>
@@ -497,6 +602,13 @@ function PrenotazioniInner() {
                             onChange={e => setEV('ospite_telefono', e.target.value)}
                             className={INPUT + ' text-xs text-gray-500'}
                             placeholder="Telefono"
+                          />
+                          <input
+                            type="email"
+                            value={(ev.ospite_email as string) ?? ''}
+                            onChange={e => setEV('ospite_email', e.target.value)}
+                            className={INPUT + ' text-xs text-blue-500'}
+                            placeholder="Email"
                           />
                         </td>
                         {/* Camera */}
@@ -610,6 +722,7 @@ function PrenotazioniInner() {
                         )}
                       </div>
                       {p.ospite_telefono && <div className="text-xs text-gray-400">{p.ospite_telefono}</div>}
+                      {p.ospite_email && <div className="text-xs text-blue-500 truncate max-w-[180px]">{p.ospite_email}</div>}
                       {p.note && <div className="text-xs text-gray-400 truncate max-w-[160px]">{p.note}</div>}
                     </td>
                     <td className="px-3 py-2.5 text-gray-600">{camera?.nome}</td>
@@ -625,9 +738,43 @@ function PrenotazioniInner() {
                         : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${statoColore(p.stato)}`}>
-                        {p.stato === 'confermata' ? 'Confermata' : p.stato === 'pending' ? 'In attesa' : 'Cancellata'}
-                      </span>
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {checkinBadge(p.id, p.ospite_email)}
+                        {p.ospite_telefono && (
+                          <>
+                            <button
+                              onClick={() => inviaLinkWhatsApp(p.id, p.ospite_telefono)}
+                              disabled={invioWA[p.id] === 'loading'}
+                              title="Invia link registrazione documenti"
+                              className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                invioWA[p.id] === 'ok' ? 'border-green-300 text-green-700 bg-green-50'
+                                : invioWA[p.id] === 'error' ? 'border-red-300 text-red-600'
+                                : 'border-green-300 text-green-700 bg-white hover:bg-green-50'
+                              }`}
+                            >
+                              {invioWA[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
+                              : invioWA[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
+                              : invioWA[p.id] === 'error' ? '✗'
+                              : <><MessageCircle size={10} /> Doc</>}
+                            </button>
+                            <button
+                              onClick={() => inviaIstruzioni(p.id, p.ospite_telefono)}
+                              disabled={invioIstr[p.id] === 'loading'}
+                              title="Invia istruzioni check-in"
+                              className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                invioIstr[p.id] === 'ok' ? 'border-blue-300 text-blue-700 bg-blue-50'
+                                : invioIstr[p.id] === 'error' ? 'border-red-300 text-red-600'
+                                : 'border-blue-300 text-blue-700 bg-white hover:bg-blue-50'
+                              }`}
+                            >
+                              {invioIstr[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
+                              : invioIstr[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
+                              : invioIstr[p.id] === 'error' ? '✗'
+                              : <><MessageCircle size={10} /> Check-in</>}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1 justify-end">

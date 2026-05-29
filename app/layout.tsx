@@ -2,13 +2,14 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import LayoutMain from "@/components/LayoutMain";
 import RegisterSW from "@/components/RegisterSW";
 
 const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "GiuAdel casa Palermo",
-  description: "GiuAdel casa Palermo - 5 camere",
+  title: "Affitti Brevi",
+  description: "Gestione affitti brevi",
   icons: {
     icon: [
       { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "GiuAdel",
+    title: "Affitti Brevi",
   },
 };
 
@@ -39,10 +40,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="it">
-      <body className={`${geist.className} bg-gray-50 min-h-screen`}>
+      <body className={`${geist.className} bg-white min-h-screen`}>
         <RegisterSW />
         <Navbar />
-        <main className="max-w-5xl mx-auto px-4 py-6 pb-24 md:pb-6">{children}</main>
+        <LayoutMain>{children}</LayoutMain>
       </body>
     </html>
   );

@@ -1,4 +1,4 @@
-const CACHE = 'giuadel-v2';
+const CACHE = 'affitti-brevi-v2';
 
 // Installa e attiva subito
 self.addEventListener('install', () => self.skipWaiting());

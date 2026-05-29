@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PUBLIC = ['/login', '/api/auth/login', '/api/ical/', '/api/debug-sheets', '/api/debug-gmail', '/api/webhook-beds24'];
+const PUBLIC = ['/login', '/api/auth/login', '/api/ical/', '/api/debug-sheets', '/api/debug-gmail', '/registrazione/', '/api/registrazione/'];
 
 async function tokenValido(token: string): Promise<boolean> {
   try {

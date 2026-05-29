@@ -4,12 +4,16 @@ import { useState, useEffect, useCallback } from 'react';
 
 export function usePersistedState<T>(
   key: string,
-  defaultValue: T
+  defaultValue: T,
+  options?: { storage?: 'session' | 'local' }
 ): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const useLocal = options?.storage === 'local';
+
   const [state, setState] = useState<T>(() => {
     if (typeof window === 'undefined') return defaultValue;
     try {
-      const saved = sessionStorage.getItem(key);
+      const storage = useLocal ? localStorage : sessionStorage;
+      const saved = storage.getItem(key);
       return saved !== null ? (JSON.parse(saved) as T) : defaultValue;
     } catch {
       return defaultValue;
@@ -18,11 +22,12 @@ export function usePersistedState<T>(
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(key, JSON.stringify(state));
+      const storage = useLocal ? localStorage : sessionStorage;
+      storage.setItem(key, JSON.stringify(state));
     } catch {
       // ignore quota errors
     }
-  }, [key, state]);
+  }, [key, state, useLocal]);
 
   const setPersistedState: React.Dispatch<React.SetStateAction<T>> = useCallback(
     (value) => setState(value),

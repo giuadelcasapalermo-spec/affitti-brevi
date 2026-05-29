@@ -23,7 +23,11 @@ export async function POST(request: NextRequest) {
   }
 
   const token = creaToken(utente.username);
-  const res   = NextResponse.json({ ok: true, username: utente.username });
+  const res   = NextResponse.json({
+    ok: true,
+    username: utente.username,
+    solo_calendario: utente.solo_calendario ?? false,
+  });
   res.cookies.set('session', token, {
     httpOnly: true,
     sameSite: 'lax',

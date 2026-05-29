@@ -54,6 +54,8 @@ export default function Dashboard() {
   const [entrate, setEntrate] = useState<Entrata[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncOk, setSyncOk]   = useState<boolean | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [filtroDal, setFiltroDal] = useState(DEFAULT_DAL);
   const [filtroAl, setFiltroAl] = useState(DEFAULT_AL);
   const [filtroCamera, setFiltroCamera] = useState<number | 'tutte'>('tutte');
@@ -75,9 +77,28 @@ export default function Dashboard() {
 
   const syncIcal = useCallback(async () => {
     setSyncing(true);
-    await fetch('/api/sync', { method: 'POST' });
-    carica();
-    setSyncing(false);
+    setSyncOk(null);
+    setSyncMsg(null);
+    try {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const json = await res.json();
+      const ok = json.ok !== false;
+      setSyncOk(ok);
+      const totIcal = (json.risultati ?? []).reduce((s: number, r: { aggiunte: number }) => s + r.aggiunte, 0);
+      const arricchite = json.prenotazioniArricchite ?? 0;
+      let msg = `iCal: +${totIcal}`;
+      if (!json.sheetsConfigurato) msg += ' · Sheet: non configurato';
+      else if (json.sheetsErrore) msg += ` · Sheet errore: ${json.sheetsErrore}`;
+      else msg += ` · Sheet: ${arricchite} aggiornate`;
+      setSyncMsg(msg);
+      carica();
+    } catch {
+      setSyncOk(false);
+      setSyncMsg('Errore di rete');
+    } finally {
+      setSyncing(false);
+      setTimeout(() => { setSyncOk(null); setSyncMsg(null); }, 6000);
+    }
   }, [carica]);
 
   useEffect(() => {
@@ -140,14 +161,22 @@ export default function Dashboard() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
         <div className="flex gap-2">
+          {syncMsg && (
+            <span className={`hidden sm:inline text-xs px-2 py-1 rounded ${
+              syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
+            }`}>{syncMsg}</span>
+          )}
           <button
             onClick={syncIcal}
             disabled={syncing}
-            title="Sincronizza Booking.com"
-            className="flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-2 rounded text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+            className={`flex items-center gap-1.5 border px-2.5 py-1.5 rounded text-sm font-medium transition-colors ${
+              syncOk === true  ? 'border-green-300 bg-green-50 text-green-700' :
+              syncOk === false ? 'border-red-300 bg-red-50 text-red-700' :
+              'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Sync...' : 'Sync iCal'}
+            <span className="hidden sm:inline">Sync iCal</span>
           </button>
           <Link
             href="/prenotazioni?nuova=1"

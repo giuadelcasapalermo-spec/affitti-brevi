@@ -3,12 +3,14 @@ import { leggiUtenti, salvaUtenti, hashPassword, nuovoSalt } from '@/lib/auth';
 import { randomUUID } from 'crypto';
 
 export async function GET() {
-  const utenti = (await leggiUtenti()).map(({ id, username }) => ({ id, username }));
+  const utenti = (await leggiUtenti()).map(({ id, username, solo_calendario }) => ({
+    id, username, solo_calendario: solo_calendario ?? false,
+  }));
   return NextResponse.json(utenti);
 }
 
 export async function POST(request: NextRequest) {
-  const { username, password } = await request.json();
+  const { username, password, solo_calendario } = await request.json();
   if (!username || !password) {
     return NextResponse.json({ error: 'Username e password richiesti' }, { status: 400 });
   }
@@ -20,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   const salt = nuovoSalt();
   const hash = hashPassword(password, salt);
-  utenti.push({ id: randomUUID(), username, salt, hash });
+  utenti.push({ id: randomUUID(), username, salt, hash, solo_calendario: solo_calendario ?? true });
   await salvaUtenti(utenti);
 
   return NextResponse.json({ ok: true });

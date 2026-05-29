@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
-import { Entrata, Uscita, CATEGORIE_USCITA, Impostazioni } from './types';
+import { Entrata, Uscita, CATEGORIE_USCITA, Impostazioni, Prenotazione } from './types';
 import { leggiEntrate, scriviEntrate } from './entrate';
 import { leggiUscite, scriviUscite } from './uscite';
 import { leggiPrenotazioni, scriviPrenotazioni } from './db';
@@ -71,6 +71,14 @@ function isoToSerial(iso: string): number {
 function serialToISO(serial: number): string {
   return new Date((serial - 25569) * 86400 * 1000).toISOString().split('T')[0];
 }
+/** Parsa un importo dal foglio: gestisce numeri JS, "€ 84,15", "84.15", "84,15" */
+function parseImporto(val: string | number | undefined): number {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return val;
+  const s = String(val).replace(/[€$£ \s]/g, '').replace(',', '.');
+  return parseFloat(s) || 0;
+}
+
 function parseSheetDate(val: string | number | undefined): string | null {
   if (!val) return null;
   if (typeof val === 'number') return serialToISO(val);
@@ -178,9 +186,9 @@ async function exportUsciteToTabs(
     const rows = (res.data.values ?? []) as (string|number)[][];
 
     const hIdx = rows.findIndex(r => String(r[0]??'').trim() === 'Tipologia');
-    const ncols = hIdx >= 0 ? (rows[hIdx] as (string|number)[]).length : 0;
-    const is2025 = ncols <= 12;
-    const dataICol = is2025 ? 6 : 10;
+    const ncols0 = (rows[Math.max(0, hIdx)]?.length ?? 0);
+    const is2025 = ncols0 > 0 && ncols0 <= 12;
+    const dataICol = is2025 ? 6 : 8;
 
     // Mappa data|tipo → riga 1-based nel foglio (per upsert)
     const keyToRow = new Map<string, number>();
@@ -218,7 +226,7 @@ async function exportUsciteToTabs(
           -u.importo,
           '',
           u.importo,
-          '', '', '', '', '',
+          '', '', '',
           isoToSerial(u.data),
           '',
           '',
@@ -278,11 +286,11 @@ async function importUsciteOriginale(
     const hIdx = rows.findIndex(r => String(r[0]??'').trim() === 'Tipologia');
     if (hIdx === -1) continue;
 
-    const ncols = rows[hIdx].length;
-    const is2025 = ncols <= 12;
+    const ncols1 = rows[hIdx]?.length ?? 0;
+    const is2025 = ncols1 > 0 && ncols1 <= 12;
     const C = is2025
       ? { tipo:0, desc:1, usc:4, dataI:6, stanza:9, note:11 }
-      : { tipo:0, desc:1, usc:4, dataI:10, stanza:13, note:15 };
+      : { tipo:0, desc:1, usc:4, dataI:8,  stanza:11, note:13 };
 
     // Chiavi trovate in questo tab (per la pulizia)
     const trovatiNelTab = new Set<string>();
@@ -293,7 +301,7 @@ async function importUsciteOriginale(
       if (!TIPO_AMMESSI_TABS.has(tipo)) continue;
 
       const desc   = String(row[C.desc]??'').trim();
-      const uscita = parseFloat(String(row[C.usc]??'')) || 0;
+      const uscita = parseImporto(row[C.usc] as string|number|undefined);
       const data   = parseSheetDate(row[C.dataI] as string|number|undefined);
       if (!data || uscita <= 0 || !desc) continue;
 
@@ -385,24 +393,31 @@ export async function dedupPrenotazioniIcal(): Promise<number> {
   return doppioni.length;
 }
 
-// ── Arricchimento prenotazioni iCal da tab mensili (Affitto) ─────────────
-// Legge le righe "Affitto" nei tab mensili e aggiorna le prenotazioni iCal
-// che hanno camera+check_in corrispondenti, riempiendo ospite_nome e importo_totale.
+// ── Allineamento prenotazioni da tab mensili ──────────────────────────────
+// Per ogni riga di ricavo nel foglio:
+//   - Cerca per chiave stanza+check_in+check_out
+//   - Se trovata → aggiorna nome/importo/tassa
+//   - Se non trovata → inserisce nuovo record
 async function arricchisciPrenotazioniDaSheets(
   sheets: ReturnType<typeof google.sheets>,
   tabEsistenti: Set<string>,
   sid: string,
-): Promise<number> {
+): Promise<{ modificate: number; saltate: string[] }> {
   const prenotazioni = await leggiPrenotazioni();
-  // Indice: "cameraId|check_in" → prenotazione iCal
-  const byKey = new Map(
-    prenotazioni
-      .filter(p => !!p.ical_uid)
-      .map(p => [`${p.camera_id}|${p.check_in}`, p])
-  );
-  if (byKey.size === 0) return 0;
 
-  let aggiornate = 0;
+  const attive = prenotazioni.filter(p => p.stato !== 'cancellata');
+  // Indice esatto: camera|check_in|check_out → prenotazione
+  const byKey = new Map<string, Prenotazione>(
+    attive.map(p => [`${p.camera_id}|${p.check_in}|${p.check_out}`, p])
+  );
+  // Fallback: camera|check_in → prenotazione (quando checkout iCal ≠ checkout sheet)
+  const byCheckIn = new Map<string, Prenotazione>(
+    attive.map(p => [`${p.camera_id}|${p.check_in}`, p])
+  );
+
+  let modificate = 0;
+  const saltate: string[] = [];
+  const now = new Date().toISOString();
 
   for (const tab of tabEsistenti) {
     if (tab === SHEET_NAME) continue;
@@ -417,58 +432,99 @@ async function arricchisciPrenotazioniDaSheets(
     const hIdx = rows.findIndex(r => String(r[0]??'').trim() === 'Tipologia');
     if (hIdx === -1) continue;
 
-    const ncols = rows[hIdx].length;
-    const is2025 = ncols <= 12;
-    // entrata = col C (indice 2) in entrambi i formati
+    const ncols2 = rows[hIdx]?.length ?? 0;
+    const headerRow2 = rows[hIdx] as (string|number)[];
+    const telefonoIdx = headerRow2.findIndex((c: string|number) => {
+      const v = String(c ?? '').toLowerCase().trim();
+      return v === 'cellulare' || v === 'email';
+    });
+    const shift2 = (telefonoIdx >= 0 && telefonoIdx <= 2) ? 1 : 0;
+    const is2025 = ncols2 > 0 && ncols2 <= (12 + shift2);
     const C = is2025
-      ? { tipo:0, desc:1, ent:3, tassa:-1, dataI:6, stanza:9 }
-      : { tipo:0, desc:1, ent:3, tassa:5,  dataI:10, stanza:13 };
+      ? { tipo:0, desc:1, telefono:telefonoIdx, ent:3+shift2, tassa:-1,       dataI:6+shift2, dataF:7+shift2, stanza:9+shift2  }
+      : { tipo:0, desc:1, telefono:telefonoIdx, ent:3+shift2, tassa:5+shift2, dataI:8+shift2, dataF:9+shift2, stanza:11+shift2 };
 
     for (let i = hIdx + 1; i < rows.length; i++) {
       const row  = rows[i];
-      const tipo = String(row[C.tipo]??'').trim().toLowerCase();
-      if (!['affitto', 'ricavo booking', 'ricavo privato'].includes(tipo)) continue;
+      const tipoRaw = String(row[C.tipo]??'').trim();
+      const tipo = tipoRaw.toLowerCase();
+      const isRicavo =
+        tipo === 'affitto' ||
+        tipo.startsWith('ricavo') ||
+        tipo.includes('booking') ||
+        tipo.includes('airbnb') ||
+        tipo.includes('privato');
+      if (!isRicavo) continue;
 
-      const data = parseSheetDate(row[C.dataI] as string|number|undefined);
-      if (!data) continue;
+      const checkIn  = parseSheetDate(row[C.dataI] as string|number|undefined);
+      if (!checkIn) {
+        saltate.push(`${tab} riga ${i+1}: tipo="${tipoRaw}" checkIn nullo (raw=${JSON.stringify(row[C.dataI])})`);
+        continue;
+      }
+      const checkOut = parseSheetDate(row[C.dataF] as string|number|undefined) ?? checkIn;
 
-      const stanza    = String(row[C.stanza]??'').trim().toLowerCase();
-      const camera_id = STANZA_ID[stanza];
-      if (!camera_id) continue;
-
-      const key = `${camera_id}|${data}`;
-      const pren = byKey.get(key);
-      if (!pren) continue;
+      const stanzaRaw = String(row[C.stanza]??'').trim();
+      const stanzaL = stanzaRaw.toLowerCase();
+      let camera_id = STANZA_ID[stanzaL];
+      if (!camera_id) {
+        for (const [k, id] of Object.entries(STANZA_ID)) {
+          if (k.length > 1 && stanzaL.includes(k)) { camera_id = id; break; }
+        }
+      }
+      if (!camera_id) {
+        saltate.push(`${tab} riga ${i+1}: stanza="${stanzaRaw}" non riconosciuta`);
+        continue;
+      }
 
       const nome    = String(row[C.desc]??'').trim();
-      const importo = parseFloat(String(row[C.ent]??'')) || 0;
-      const tassa   = C.tassa >= 0 ? (parseFloat(String(row[C.tassa]??'')) || 0) : 0;
+      const importo = parseImporto(row[C.ent] as string|number|undefined);
+      const tassa   = C.tassa >= 0 ? parseImporto(row[C.tassa] as string|number|undefined) : 0;
+      const telefono = C.telefono >= 0 ? String(row[C.telefono] ?? '').trim() : '';
+      if (importo <= 0) {
+        saltate.push(`${tab} riga ${i+1}: "${nome}" ${checkIn} importo=${importo} (raw=${JSON.stringify(row[C.ent])})`);
+        continue;
+      }
 
-      let modificata = false;
-      if (nome && (!pren.ospite_nome || pren.ospite_nome === 'Ospite Booking.com')) {
-        pren.ospite_nome = nome;
-        modificata = true;
-      }
-      if (importo > 0) {
+      const key  = `${camera_id}|${checkIn}|${checkOut}`;
+      const pren = byKey.get(key) ?? byCheckIn.get(`${camera_id}|${checkIn}`);
+
+      if (pren) {
+        if (nome) pren.ospite_nome = nome;
         pren.importo_totale = importo;
-        modificata = true;
+        if (tassa > 0) pren.tassa_soggiorno = tassa;
+        if (telefono) pren.ospite_telefono = telefono;
+        modificate++;
+      } else {
+        const nuova: Prenotazione = {
+          id: randomUUID(),
+          camera_id,
+          ospite_nome: nome || 'Sconosciuto',
+          ospite_telefono: telefono,
+          ospite_email: '',
+          check_in: checkIn,
+          check_out: checkOut,
+          importo_totale: importo,
+          tassa_soggiorno: tassa > 0 ? tassa : undefined,
+          stato: 'confermata',
+          note: tipo.charAt(0).toUpperCase() + tipo.slice(1),
+          created_at: now,
+          fonte: 'sheet',
+        };
+        prenotazioni.push(nuova);
+        byKey.set(key, nuova);
+        modificate++;
       }
-      if (tassa > 0) {
-        pren.tassa_soggiorno = tassa;
-        modificata = true;
-      }
-      if (modificata) aggiornate++;
     }
   }
 
-  if (aggiornate > 0) {
+  if (modificate > 0) {
     await scriviPrenotazioni(prenotazioni);
   }
-  return aggiornate;
+  return { modificate, saltate };
 }
 
 // ── Arricchisci prenotazioni iCal da sheet (wrapper pubblico) ────────────
-export async function arricchisciPrenotazioniDaSheetsAll(): Promise<number> {
+export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate: number; saltate: string[] }> {
   const sid    = await getSpreadsheetId();
   const sheets = await getSheetsClient();
   const meta   = await sheets.spreadsheets.get({ spreadsheetId: sid });
@@ -551,7 +607,7 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   const doppioniRimossi = await dedupPrenotazioniIcal();
 
   // 4. Arricchisci prenotazioni iCal con nome ospite e importo dai tab mensili
-  const prenotazioniArricchite = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
+  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }
@@ -583,10 +639,10 @@ export async function leggiImpostazioniSheets(): Promise<Impostazioni> {
     });
     rows = (res.data.values ?? []) as (string | number)[][];
   } catch {
-    return { ical_urls: {}, nomi_camere: {} };
+    return { ical_urls: {}, nomi_camere: {}, prezzi_camere: {}, colori_camere: {}, num_camere: 5 };
   }
 
-  const imp: Impostazioni = { ical_urls: {}, nomi_camere: {} };
+  const imp: Impostazioni = { ical_urls: {}, nomi_camere: {}, prezzi_camere: {}, colori_camere: {}, num_camere: 5 };
   for (const row of rows.slice(1)) {
     const tipo   = String(row[0] ?? '').trim();
     const id     = String(row[1] ?? '').trim();

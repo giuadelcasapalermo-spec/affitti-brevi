@@ -16,22 +16,37 @@ export interface Utente {
   username: string;
   salt: string;
   hash: string;
+  solo_calendario?: boolean;
 }
 
 export async function leggiUtenti(): Promise<Utente[]> {
-  const rows = await sql`SELECT id, username, salt, hash FROM utenti` as Utente[];
-  return rows;
+  try {
+    const rows = await sql`
+      SELECT id, username, salt, hash, COALESCE(solo_calendario, false) AS solo_calendario
+      FROM utenti
+    ` as Utente[];
+    return rows;
+  } catch {
+    // Colonna non ancora presente: aggiunge e riprova
+    await sql`ALTER TABLE utenti ADD COLUMN IF NOT EXISTS solo_calendario BOOLEAN DEFAULT FALSE`;
+    const rows = await sql`
+      SELECT id, username, salt, hash, COALESCE(solo_calendario, false) AS solo_calendario
+      FROM utenti
+    ` as Utente[];
+    return rows;
+  }
 }
 
 export async function salvaUtenti(utenti: Utente[]): Promise<void> {
   for (const u of utenti) {
     await sql`
-      INSERT INTO utenti (id, username, salt, hash)
-      VALUES (${u.id}, ${u.username}, ${u.salt}, ${u.hash})
+      INSERT INTO utenti (id, username, salt, hash, solo_calendario)
+      VALUES (${u.id}, ${u.username}, ${u.salt}, ${u.hash}, ${u.solo_calendario ?? false})
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         salt = EXCLUDED.salt,
-        hash = EXCLUDED.hash
+        hash = EXCLUDED.hash,
+        solo_calendario = EXCLUDED.solo_calendario
     `;
   }
   const ids = utenti.map((u) => u.id);

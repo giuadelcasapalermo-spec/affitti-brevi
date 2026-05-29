@@ -20,6 +20,9 @@ export async function POST() {
     imp = {
       ical_urls: {},
       nomi_camere: { 1: 'Rossa', 2: 'Gialla', 3: 'Verde', 4: 'Bianca', 5: 'Blue' },
+      prezzi_camere: {},
+      colori_camere: {},
+      num_camere: 5,
     };
   }
 

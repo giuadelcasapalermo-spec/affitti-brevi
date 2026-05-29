@@ -7,7 +7,7 @@ import {
 } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { fData } from '@/lib/utils';
-import { Plus, Pencil, Trash2, X, TrendingDown, TrendingUp, ChevronDown, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
 
 /* ── colori ───────────────────────────────────────────── */
@@ -31,6 +31,11 @@ const COL_ENTRATA: Record<CategoriaEntrata, string> = {
 };
 
 const oggi = new Date().toISOString().split('T')[0];
+const DEFAULT_DAL_PN = oggi.slice(0, 7) + '-01';
+const DEFAULT_AL_PN = (() => {
+  const [y, m] = oggi.slice(0, 7).split('-').map(Number);
+  return `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+})();
 
 /* ── riga unificata ───────────────────────────────────── */
 type Riga =
@@ -164,37 +169,20 @@ export default function PrimaNotaPage() {
   const [formAperto, setFormAperto] = useState<'entrata' | 'uscita' | null>(null);
   const [editingE, setEditingE] = useState<Entrata | null>(null);
   const [editingU, setEditingU] = useState<Uscita | null>(null);
-  const [filtroMese, setFiltroMese] = useState(() => oggi.slice(0, 7));
+  const [filtroDal, setFiltroDal] = useState(DEFAULT_DAL_PN);
+  const [filtroAl,  setFiltroAl]  = useState(DEFAULT_AL_PN);
   const [filtriFiltriAperti, setFiltriFiltriAperti] = useState(false);
+  const filtroModificato = filtroDal !== DEFAULT_DAL_PN || filtroAl !== DEFAULT_AL_PN;
 
   function spostaMese(delta: number) {
-    const [y, m] = filtroMese.split('-').map(Number);
+    const [y, m] = filtroDal.slice(0, 7).split('-').map(Number);
     const d = new Date(y, m - 1 + delta, 1);
-    setFiltroMese(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    setFiltroDal(`${ym}-01`);
+    setFiltroAl(`${ym}-${String(last.getDate()).padStart(2, '0')}`);
   }
-  const [tabAttivo, setTabAttivo] = useState<'movimenti' | 'foglio'>('movimenti');
-  const [syncing, setSyncing] = useState<'export' | 'import' | null>(null);
-  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; testo: string } | null>(null);
   const [sheetsAbilitato, setSheetsAbilitato] = useState(false);
-
-  async function syncSheets(direzione: 'export' | 'import') {
-    setSyncing(direzione);
-    setSyncMsg(null);
-    try {
-      const res = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ direzione }),
-      });
-      const json = await res.json();
-      setSyncMsg({ ok: json.ok, testo: json.messaggio ?? json.errore ?? 'Errore' });
-      if (json.ok && direzione === 'import') carica();
-    } catch {
-      setSyncMsg({ ok: false, testo: 'Errore di rete' });
-    } finally {
-      setSyncing(null);
-    }
-  }
   const [filtroE, setFiltroE] = useState<Set<string>>(new Set(CATEGORIE_ENTRATA));
   const [filtroU, setFiltroU] = useState<Set<string>>(new Set(CATEGORIE_USCITA));
 
@@ -252,8 +240,8 @@ export default function PrimaNotaPage() {
 
   /* Lista unificata ordinata per data desc */
   const righe: Riga[] = [
-    ...entrate.filter(e => e.data.startsWith(filtroMese) && filtroE.has(e.categoria)).map(e => ({ tipo: 'entrata' as const, rec: e })),
-    ...uscite.filter(u => u.data.startsWith(filtroMese) && filtroU.has(u.categoria)).map(u => ({ tipo: 'uscita' as const, rec: u })),
+    ...entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl && filtroE.has(e.categoria)).map(e => ({ tipo: 'entrata' as const, rec: e })),
+    ...uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl && filtroU.has(u.categoria)).map(u => ({ tipo: 'uscita' as const, rec: u })),
   ].sort((a, b) => b.rec.data.localeCompare(a.rec.data));
 
   /* KPI */
@@ -275,137 +263,88 @@ export default function PrimaNotaPage() {
   return (
     <div className="space-y-5">
 
-      {/* Titolo pagina */}
-      <h1 className="text-2xl font-bold text-gray-800">Prima Nota</h1>
-
-      {/* Tab switcher — solo desktop, solo se sheets abilitato */}
-      {sheetsAbilitato && (
-        <div className="hidden sm:flex border-b border-gray-200 -mb-1">
+      {/* Riga 1: titolo + pulsanti a destra */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-800">Prima Nota</h1>
+        <div className="flex gap-2">
           <button
-            onClick={() => setTabAttivo('movimenti')}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${tabAttivo === 'movimenti' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setFormAperto(f => f === 'entrata' ? null : 'entrata')}
+            className="flex items-center gap-1.5 bg-green-600 text-white px-2.5 py-1.5 rounded text-sm font-medium hover:bg-green-700 sm:px-4 sm:py-2"
           >
-            Movimenti
+            <Plus size={15} /><span className="hidden sm:inline">Entrata</span>
           </button>
           <button
-            onClick={() => setTabAttivo('foglio')}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${tabAttivo === 'foglio' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setFormAperto(f => f === 'uscita' ? null : 'uscita')}
+            className="flex items-center gap-1.5 bg-red-600 text-white px-2.5 py-1.5 rounded text-sm font-medium hover:bg-red-700 sm:px-4 sm:py-2"
           >
-            Foglio Google
+            <Plus size={15} /><span className="hidden sm:inline">Uscita</span>
           </button>
         </div>
-      )}
-
-      {/* Pulsanti sync Google Sheets */}
-      {sheetsAbilitato && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => syncSheets('export')}
-            disabled={!!syncing}
-            title="Esporta movimenti → Google Sheets"
-            className="flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 rounded text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
-          >
-            {syncing === 'export' ? <RefreshCw size={13} className="animate-spin" /> : <ArrowUpFromLine size={13} />}
-            App → Sheets
-          </button>
-          <button
-            onClick={() => syncSheets('import')}
-            disabled={!!syncing}
-            title="Importa movimenti ← Google Sheets"
-            className="flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 rounded text-xs font-medium hover:bg-gray-50 disabled:opacity-50"
-          >
-            {syncing === 'import' ? <RefreshCw size={13} className="animate-spin" /> : <ArrowDownToLine size={13} />}
-            Sheets → App
-          </button>
-          {syncMsg && (
-            <span className={`text-xs px-2 py-1 rounded ${syncMsg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-              {syncMsg.testo}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Foglio Google — solo desktop */}
-      {sheetsAbilitato && tabAttivo === 'foglio' && (
-        <div className="hidden sm:block bg-white rounded-lg shadow-sm overflow-hidden" style={{ height: 'calc(100vh - 160px)' }}>
-          <iframe
-            src="https://docs.google.com/spreadsheets/d/1t8sY-JBkSDAnIBhQA_xwotRjxAzRCJ1XMUrxbpHlJpM/htmlview?gid=1457435591"
-            className="w-full h-full border-0"
-            title="Foglio Google Prima Nota"
-          />
-        </div>
-      )}
-
-      {/* Contenuto movimenti */}
-      {(tabAttivo === 'movimenti') && <>
-
-      {/* Header controlli */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100" title="Mese precedente">
-          <ChevronLeft size={16} />
-        </button>
-        <input type="month" value={filtroMese} onChange={e => setFiltroMese(e.target.value)} className="border rounded px-2 py-1.5 text-sm w-28 sm:w-auto" />
-        <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100" title="Mese successivo">
-          <ChevronRight size={16} />
-        </button>
-        <button
-          onClick={() => setFormAperto(f => f === 'entrata' ? null : 'entrata')}
-          className="flex items-center gap-1 bg-green-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-green-700 sm:px-4 sm:py-2 sm:text-sm sm:gap-1.5"
-        >
-          <Plus size={13} className="sm:hidden" /><Plus size={15} className="hidden sm:inline" /> Entrata
-        </button>
-        <button
-          onClick={() => setFormAperto(f => f === 'uscita' ? null : 'uscita')}
-          className="flex items-center gap-1 bg-red-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-red-700 sm:px-4 sm:py-2 sm:text-sm sm:gap-1.5"
-        >
-          <Plus size={13} className="sm:hidden" /><Plus size={15} className="hidden sm:inline" /> Uscita
-        </button>
       </div>
 
       {/* KPI mobile compatto */}
       <div className="sm:hidden bg-white rounded-lg shadow-sm px-4 py-3 grid grid-cols-3 divide-x divide-gray-100">
         <div className="text-center">
-          <div className="text-[11px] text-gray-400 uppercase tracking-wide">Entrate</div>
+          <div className="text-[11px] text-gray-400">Entrate</div>
           <div className="text-base font-bold text-green-700">+€{totEntrate.toFixed(0)}</div>
         </div>
         <div className="text-center">
-          <div className="text-[11px] text-gray-400 uppercase tracking-wide">Uscite</div>
+          <div className="text-[11px] text-gray-400">Uscite</div>
           <div className="text-base font-bold text-red-600">-€{totUscite.toFixed(0)}</div>
         </div>
         <div className="text-center">
-          <div className="text-[11px] text-gray-400 uppercase tracking-wide">Saldo</div>
-          <div className={`text-base font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>{saldo >= 0 ? '+' : ''}€{saldo.toFixed(0)}</div>
+          <div className="text-[11px] text-gray-400">Saldo</div>
+          <div className={`text-base font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>{saldo >= 0 ? '+' : ''}€{saldo.toFixed(0)}</div>
         </div>
       </div>
 
-      {/* KPI desktop */}
+      {/* KPI cards desktop */}
       <div className="hidden sm:grid sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-green-100 rounded-full p-2"><TrendingUp size={20} className="text-green-600" /></div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Entrate</div>
-            <div className="text-xl font-bold text-green-700">+€{totEntrate.toFixed(2)}</div>
+            <div className="text-sm text-gray-500">Entrate</div>
+            <div className="text-lg font-bold text-green-700">+€{totEntrate.toFixed(2)}</div>
           </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Uscite</div>
-            <div className="text-xl font-bold text-red-600">-€{totUscite.toFixed(2)}</div>
+            <div className="text-sm text-gray-500">Uscite</div>
+            <div className="text-lg font-bold text-red-600">-€{totUscite.toFixed(2)}</div>
           </div>
         </div>
-        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldo >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-          <div className={`rounded-full p-2 ${saldo >= 0 ? 'bg-green-200' : 'bg-red-200'}`}>
-            {saldo >= 0 ? <TrendingUp size={20} className="text-green-700" /> : <TrendingDown size={20} className="text-red-700" />}
+        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
+          <div className={`rounded-full p-2 ${saldo >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <Euro size={20} className={saldo >= 0 ? 'text-green-600' : 'text-red-600'} />
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Saldo</div>
-            <div className={`text-xl font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-              {saldo >= 0 ? '+' : ''}€{saldo.toFixed(2)}
-            </div>
+            <div className="text-sm text-gray-500">Saldo</div>
+            <div className={`text-lg font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>{saldo >= 0 ? '+' : ''}€{saldo.toFixed(2)}</div>
           </div>
         </div>
       </div>
+
+      {/* Filtro periodo */}
+      <div className="bg-white rounded-lg shadow-sm p-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100" title="Mese precedente"><ChevronLeft size={16} /></button>
+          <div className="flex items-center gap-1">
+            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-1.5 py-1 text-xs" />
+            <span className="text-gray-400 text-xs">→</span>
+            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1.5 py-1 text-xs" />
+          </div>
+          <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100" title="Mese successivo"><ChevronRight size={16} /></button>
+          {filtroModificato && (
+            <button onClick={() => { setFiltroDal(DEFAULT_DAL_PN); setFiltroAl(DEFAULT_AL_PN); }} className="text-xs text-blue-600 hover:underline">
+              Mese corrente
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Contenuto movimenti */}
+      <>
 
       {/* Filtro categorie */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -628,7 +567,7 @@ export default function PrimaNotaPage() {
         )}
       </div>
 
-      </> }
+      </>
     </div>
   );
 }
