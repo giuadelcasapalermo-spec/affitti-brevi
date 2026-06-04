@@ -210,6 +210,7 @@ export default function PrimaNotaPage() {
   const [sheetsAbilitato, setSheetsAbilitato] = useState(false);
   const [filtroE, setFiltroE] = useState<Set<string>>(new Set(CATEGORIE_ENTRATA));
   const [filtroU, setFiltroU] = useState<Set<string>>(new Set(CATEGORIE_USCITA));
+  const [filtroFonti, setFiltroFonti] = useState<Set<string> | null>(null); // null = tutte
 
   function toggleCatE(cat: string) {
     setFiltroE(prev => { const s = new Set(prev); s.has(cat) ? s.delete(cat) : s.add(cat); return s; });
@@ -263,10 +264,25 @@ export default function PrimaNotaPage() {
     await fetch(`/api/uscite/${id}`, { method: 'DELETE' }); carica();
   }
 
+  /* Fonti disponibili nel periodo (per filtro e totali) */
+  const fontiDisponibili: string[] = Array.from(new Set([
+    ...entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl).map(e => e.fonte_pagamento || 'Contanti'),
+    ...uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl).map(u => u.fonte_pagamento || 'Contanti'),
+  ])).sort();
+  const fontiAttive = filtroFonti ?? new Set(fontiDisponibili);
+  const filtroFonteAttivo = filtroFonti !== null && filtroFonti.size < fontiDisponibili.length;
+
+  /* Totali per modalità (rispettano filtri categorie e periodo, ignora filtro fonte per mostrare il quadro completo) */
+  const totaliPerFonte = fontiDisponibili.map(fonte => {
+    const totE = entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl && filtroE.has(e.categoria) && (e.fonte_pagamento || 'Contanti') === fonte).reduce((s, e) => s + e.importo, 0);
+    const totU = uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl && filtroU.has(u.categoria) && (u.fonte_pagamento || 'Contanti') === fonte).reduce((s, u) => s + u.importo, 0);
+    return { fonte, totE, totU, saldo: totE - totU };
+  }).filter(t => t.totE > 0 || t.totU > 0);
+
   /* Lista unificata ordinata per data desc */
   const righe: Riga[] = [
-    ...entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl && filtroE.has(e.categoria)).map(e => ({ tipo: 'entrata' as const, rec: e })),
-    ...uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl && filtroU.has(u.categoria)).map(u => ({ tipo: 'uscita' as const, rec: u })),
+    ...entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl && filtroE.has(e.categoria) && fontiAttive.has(e.fonte_pagamento || 'Contanti')).map(e => ({ tipo: 'entrata' as const, rec: e })),
+    ...uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl && filtroU.has(u.categoria) && fontiAttive.has(u.fonte_pagamento || 'Contanti')).map(u => ({ tipo: 'uscita' as const, rec: u })),
   ].sort((a, b) => b.rec.data.localeCompare(a.rec.data));
 
   /* KPI */
@@ -350,6 +366,54 @@ export default function PrimaNotaPage() {
         </div>
       </div>
 
+      {/* Totali per modalità */}
+      {totaliPerFonte.length > 1 && (
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="px-4 py-2 bg-gray-50 border-b flex items-center gap-2">
+            <Wallet size={13} className="text-gray-500" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Totali per modalità</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {totaliPerFonte.map(({ fonte, totE, totU, saldo: s }) => {
+              const selezionata = filtroFonti?.has(fonte) ?? true;
+              return (
+                <button
+                  key={fonte}
+                  onClick={() => {
+                    if (filtroFonti === null) {
+                      setFiltroFonti(new Set([fonte]));
+                    } else if (filtroFonti.has(fonte) && filtroFonti.size === 1) {
+                      setFiltroFonti(null);
+                    } else {
+                      const ns = new Set(filtroFonti);
+                      ns.has(fonte) ? ns.delete(fonte) : ns.add(fonte);
+                      setFiltroFonti(ns.size === fontiDisponibili.length ? null : ns);
+                    }
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${selezionata ? 'hover:bg-gray-50' : 'opacity-40 hover:opacity-60 hover:bg-gray-50'}`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${selezionata ? 'bg-blue-400' : 'bg-gray-300'}`} />
+                  <span className="text-sm font-medium text-gray-700 flex-1">{fonte}</span>
+                  <span className="text-xs text-green-700 w-20 text-right">+€{totE.toFixed(2)}</span>
+                  <span className="text-xs text-red-600 w-20 text-right">-€{totU.toFixed(2)}</span>
+                  <span className={`text-xs font-semibold w-20 text-right ${s >= 0 ? 'text-green-700' : 'text-red-600'}`}>{s >= 0 ? '+' : ''}€{s.toFixed(2)}</span>
+                </button>
+              );
+            })}
+            {/* Riga totale */}
+            <div className="flex items-center gap-3 px-4 py-2 bg-gray-50">
+              <span className="w-2 h-2 shrink-0" />
+              <span className="text-xs font-semibold text-gray-600 flex-1 uppercase tracking-wide">Totale</span>
+              <span className="text-xs font-bold text-green-700 w-20 text-right">+€{totaliPerFonte.reduce((s, t) => s + t.totE, 0).toFixed(2)}</span>
+              <span className="text-xs font-bold text-red-600 w-20 text-right">-€{totaliPerFonte.reduce((s, t) => s + t.totU, 0).toFixed(2)}</span>
+              <span className={`text-xs font-bold w-20 text-right ${totaliPerFonte.reduce((s, t) => s + t.saldo, 0) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                {totaliPerFonte.reduce((s, t) => s + t.saldo, 0) >= 0 ? '+' : ''}€{totaliPerFonte.reduce((s, t) => s + t.saldo, 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtro periodo */}
       <div className="bg-white rounded-lg shadow-sm p-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -371,15 +435,15 @@ export default function PrimaNotaPage() {
       {/* Contenuto movimenti */}
       <>
 
-      {/* Filtro categorie */}
+      {/* Filtri */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <button
           onClick={() => setFiltriFiltriAperti(v => !v)}
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filtro categorie</span>
-            {filtroAttivo && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">attivo</span>}
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filtri</span>
+            {(filtroAttivo || filtroFonteAttivo) && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">attivi</span>}
           </div>
           <ChevronDown size={16} className={`text-gray-400 transition-transform ${filtriFiltriAperti ? 'rotate-180' : ''}`} />
         </button>
@@ -387,15 +451,43 @@ export default function PrimaNotaPage() {
         {filtriFiltriAperti && (
           <div className="px-4 pb-4 space-y-2.5 border-t border-gray-100">
             <div className="flex justify-end pt-2">
-              {filtroAttivo && (
+              {(filtroAttivo || filtroFonteAttivo) && (
                 <button
-                  onClick={() => { setFiltroE(new Set(CATEGORIE_ENTRATA)); setFiltroU(new Set(CATEGORIE_USCITA)); }}
+                  onClick={() => { setFiltroE(new Set(CATEGORIE_ENTRATA)); setFiltroU(new Set(CATEGORIE_USCITA)); setFiltroFonti(null); }}
                   className="text-xs text-blue-600 hover:underline"
                 >
-                  Seleziona tutti
+                  Azzera filtri
                 </button>
               )}
             </div>
+
+            {/* Modalità pagamento */}
+            {fontiDisponibili.length > 1 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-400 w-14 shrink-0">Modalità</span>
+                <button
+                  onClick={() => setFiltroFonti(null)}
+                  className={`text-xs px-2 py-0.5 rounded-full border font-medium transition-colors ${!filtroFonteAttivo ? 'border-gray-300 text-gray-500 hover:bg-gray-50' : 'border-blue-400 text-blue-600 bg-blue-50'}`}
+                >
+                  {filtroFonteAttivo ? 'Seleziona tutte' : 'Tutte'}
+                </button>
+                {fontiDisponibili.map(fonte => {
+                  const attiva = fontiAttive.has(fonte);
+                  return (
+                    <button key={fonte}
+                      onClick={() => {
+                        const ns = new Set(fontiAttive);
+                        ns.has(fonte) ? ns.delete(fonte) : ns.add(fonte);
+                        setFiltroFonti(ns.size === fontiDisponibili.length ? null : ns);
+                      }}
+                      className={`text-xs px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1 transition-opacity ${attiva ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400 line-through'}`}
+                    >
+                      <Wallet size={9} />{fonte}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Entrate */}
             <div className="flex items-center gap-2 flex-wrap">
