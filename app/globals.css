@@ -18,3 +18,23 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  /* Nascondi navigazione e controlli */
+  nav,
+  .no-print { display: none !important; }
+
+  /* Rimuovi sfondi e ombre che non stampano bene */
+  * { box-shadow: none !important; }
+
+  /* Assicura che il contenuto sia visibile */
+  body { background: white !important; margin: 0; }
+  main { padding: 0 !important; }
+
+  /* Evita che i grafici vengano tagliati */
+  .recharts-wrapper { break-inside: avoid; }
+
+  /* Tabelle stampabili su più pagine */
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+}

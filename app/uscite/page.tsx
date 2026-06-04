@@ -9,7 +9,7 @@ import {
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
-import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
 
 /* ── colori ───────────────────────────────────────────── */
@@ -299,6 +299,34 @@ export default function PrimaNotaPage() {
     saldoMap.set(r.rec.id, saldoCorrente);
   }
 
+  function scaricaExcel() {
+    const intestazioni = ['Data', 'Tipo', 'Descrizione', 'Categoria', 'Modalità', 'Entrata (€)', 'Uscita (€)', 'Saldo (€)'];
+    const righeCSV = righe.map((r, i) => {
+      const isE = r.tipo === 'entrata';
+      const s = saldoMap.get(r.rec.id) ?? 0;
+      return [
+        r.rec.data,
+        isE ? 'Entrata' : 'Uscita',
+        r.rec.descrizione,
+        isE ? (r.rec as Entrata).categoria : (r.rec as Uscita).categoria,
+        r.rec.fonte_pagamento || 'Contanti',
+        isE ? r.rec.importo.toFixed(2) : '',
+        !isE ? r.rec.importo.toFixed(2) : '',
+        s.toFixed(2),
+      ];
+    });
+    // Riga totali
+    righeCSV.push(['', '', 'TOTALI', '', '', totEntrate.toFixed(2), totUscite.toFixed(2), saldo.toFixed(2)]);
+    const csv = [intestazioni, ...righeCSV]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `prima-nota_${filtroDal}_${filtroAl}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
+
   if (loading) return <div className="text-gray-400 py-10 text-center">Caricamento...</div>;
 
   return (
@@ -307,7 +335,19 @@ export default function PrimaNotaPage() {
       {/* Riga 1: titolo + pulsanti a destra */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Prima Nota</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 no-print">
+          <button onClick={scaricaExcel} title="Esporta Excel"
+            className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
+          >
+            <FileSpreadsheet size={15} className="text-green-600" />
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+          <button onClick={() => window.print()} title="Stampa / Salva PDF"
+            className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
+          >
+            <Printer size={15} className="text-gray-500" />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
           <button
             onClick={() => setFormAperto(f => f === 'entrata' ? null : 'entrata')}
             className="flex items-center gap-1.5 bg-green-600 text-white px-2.5 py-1.5 rounded text-sm font-medium hover:bg-green-700 sm:px-4 sm:py-2"

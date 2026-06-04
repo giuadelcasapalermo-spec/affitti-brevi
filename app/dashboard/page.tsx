@@ -6,7 +6,7 @@ import { Prenotazione, Uscita, Entrata, CATEGORIE_USCITA, CATEGORIE_ENTRATA } fr
 import { useCamere } from '@/hooks/useCamere';
 import { isWithinInterval, parseISO, differenceInDays, format, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from 'date-fns';
 import { fData } from '@/lib/utils';
-import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2 } from 'lucide-react';
+import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer } from 'lucide-react';
 import { getCameraStyle } from '@/lib/camera-colors';
 import { ComposedChart, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -208,6 +208,59 @@ export default function Dashboard() {
     });
   }
 
+  function scaricaExcelCamere() {
+    const nGiorniPeriodo = differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1;
+    const intestazioni = ['Camera', 'Notti Occupate', `Giorni Periodo`, 'Saturazione %', 'N° Prenotazioni', 'Ricavo Totale (€)', 'Prezzo Medio/Notte (€)', 'Prezzo Base (€)'];
+    const righe = camere
+      .filter(c => filtroCamera === 'tutte' || c.id === filtroCamera)
+      .sort((a, b) => a.id - b.id)
+      .map(camera => {
+        const { notti, ricavo } = statsCamera.find(s => s.camera.id === camera.id) ?? { notti: 0, ricavo: 0 };
+        const pren = prenNelPeriodo.filter(p => p.camera_id === camera.id);
+        const satPct = nGiorniPeriodo > 0 ? ((notti / nGiorniPeriodo) * 100).toFixed(1) : '0.0';
+        const mediaNotteRicavo = notti > 0 && ricavo > 0 ? (ricavo / notti).toFixed(2) : '';
+        return [camera.nome, notti, nGiorniPeriodo, satPct, pren.length, ricavo > 0 ? ricavo.toFixed(2) : '', mediaNotteRicavo, camera.prezzo_notte.toFixed(2)];
+      });
+    // Aggiunge prenotazioni dettagliate
+    const intestazioniPren = ['', '', '', '', '', '', '', ''];
+    const intestazioniPren2 = ['Camera', 'Ospite', 'Check-in', 'Check-out', 'Notti', 'Importo (€)', 'Fonte', ''];
+    const righePren = prenNelPeriodo
+      .sort((a, b) => a.check_in.localeCompare(b.check_in))
+      .map(p => {
+        const cam = camere.find(c => c.id === p.camera_id);
+        const notti = differenceInDays(parseISO(p.check_out), parseISO(p.check_in));
+        return [cam?.nome ?? `Camera ${p.camera_id}`, p.ospite_nome, p.check_in, p.check_out, notti, p.importo_totale > 0 ? p.importo_totale.toFixed(2) : '', p.fonte, ''];
+      });
+    const csv = [intestazioni, ...righe, intestazioniPren, intestazioniPren2, ...righePren]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `camere_${filtroDal}_${filtroAl}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  function scaricaExcelPrimaNota() {
+    const intestazioni = ['Data', 'Tipo', 'Descrizione', 'Categoria', 'Importo (€)'];
+    const righe = movimenti.map(m => [
+      m.data,
+      m.tipo === 'entrata' ? 'Entrata' : 'Uscita',
+      m.descrizione,
+      m.categoria,
+      (m.tipo === 'entrata' ? '+' : '-') + m.importo.toFixed(2),
+    ]);
+    righe.push(['', '', 'Totale entrate', '', '+' + entrateEffettive.toFixed(2)]);
+    righe.push(['', '', 'Totale uscite', '', '-' + usciteDelPeriodo.toFixed(2)]);
+    righe.push(['', '', 'Saldo netto', '', (saldo >= 0 ? '+' : '') + saldo.toFixed(2)]);
+    const csv = [intestazioni, ...righe]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `prima-nota-dashboard_${filtroDal}_${filtroAl}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-gray-400">Caricamento...</div>;
   }
@@ -217,12 +270,26 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 no-print">
           {syncMsg && (
             <span className={`hidden sm:inline text-xs px-2 py-1 rounded ${
               syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
             }`}>{syncMsg}</span>
           )}
+          <button
+            onClick={() => sezione === 'camere' ? scaricaExcelCamere() : scaricaExcelPrimaNota()}
+            title="Esporta Excel"
+            className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
+          >
+            <FileSpreadsheet size={14} className="text-green-600" />
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+          <button onClick={() => window.print()} title="Stampa / Salva PDF"
+            className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
+          >
+            <Printer size={14} className="text-gray-500" />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
           <button
             onClick={syncIcal}
             disabled={syncing}
