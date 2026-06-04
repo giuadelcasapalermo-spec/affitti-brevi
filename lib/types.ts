@@ -11,6 +11,21 @@ export interface AlloggiatiCredentials {
   wskey: string;
 }
 
+export type TipoContoCorrente = 'contanti' | 'pos' | 'bonifico' | 'altro';
+
+export interface ContoCorrente {
+  id: string;
+  tipo: TipoContoCorrente;
+  nome: string;
+}
+
+export const TIPI_CONTO: Record<TipoContoCorrente, string> = {
+  contanti: 'Contanti',
+  pos:      'POS',
+  bonifico: 'Bonifico',
+  altro:    'Altro',
+};
+
 export interface Struttura {
   id: string;
   nome: string;
@@ -21,6 +36,7 @@ export interface Struttura {
   colori_camere: Record<number, string>;
   ical_urls: Record<number, string>;
   alloggiati_credentials?: AlloggiatiCredentials;
+  conti_correnti: ContoCorrente[];
   created_at: string;
 }
 
@@ -65,6 +81,7 @@ export interface Uscita {
   importo: number;
   camera_id?: number;
   note: string;
+  fonte_pagamento: string;
   created_at: string;
 }
 
@@ -85,6 +102,7 @@ export interface Entrata {
   importo: number;
   camera_id?: number;
   note: string;
+  fonte_pagamento: string;
   created_at: string;
 }
 

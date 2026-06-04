@@ -1,8 +1,10 @@
 import sql from './postgres';
 import { randomUUID } from 'crypto';
-import { Struttura, AlloggiatiCredentials } from './types';
+import { Struttura, AlloggiatiCredentials, ContoCorrente } from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
+const DEFAULT_CONTI: ContoCorrente[] = [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }];
+
 let _tableReady = false;
 let _migrated = false;
 
@@ -22,6 +24,7 @@ async function ensureTable(): Promise<void> {
     )
   `;
   await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_credentials JSONB DEFAULT NULL`;
+  await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS conti_correnti JSONB DEFAULT '[]'`;
   _tableReady = true;
 }
 
@@ -38,6 +41,8 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     for (const [k, val] of Object.entries(obj)) result[Number(k)] = Number(val);
     return result;
   };
+  const rawConti = Array.isArray(row.conti_correnti) ? row.conti_correnti : [];
+  const conti: ContoCorrente[] = rawConti.length > 0 ? rawConti as ContoCorrente[] : DEFAULT_CONTI;
   return {
     id: row.id as string,
     nome: row.nome as string,
@@ -48,6 +53,7 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     colori_camere: toNumericRecord(row.colori_camere),
     ical_urls: toNumericRecord(row.ical_urls),
     alloggiati_credentials: row.alloggiati_credentials as AlloggiatiCredentials | undefined,
+    conti_correnti: conti,
     created_at: row.created_at as string,
   };
 }
@@ -66,6 +72,7 @@ export async function leggiStruttura(id: string): Promise<Struttura | null> {
 
 export async function creaStruttura(nome: string, indirizzo: string, numCamere = 5): Promise<Struttura> {
   await ensureTable();
+  const conti: ContoCorrente[] = [{ id: randomUUID(), tipo: 'contanti', nome: 'Contanti' }];
   const record: Struttura = {
     id: randomUUID(),
     nome,
@@ -75,14 +82,15 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     prezzi_camere: Object.fromEntries(Array.from({ length: numCamere }, (_, i) => [i + 1, DEFAULT_PREZZI[i + 1] ?? 60])) as Record<number, number>,
     colori_camere: {},
     ical_urls: {},
+    conti_correnti: conti,
     created_at: new Date().toISOString(),
   };
   await sql`
-    INSERT INTO strutture (id, nome, indirizzo, num_camere, nomi_camere, prezzi_camere, colori_camere, ical_urls, created_at)
+    INSERT INTO strutture (id, nome, indirizzo, num_camere, nomi_camere, prezzi_camere, colori_camere, ical_urls, conti_correnti, created_at)
     VALUES (${record.id}, ${record.nome}, ${record.indirizzo}, ${record.num_camere},
             ${JSON.stringify(record.nomi_camere)}, ${JSON.stringify(record.prezzi_camere)},
             ${JSON.stringify(record.colori_camere)}, ${JSON.stringify(record.ical_urls)},
-            ${record.created_at})
+            ${JSON.stringify(record.conti_correnti)}, ${record.created_at})
   `;
   return record;
 }
@@ -104,6 +112,8 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET ical_urls = ${JSON.stringify(fields.ical_urls)} WHERE id = ${id}`;
   if (fields.alloggiati_credentials !== undefined)
     await sql`UPDATE strutture SET alloggiati_credentials = ${JSON.stringify(fields.alloggiati_credentials)} WHERE id = ${id}`;
+  if (fields.conti_correnti !== undefined)
+    await sql`UPDATE strutture SET conti_correnti = ${JSON.stringify(fields.conti_correnti)} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {
@@ -135,6 +145,7 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     if (prezzi[i] === undefined) prezzi[i] = DEFAULT_PREZZI[i] ?? 60;
   }
 
+  const conti: ContoCorrente[] = [{ id: randomUUID(), tipo: 'contanti', nome: 'Contanti' }];
   const struttura: Struttura = {
     id: randomUUID(),
     nome: 'Struttura principale',
@@ -144,14 +155,15 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     prezzi_camere: prezzi,
     colori_camere: colori,
     ical_urls: ical,
+    conti_correnti: conti,
     created_at: new Date().toISOString(),
   };
   await sql`
-    INSERT INTO strutture (id, nome, indirizzo, num_camere, nomi_camere, prezzi_camere, colori_camere, ical_urls, created_at)
+    INSERT INTO strutture (id, nome, indirizzo, num_camere, nomi_camere, prezzi_camere, colori_camere, ical_urls, conti_correnti, created_at)
     VALUES (${struttura.id}, ${struttura.nome}, ${struttura.indirizzo}, ${struttura.num_camere},
             ${JSON.stringify(struttura.nomi_camere)}, ${JSON.stringify(struttura.prezzi_camere)},
             ${JSON.stringify(struttura.colori_camere)}, ${JSON.stringify(struttura.ical_urls)},
-            ${struttura.created_at})
+            ${JSON.stringify(struttura.conti_correnti)}, ${struttura.created_at})
   `;
   return struttura;
 }
@@ -159,10 +171,8 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
 export async function migraStruttura(): Promise<string> {
   if (_migrated) return '';
   const s = await getOrCreateDefaultStruttura();
-  // Add struttura_id column to prenotazioni and prezzi_periodi if missing
   await sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS struttura_id TEXT`;
   await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`;
-  // Migrate existing rows
   await sql`UPDATE prenotazioni SET struttura_id = ${s.id} WHERE struttura_id IS NULL`;
   await sql`UPDATE prezzi_periodi SET struttura_id = ${s.id} WHERE struttura_id IS NULL`;
   _migrated = true;

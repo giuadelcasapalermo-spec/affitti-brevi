@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     importo: Number(body.importo),
     camera_id: body.camera_id ?? undefined,
     note: body.note ?? '',
+    fonte_pagamento: body.fonte_pagamento ?? 'Contanti',
     created_at: new Date().toISOString(),
   };
 

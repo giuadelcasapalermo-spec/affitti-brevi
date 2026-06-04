@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Uscita, CATEGORIE_USCITA, CategoriaUscita,
   Entrata, CATEGORIE_ENTRATA, CategoriaEntrata,
+  ContoCorrente,
 } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
+import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
-import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
 
 /* ── colori ───────────────────────────────────────────── */
@@ -43,19 +45,22 @@ type Riga =
   | { tipo: 'uscita';  rec: Uscita  };
 
 /* ── Form uscita ──────────────────────────────────────── */
-function FormUscita({ iniziale, onSalva, onAnnulla, camere }: {
+function FormUscita({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
   iniziale?: Partial<Uscita>;
   onSalva: (d: Partial<Uscita>) => void;
   onAnnulla: () => void;
   camere: { id: number; nome: string }[];
+  contiCorrenti: ContoCorrente[];
 }) {
+  const defaultFonte = contiCorrenti[0]?.nome ?? 'Contanti';
   const [f, setF] = useState({
-    data:       iniziale?.data       ?? oggi,
-    descrizione:iniziale?.descrizione ?? '',
-    categoria:  iniziale?.categoria  ?? 'Altro' as CategoriaUscita,
-    importo:    iniziale?.importo    ?? '',
-    camera_id:  iniziale?.camera_id  ?? '',
-    note:       iniziale?.note       ?? '',
+    data:            iniziale?.data            ?? oggi,
+    descrizione:     iniziale?.descrizione     ?? '',
+    categoria:       iniziale?.categoria       ?? 'Altro' as CategoriaUscita,
+    importo:         iniziale?.importo         ?? '',
+    camera_id:       iniziale?.camera_id       ?? '',
+    note:            iniziale?.note            ?? '',
+    fonte_pagamento: iniziale?.fonte_pagamento ?? defaultFonte,
   });
   const set = (k: string, v: string | number) => setF(p => ({ ...p, [k]: v }));
   function applicaVoce(data: Record<string, unknown>) {
@@ -85,14 +90,20 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere }: {
       <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Importo (€) *</label>
           <input type="number" min="0" step="0.01" value={f.importo} onChange={e => set('importo', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Fonte pagamento</label>
+          <select value={f.fonte_pagamento} onChange={e => set('fonte_pagamento', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
+            {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+          </select></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Camera</label>
           <select value={f.camera_id} onChange={e => set('camera_id', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             <option value="">Generale</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+          <input type="text" value={f.note} onChange={e => set('note', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" /></div>
       </div>
-      <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-        <textarea value={f.note} onChange={e => set('note', e.target.value)} rows={2} className="w-full border rounded px-3 py-2 text-sm" /></div>
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onAnnulla} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Annulla</button>
         <button type="submit" className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700">Salva uscita</button>
@@ -102,19 +113,22 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere }: {
 }
 
 /* ── Form entrata ─────────────────────────────────────── */
-function FormEntrata({ iniziale, onSalva, onAnnulla, camere }: {
+function FormEntrata({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
   iniziale?: Partial<Entrata>;
   onSalva: (d: Partial<Entrata>) => void;
   onAnnulla: () => void;
   camere: { id: number; nome: string }[];
+  contiCorrenti: ContoCorrente[];
 }) {
+  const defaultFonte = contiCorrenti[0]?.nome ?? 'Contanti';
   const [f, setF] = useState({
-    data:       iniziale?.data        ?? oggi,
-    descrizione:iniziale?.descrizione ?? '',
-    categoria:  iniziale?.categoria   ?? 'Altro' as CategoriaEntrata,
-    importo:    iniziale?.importo     ?? '',
-    camera_id:  iniziale?.camera_id   ?? '',
-    note:       iniziale?.note        ?? '',
+    data:            iniziale?.data            ?? oggi,
+    descrizione:     iniziale?.descrizione     ?? '',
+    categoria:       iniziale?.categoria       ?? 'Altro' as CategoriaEntrata,
+    importo:         iniziale?.importo         ?? '',
+    camera_id:       iniziale?.camera_id       ?? '',
+    note:            iniziale?.note            ?? '',
+    fonte_pagamento: iniziale?.fonte_pagamento ?? defaultFonte,
   });
   const set = (k: string, v: string | number) => setF(p => ({ ...p, [k]: v }));
   function applicaVoce(data: Record<string, unknown>) {
@@ -134,7 +148,7 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere }: {
       <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Data *</label>
           <input type="date" value={f.data} onChange={e => set('data', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">Fonte *</label>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Fonte incasso *</label>
           <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required>
             {CATEGORIE_ENTRATA.map(c => <option key={c} value={c}>{c}</option>)}
           </select></div>
@@ -144,14 +158,20 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere }: {
       <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Importo (€) *</label>
           <input type="number" min="0" step="0.01" value={f.importo} onChange={e => set('importo', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Modalità pagamento</label>
+          <select value={f.fonte_pagamento} onChange={e => set('fonte_pagamento', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
+            {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+          </select></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Camera</label>
           <select value={f.camera_id} onChange={e => set('camera_id', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             <option value="">Generale</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+          <input type="text" value={f.note} onChange={e => set('note', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" /></div>
       </div>
-      <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-        <textarea value={f.note} onChange={e => set('note', e.target.value)} rows={2} className="w-full border rounded px-3 py-2 text-sm" /></div>
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onAnnulla} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Annulla</button>
         <button type="submit" className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Salva entrata</button>
@@ -163,6 +183,11 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere }: {
 /* ── Pagina ───────────────────────────────────────────── */
 export default function PrimaNotaPage() {
   const camere = useCamere();
+  const { struttura } = useStruttura();
+  const contiCorrenti: ContoCorrente[] = struttura?.conti_correnti?.length
+    ? struttura.conti_correnti
+    : [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }];
+
   const [entrate, setEntrate] = useState<Entrata[]>([]);
   const [uscite, setUscite]   = useState<Uscita[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,7 +274,7 @@ export default function PrimaNotaPage() {
   const totUscite  = righe.filter(r => r.tipo === 'uscita').reduce((s, r) => s + r.rec.importo, 0);
   const saldo      = totEntrate - totUscite;
 
-  /* Saldo progressivo (dalla più vecchia alla più recente, poi invertiamo per display) */
+  /* Saldo progressivo */
   const righeCrono = [...righe].reverse();
   let saldoCorrente = 0;
   const saldoMap = new Map<string, number>();
@@ -420,7 +445,7 @@ export default function PrimaNotaPage() {
             <h2 className="font-semibold text-gray-700">Nuova entrata</h2>
             <button onClick={() => setFormAperto(null)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
           </div>
-          <FormEntrata onSalva={creaEntrata} onAnnulla={() => setFormAperto(null)} camere={camere} />
+          <FormEntrata onSalva={creaEntrata} onAnnulla={() => setFormAperto(null)} camere={camere} contiCorrenti={contiCorrenti} />
         </div>
       )}
 
@@ -431,7 +456,7 @@ export default function PrimaNotaPage() {
             <h2 className="font-semibold text-gray-700">Nuova uscita</h2>
             <button onClick={() => setFormAperto(null)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
           </div>
-          <FormUscita onSalva={creaUscita} onAnnulla={() => setFormAperto(null)} camere={camere} />
+          <FormUscita onSalva={creaUscita} onAnnulla={() => setFormAperto(null)} camere={camere} contiCorrenti={contiCorrenti} />
         </div>
       )}
 
@@ -442,7 +467,7 @@ export default function PrimaNotaPage() {
             <h2 className="font-semibold text-gray-700">Modifica entrata</h2>
             <button onClick={() => setEditingE(null)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
           </div>
-          <FormEntrata iniziale={editingE} onSalva={d => aggiornaEntrata(editingE.id, d)} onAnnulla={() => setEditingE(null)} camere={camere} />
+          <FormEntrata iniziale={editingE} onSalva={d => aggiornaEntrata(editingE.id, d)} onAnnulla={() => setEditingE(null)} camere={camere} contiCorrenti={contiCorrenti} />
         </div>
       )}
       {editingU && (
@@ -451,7 +476,7 @@ export default function PrimaNotaPage() {
             <h2 className="font-semibold text-gray-700">Modifica uscita</h2>
             <button onClick={() => setEditingU(null)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
           </div>
-          <FormUscita iniziale={editingU} onSalva={d => aggiornaUscita(editingU.id, d)} onAnnulla={() => setEditingU(null)} camere={camere} />
+          <FormUscita iniziale={editingU} onSalva={d => aggiornaUscita(editingU.id, d)} onAnnulla={() => setEditingU(null)} camere={camere} contiCorrenti={contiCorrenti} />
         </div>
       )}
 
@@ -475,6 +500,11 @@ export default function PrimaNotaPage() {
                         ? <span className={`text-[10px] px-1.5 py-0 rounded-full font-medium ${COL_ENTRATA[e.categoria]}`}>{e.categoria}</span>
                         : <span className={`text-[10px] px-1.5 py-0 rounded-full font-medium ${COL_USCITA[u.categoria]}`}>{u.categoria}</span>
                       }
+                      {r.rec.fonte_pagamento && r.rec.fonte_pagamento !== 'Contanti' && (
+                        <span className="text-[10px] px-1.5 py-0 rounded-full bg-gray-100 text-gray-500 flex items-center gap-0.5">
+                          <Wallet size={8} />{r.rec.fonte_pagamento}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs font-medium text-gray-800 truncate">{r.rec.descrizione}</div>
                   </div>
@@ -516,6 +546,7 @@ export default function PrimaNotaPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Data</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Descrizione</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Categoria</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Modalità</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Entrata</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Uscita</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Saldo</th>
@@ -541,6 +572,12 @@ export default function PrimaNotaPage() {
                         : <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${COL_USCITA[u.categoria]}`}>{u.categoria}</span>
                       }
                     </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs text-gray-500 flex items-center gap-1">
+                        <Wallet size={11} />
+                        {r.rec.fonte_pagamento || 'Contanti'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-green-700">{isE ? `+€${r.rec.importo.toFixed(2)}` : ''}</td>
                     <td className="px-4 py-3 text-right font-semibold text-red-600">{!isE ? `-€${r.rec.importo.toFixed(2)}` : ''}</td>
                     <td className={`px-4 py-3 text-right font-bold ${s >= 0 ? 'text-green-700' : 'text-red-700'}`}>{s >= 0 ? '+' : ''}€{s.toFixed(2)}</td>
@@ -556,7 +593,7 @@ export default function PrimaNotaPage() {
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 font-semibold">
               <tr>
-                <td colSpan={3} className="px-4 py-3 text-gray-600">Totale mese</td>
+                <td colSpan={4} className="px-4 py-3 text-gray-600">Totale mese</td>
                 <td className="px-4 py-3 text-right text-green-700">+€{totEntrate.toFixed(2)}</td>
                 <td className="px-4 py-3 text-right text-red-600">-€{totUscite.toFixed(2)}</td>
                 <td className={`px-4 py-3 text-right font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>{saldo >= 0 ? '+' : ''}€{saldo.toFixed(2)}</td>

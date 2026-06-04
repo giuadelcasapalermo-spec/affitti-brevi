@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo } from '@/lib/types';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
-  Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2,
+  Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
@@ -90,6 +90,12 @@ export default function ImpostazioniPage() {
   const [logoUrl, setLogoUrl] = useState('');
   const [salvatoBranding, setSalvatoBranding] = useState(false);
 
+  // Conti correnti (per struttura)
+  const [editContiCorrenti, setEditContiCorrenti] = useState<ContoCorrente[]>([]);
+  const [nuovoContoNome, setNuovoContoNome] = useState('');
+  const [nuovoContoTipo, setNuovoContoTipo] = useState<TipoContoCorrente>('contanti');
+  const [salvatoConti, setSalvatoConti] = useState(false);
+
   // AlloggiatiWeb credentials (per struttura)
   const [editAlloggiatiUtente, setEditAlloggiatiUtente] = useState('');
   const [editAlloggiatiPassword, setEditAlloggiatiPassword] = useState('');
@@ -137,6 +143,17 @@ export default function ImpostazioniPage() {
 
   function caricaStrutture() {
     fetch('/api/strutture').then(r => r.json()).catch(() => {});
+  }
+
+  async function salvaContiCorrenti(id: string) {
+    await fetch(`/api/strutture/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conti_correnti: editContiCorrenti }),
+    });
+    setSalvatoConti(true);
+    setTimeout(() => setSalvatoConti(false), 2000);
+    caricaStrutture();
   }
 
   async function salvaCredenziali(id: string) {
@@ -794,6 +811,10 @@ export default function ImpostazioniPage() {
                           setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
                           setMostraPasswordAlloggiati(false);
                           setSalvatoAlloggiati(false);
+                          setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }]);
+                          setNuovoContoNome('');
+                          setNuovoContoTipo('contanti');
+                          setSalvatoConti(false);
                         }}
                         className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-100 border border-slate-200"
                       >
@@ -887,6 +908,77 @@ export default function ImpostazioniPage() {
                             )}
                           </>
                         )}
+                      </div>
+
+                      {/* Conti correnti */}
+                      <div className="border-t pt-3 mt-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Euro size={14} className="text-emerald-600" />
+                          <span className="font-semibold text-gray-700 text-xs">Conti correnti / Modalità pagamento</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-2">
+                          Cassa, POS, conti bancari disponibili per questa struttura. Usati nella Prima Nota.
+                        </p>
+                        <div className="space-y-1 mb-2">
+                          {editContiCorrenti.map((c, idx) => (
+                            <div key={c.id} className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1.5">
+                              <span className="text-xs text-gray-500 w-16 shrink-0">{TIPI_CONTO[c.tipo]}</span>
+                              <span className="text-xs font-medium text-gray-700 flex-1">{c.nome}</span>
+                              {editContiCorrenti.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditContiCorrenti(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-gray-300 hover:text-red-500"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-1 mb-2">
+                          <select
+                            value={nuovoContoTipo}
+                            onChange={e => setNuovoContoTipo(e.target.value as TipoContoCorrente)}
+                            className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                          >
+                            {(Object.entries(TIPI_CONTO) as [TipoContoCorrente, string][]).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Nome (es. Cassa, POS Visa…)"
+                            value={nuovoContoNome}
+                            onChange={e => setNuovoContoNome(e.target.value)}
+                            className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && nuovoContoNome.trim()) {
+                                e.preventDefault();
+                                setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]);
+                                setNuovoContoNome('');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={!nuovoContoNome.trim()}
+                            onClick={() => {
+                              setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]);
+                              setNuovoContoNome('');
+                            }}
+                            className="flex items-center gap-1 bg-emerald-600 text-white px-2 py-1 rounded text-xs hover:bg-emerald-700 disabled:opacity-40"
+                          >
+                            <Plus size={11} /> Aggiungi
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => salvaContiCorrenti(s.id)}
+                          className="flex items-center gap-1.5 bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700"
+                        >
+                          <Save size={12} />
+                          {salvatoConti ? 'Salvato!' : 'Salva modalità pagamento'}
+                        </button>
                       </div>
 
                       {/* AlloggiatiWeb */}
