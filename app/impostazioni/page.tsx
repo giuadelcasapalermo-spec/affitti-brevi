@@ -61,6 +61,7 @@ export default function ImpostazioniPage() {
   const [nuovoPeriodo, setNuovoPeriodo] = useState({ ...DEFAULT_PERIODO });
   const [salvatoPeriodo, setSalvatoPeriodo] = useState(false);
   const [canalePrezzi, setCanalePrezzi] = useState<CanalePrezzi>('privato');
+  const [filtroPeriodo, setFiltroPeriodo] = useState<'corrente' | 'tutti'>('corrente');
 
   // Sync iCal
   const [syncingIcal, setSyncingIcal] = useState(false);
@@ -343,6 +344,11 @@ export default function ImpostazioniPage() {
   const idsEditCamere = Array.from({ length: editNumCamere }, (_, i) => i + 1);
   const idsCamereOutput = Array.from({ length: numCamere }, (_, i) => i + 1);
   const periodiAttiva = prezziPeriodi.filter(p => p.struttura_id === strutturaAttiva?.id);
+  const oggi = new Date().toISOString().slice(0, 10);
+  const periodiVisibili = filtroPeriodo === 'corrente'
+    ? periodiAttiva.filter(p => p.data_inizio <= oggi && p.data_fine >= oggi)
+    : periodiAttiva;
+  const hasPeriodoCorrente = periodiAttiva.some(p => p.data_inizio <= oggi && p.data_fine >= oggi);
 
   const TAB = [
     { id: 'strutture', label: 'Strutture', icon: Building2, color: 'slate'  },
@@ -600,24 +606,47 @@ export default function ImpostazioniPage() {
                       <h3 className="font-semibold text-gray-700 text-sm">Prezzi per periodo</h3>
                     </div>
 
-                    {/* Filtro canale */}
-                    <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
-                      {([['privato', 'Privato'], ['booking', 'Booking'], ['airbnb', 'Airbnb']] as [CanalePrezzi, string][]).map(([id, label]) => (
-                        <button key={id} onClick={() => setCanalePrezzi(id)}
+                    {/* Filtri: periodo + canale */}
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                        <button onClick={() => setFiltroPeriodo('corrente')}
                           className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                            canalePrezzi === id
-                              ? 'bg-white shadow text-gray-800'
-                              : 'text-gray-500 hover:text-gray-700'
+                            filtroPeriodo === 'corrente' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'
                           }`}
                         >
-                          {label}
+                          Periodo corrente
                         </button>
-                      ))}
+                        <button onClick={() => setFiltroPeriodo('tutti')}
+                          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                            filtroPeriodo === 'tutti' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Tutti
+                        </button>
+                      </div>
+                      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                        {([['privato', 'Privato'], ['booking', 'Booking'], ['airbnb', 'Airbnb']] as [CanalePrezzi, string][]).map(([id, label]) => (
+                          <button key={id} onClick={() => setCanalePrezzi(id)}
+                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                              canalePrezzi === id ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+
+                    {filtroPeriodo === 'corrente' && !hasPeriodoCorrente && periodiAttiva.length > 0 && (
+                      <p className="text-xs text-amber-600 bg-amber-50 rounded px-3 py-2 mb-3">
+                        Nessun periodo attivo oggi. Mostra tutti i periodi.
+                      </p>
+                    )}
 
                     {idsEditCamere.map(id => {
                       const nomeCamera = editNomiCamere[id] || `Camera ${id}`;
-                      const periodiCamera = periodiAttiva.filter(p => p.camera_id === id);
+                      const periodiCamera = (filtroPeriodo === 'corrente' && !hasPeriodoCorrente ? periodiAttiva : periodiVisibili)
+                        .filter(p => p.camera_id === id);
                       if (periodiCamera.length === 0) return null;
                       return (
                         <div key={id} className="mb-3">
@@ -636,10 +665,12 @@ export default function ImpostazioniPage() {
                                 (canalePrezzi === 'booking' && p.prezzo_booking == null) ||
                                 (canalePrezzi === 'airbnb'  && p.prezzo_airbnb  == null)
                               );
+                              const isAttivo = p.data_inizio <= oggi && p.data_fine >= oggi;
                               return (
-                                <div key={p.id} className="flex items-center gap-2 text-xs bg-gray-50 rounded px-3 py-1.5">
+                                <div key={p.id} className={`flex items-center gap-2 text-xs rounded px-3 py-1.5 ${isAttivo ? 'bg-green-50 ring-1 ring-green-200' : 'bg-gray-50'}`}>
                                   <span className="font-medium text-gray-700 w-24 truncate">{p.nome_periodo || '—'}</span>
                                   <span className="text-gray-400">{p.data_inizio} → {p.data_fine}</span>
+                                  {isAttivo && <span className="text-[10px] bg-green-100 text-green-700 rounded px-1 font-medium">oggi</span>}
                                   <span className={`ml-auto font-semibold ${isDefault ? 'text-gray-400' : 'text-green-700'}`}>
                                     €{prezzoCanale}/notte{isDefault ? ' (=priv.)' : ''}
                                   </span>

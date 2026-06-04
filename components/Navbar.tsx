@@ -207,6 +207,15 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-1">
+            {!soloCalendario && (
+              <Link
+                href="/alloggiati"
+                className={`p-1.5 rounded hover:bg-white/10 ${pathname === '/alloggiati' ? 'bg-white/20' : ''}`}
+                title="Alloggiati"
+              >
+                <UserCheck size={16} />
+              </Link>
+            )}
             <Link
               href="/impostazioni"
               className={`p-1.5 rounded hover:bg-white/10 ${pathname === '/impostazioni' ? 'bg-white/20' : ''}`}
