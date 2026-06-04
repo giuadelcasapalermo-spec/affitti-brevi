@@ -9,10 +9,11 @@ export function useStruttura() {
   useEffect(() => {
     const saved = document.cookie.split('; ').find(r => r.startsWith('struttura_id='))?.split('=')[1] ?? '';
     setStrutturaIdState(saved);
-    fetch('/api/strutture').then(r => r.json()).then((s: Struttura[]) => {
-      setStrutture(s);
+    fetch('/api/strutture').then(r => r.json()).then((s: unknown) => {
+      if (!Array.isArray(s)) return;
+      setStrutture(s as Struttura[]);
       if (!saved && s.length > 0) {
-        setStruttura(s[0].id);
+        setStruttura((s as Struttura[])[0].id);
       }
     }).catch(() => {});
   }, []);
