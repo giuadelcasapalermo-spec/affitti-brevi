@@ -780,298 +780,281 @@ export default function ImpostazioniPage() {
       )}
 
       {/* ── STRUTTURE ─────────────────────────────────────────────────── */}
-      {sezione === 'strutture' && (
-        <div className="bg-white rounded-lg shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Building2 size={16} className="text-slate-600" />
-            <h2 className="font-semibold text-slate-700">Gestisci strutture</h2>
-          </div>
+      {sezione === 'strutture' && (() => {
+        const selezionata = strutture.find(s => s.id === editingDatiId) ?? null;
+        function seleziona(s: typeof strutture[0]) {
+          setEditingDatiId(s.id);
+          setEditDatiNome(s.nome);
+          setEditDatiIndirizzo(s.indirizzo ?? '');
+          setSalvatoEditDati(false);
+          setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
+          setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
+          setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
+          setMostraPasswordAlloggiati(false);
+          setSalvatoAlloggiati(false);
+          setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
+          setNuovoContoNome('');
+          setNuovoContoTipo('contanti');
+          setSalvatoConti(false);
+        }
+        return (
+          <div className="space-y-4">
 
-          {strutture.length > 0 && (
-            <div className="space-y-3 mb-5">
-              {strutture.map(s => (
-                <div key={s.id} className={`rounded border ${s.id === strutturaAttiva?.id ? 'border-purple-200 bg-purple-50' : 'border-gray-100 bg-gray-50'}`}>
-                  {/* Riga struttura */}
-                  <div className="flex items-center justify-between px-3 py-2 text-sm">
-                    <div>
-                      <span className={`font-medium ${s.id === strutturaAttiva?.id ? 'text-purple-800' : 'text-gray-700'}`}>{s.nome}</span>
-                      {s.indirizzo && <span className="text-xs text-gray-400 ml-2">{s.indirizzo}</span>}
-                      {s.id === strutturaAttiva?.id && <span className="ml-2 text-[10px] bg-purple-100 text-purple-600 rounded px-1.5 py-0.5">attiva</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          if (editingDatiId === s.id) { setEditingDatiId(null); return; }
-                          setEditingDatiId(s.id);
-                          setEditDatiNome(s.nome);
-                          setEditDatiIndirizzo(s.indirizzo ?? '');
-                          setSalvatoEditDati(false);
-                          setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
-                          setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
-                          setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
-                          setMostraPasswordAlloggiati(false);
-                          setSalvatoAlloggiati(false);
-                          setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }]);
-                          setNuovoContoNome('');
-                          setNuovoContoTipo('contanti');
-                          setSalvatoConti(false);
-                        }}
-                        className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-100 border border-slate-200"
-                      >
-                        {editingDatiId === s.id ? 'Annulla' : 'Modifica'}
-                      </button>
-                      {s.id !== strutturaAttiva?.id && (
-                        <button onClick={() => { setStrutturaAttiva(s.id); setSezione('camere'); }}
-                          className="text-xs text-purple-600 hover:underline"
-                        >
-                          Seleziona
-                        </button>
-                      )}
-                      {strutture.length > 1 && (
-                        <button onClick={() => eliminaStruttura(s.id)} className="text-gray-300 hover:text-red-500 p-0.5 rounded">
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {/* Form inline modifica dati */}
-                  {editingDatiId === s.id && (
-                    <div className="border-t px-3 py-3 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">Nome</label>
-                          <input type="text" value={editDatiNome} onChange={e => setEditDatiNome(e.target.value)}
-                            className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">Indirizzo</label>
-                          <input type="text" value={editDatiIndirizzo} onChange={e => setEditDatiIndirizzo(e.target.value)}
-                            className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                          />
+            {/* Lista strutture */}
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b bg-slate-50">
+                <Building2 size={15} className="text-slate-600" />
+                <span className="font-semibold text-slate-700 text-sm">Le tue strutture</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {strutture.map(s => {
+                  const isSelezionata = s.id === editingDatiId;
+                  const isAttiva = s.id === strutturaAttiva?.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => seleziona(s)}
+                      className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                        isSelezionata ? 'bg-slate-700 text-white' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Building2 size={14} className={isSelezionata ? 'text-slate-300' : 'text-slate-400'} />
+                        <div className="min-w-0">
+                          <span className={`text-sm font-medium truncate block ${isSelezionata ? 'text-white' : 'text-gray-800'}`}>{s.nome}</span>
+                          {s.indirizzo && <span className={`text-xs truncate block ${isSelezionata ? 'text-slate-300' : 'text-gray-400'}`}>{s.indirizzo}</span>}
                         </div>
                       </div>
-                      <button onClick={() => salvaEditDati(s.id)} disabled={!editDatiNome.trim()}
-                        className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
-                      >
-                        <Save size={13} />
-                        {salvatoEditDati ? 'Salvato!' : 'Salva'}
-                      </button>
-
-                      {/* Google Sheets */}
-                      <div className="border-t pt-3 mt-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <Table2 size={14} className="text-emerald-600" />
-                            <span className="font-semibold text-gray-700 text-xs">Google Sheets</span>
-                          </div>
-                          <button onClick={toggleGoogleSheets} disabled={togglingSheets}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${imp.google_sheets_abilitato ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        {isAttiva && (
+                          <span className={`text-[10px] rounded px-1.5 py-0.5 font-medium ${isSelezionata ? 'bg-slate-500 text-slate-200' : 'bg-purple-100 text-purple-600'}`}>
+                            attiva
+                          </span>
+                        )}
+                        {strutture.length > 1 && (
+                          <span
+                            role="button"
+                            onClick={e => { e.stopPropagation(); eliminaStruttura(s.id); }}
+                            className={`p-0.5 rounded ${isSelezionata ? 'text-slate-400 hover:text-red-300' : 'text-gray-300 hover:text-red-500'}`}
                           >
-                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${imp.google_sheets_abilitato ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                          </button>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">
-                          {imp.google_sheets_abilitato ? 'Integrazione attiva.' : 'Integrazione disabilitata.'}
-                        </p>
-                        {imp.google_sheets_abilitato && (
-                          <>
-                            <div className="mb-2">
-                              <div className="flex gap-2">
-                                <input type="text" placeholder="URL o ID Foglio Google" defaultValue={imp.google_sheet_id ?? ''} id="sheet-url-input"
-                                  className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                                />
-                                <button onClick={async () => {
-                                  const raw = (document.getElementById('sheet-url-input') as HTMLInputElement).value.trim();
-                                  const match = raw.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) ?? raw.match(/^([a-zA-Z0-9_-]{20,})$/);
-                                  const sheetId = match?.[1] ?? raw;
-                                  if (!sheetId) return;
-                                  await fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ google_sheet_id: sheetId }) });
-                                  setImp(prev => ({ ...prev, google_sheet_id: sheetId }));
-                                }} className="bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700">Salva</button>
-                              </div>
-                              {imp.google_sheet_id && (
-                                <a href={`https://docs.google.com/spreadsheets/d/${imp.google_sheet_id}/edit`} target="_blank" rel="noopener noreferrer"
-                                  className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Apri foglio →</a>
-                              )}
-                            </div>
-                            <button onClick={() => syncSheets('export')} disabled={syncingSheets}
-                              className="flex items-center gap-1.5 bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-50"
-                            >
-                              <RefreshCw size={12} className={syncingSheets ? 'animate-spin' : ''} />
-                              Esporta su Sheets
-                            </button>
-                            {msgSheets && (
-                              <div className={`mt-2 text-xs px-3 py-2 rounded ${msgSheets.includes('rrore') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                                {msgSheets}
-                              </div>
-                            )}
-                          </>
+                            <Trash2 size={13} />
+                          </span>
                         )}
                       </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                      {/* Conti correnti */}
-                      <div className="border-t pt-3 mt-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Euro size={14} className="text-emerald-600" />
-                          <span className="font-semibold text-gray-700 text-xs">Conti correnti / Modalità pagamento</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">
-                          Cassa, POS, conti bancari disponibili per questa struttura. Usati nella Prima Nota.
-                        </p>
-                        <div className="space-y-1 mb-2">
-                          {editContiCorrenti.map((c, idx) => (
-                            <div key={c.id} className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1.5">
-                              <span className="text-xs text-gray-500 w-16 shrink-0">{TIPI_CONTO[c.tipo]}</span>
-                              <span className="text-xs font-medium text-gray-700 flex-1">{c.nome}</span>
-                              {editContiCorrenti.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setEditContiCorrenti(prev => prev.filter((_, i) => i !== idx))}
-                                  className="text-gray-300 hover:text-red-500"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-1 mb-2">
-                          <select
-                            value={nuovoContoTipo}
-                            onChange={e => setNuovoContoTipo(e.target.value as TipoContoCorrente)}
-                            className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                          >
-                            {(Object.entries(TIPI_CONTO) as [TipoContoCorrente, string][]).map(([k, v]) => (
-                              <option key={k} value={k}>{v}</option>
-                            ))}
-                          </select>
-                          <input
-                            type="text"
-                            placeholder="Nome (es. Cassa, POS Visa…)"
-                            value={nuovoContoNome}
-                            onChange={e => setNuovoContoNome(e.target.value)}
-                            className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                            onKeyDown={e => {
-                              if (e.key === 'Enter' && nuovoContoNome.trim()) {
-                                e.preventDefault();
-                                setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]);
-                                setNuovoContoNome('');
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            disabled={!nuovoContoNome.trim()}
-                            onClick={() => {
-                              setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]);
-                              setNuovoContoNome('');
-                            }}
-                            className="flex items-center gap-1 bg-emerald-600 text-white px-2 py-1 rounded text-xs hover:bg-emerald-700 disabled:opacity-40"
-                          >
-                            <Plus size={11} /> Aggiungi
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => salvaContiCorrenti(s.id)}
-                          className="flex items-center gap-1.5 bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700"
-                        >
-                          <Save size={12} />
-                          {salvatoConti ? 'Salvato!' : 'Salva modalità pagamento'}
-                        </button>
-                      </div>
-
-                      {/* AlloggiatiWeb */}
-                      <div className="border-t pt-3 mt-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Shield size={14} className="text-blue-600" />
-                          <span className="font-semibold text-gray-700 text-xs">AlloggiatiWeb</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">
-                          Credenziali per l&apos;invio automatico al portale Polizia di Stato.
-                        </p>
-                        <div className="space-y-2 mb-2">
-                          <input
-                            type="text"
-                            placeholder="Utente"
-                            value={editAlloggiatiUtente}
-                            onChange={e => setEditAlloggiatiUtente(e.target.value)}
-                            autoComplete="off"
-                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                          />
-                          <div className="flex gap-1">
-                            <input
-                              type={mostraPasswordAlloggiati ? 'text' : 'password'}
-                              placeholder="Password"
-                              value={editAlloggiatiPassword}
-                              onChange={e => setEditAlloggiatiPassword(e.target.value)}
-                              autoComplete="new-password"
-                              className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setMostraPasswordAlloggiati(p => !p)}
-                              className="border rounded px-2 text-xs text-gray-500 hover:bg-gray-50"
-                            >
-                              {mostraPasswordAlloggiati ? 'Nascondi' : 'Mostra'}
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            placeholder="WsKey"
-                            value={editAlloggiatiWskey}
-                            onChange={e => setEditAlloggiatiWskey(e.target.value)}
-                            autoComplete="off"
-                            className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
-                          />
-                        </div>
-                        <button
-                          onClick={() => salvaCredenziali(s.id)}
-                          disabled={!editAlloggiatiUtente || !editAlloggiatiPassword || !editAlloggiatiWskey}
-                          className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-40"
-                        >
-                          <Save size={12} />
-                          {salvatoAlloggiati ? 'Salvato!' : 'Salva credenziali'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+            {/* Dettaglio struttura selezionata */}
+            {selezionata && (
+              <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-700 text-white">
+                  <div className="flex items-center gap-2">
+                    <Building2 size={15} />
+                    <span className="font-semibold text-sm">{selezionata.nome}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selezionata.id !== strutturaAttiva?.id && (
+                      <button
+                        onClick={() => { setStrutturaAttiva(selezionata.id); setSezione('camere'); }}
+                        className="text-xs bg-white/20 hover:bg-white/30 text-white px-2 py-1 rounded transition-colors"
+                      >
+                        Usa questa struttura
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
 
-          <div className="border-t pt-4">
-            <p className="text-xs font-medium text-gray-500 mb-3">Aggiungi struttura</p>
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="col-span-2">
-                <input type="text" placeholder="Nome struttura" value={nuovaStrutturaForm.nome}
-                  onChange={e => setNuovaStrutturaForm(f => ({ ...f, nome: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                />
+                <div className="px-5 py-4 space-y-2">
+                  {/* Nome e indirizzo */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Nome</label>
+                      <input type="text" value={editDatiNome} onChange={e => setEditDatiNome(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Indirizzo</label>
+                      <input type="text" value={editDatiIndirizzo} onChange={e => setEditDatiIndirizzo(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                    </div>
+                  </div>
+                  <button onClick={() => salvaEditDati(selezionata.id)} disabled={!editDatiNome.trim()}
+                    className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    <Save size={13} />
+                    {salvatoEditDati ? 'Salvato!' : 'Salva nome/indirizzo'}
+                  </button>
+
+                  {/* Conti correnti */}
+                  <div className="border-t pt-4 mt-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Euro size={14} className="text-emerald-600" />
+                      <span className="font-semibold text-gray-700 text-xs">Conti correnti / Modalità pagamento</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">Cassa, POS, conti bancari. Appaiono come scelta nella Prima Nota.</p>
+                    <div className="space-y-1 mb-2">
+                      {editContiCorrenti.map((c, idx) => (
+                        <div key={c.id} className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1.5">
+                          <span className="text-xs text-gray-500 w-16 shrink-0">{TIPI_CONTO[c.tipo]}</span>
+                          <span className="text-xs font-medium text-gray-700 flex-1">{c.nome}</span>
+                          {editContiCorrenti.length > 1 && (
+                            <button type="button" onClick={() => setEditContiCorrenti(prev => prev.filter((_, i) => i !== idx))} className="text-gray-300 hover:text-red-500">
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-1 mb-2">
+                      <select value={nuovoContoTipo} onChange={e => setNuovoContoTipo(e.target.value as TipoContoCorrente)}
+                        className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                      >
+                        {(Object.entries(TIPI_CONTO) as [TipoContoCorrente, string][]).map(([k, v]) => (
+                          <option key={k} value={k}>{v}</option>
+                        ))}
+                      </select>
+                      <input type="text" placeholder="Nome (es. Cassa, POS Visa…)" value={nuovoContoNome}
+                        onChange={e => setNuovoContoNome(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && nuovoContoNome.trim()) { e.preventDefault(); setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]); setNuovoContoNome(''); }}}
+                        className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                      />
+                      <button type="button" disabled={!nuovoContoNome.trim()}
+                        onClick={() => { setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]); setNuovoContoNome(''); }}
+                        className="flex items-center gap-1 bg-emerald-600 text-white px-2 py-1 rounded text-xs hover:bg-emerald-700 disabled:opacity-40"
+                      >
+                        <Plus size={11} /> Aggiungi
+                      </button>
+                    </div>
+                    <button onClick={() => salvaContiCorrenti(selezionata.id)}
+                      className="flex items-center gap-1.5 bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700"
+                    >
+                      <Save size={12} />
+                      {salvatoConti ? 'Salvato!' : 'Salva modalità pagamento'}
+                    </button>
+                  </div>
+
+                  {/* Google Sheets */}
+                  <div className="border-t pt-4 mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <Table2 size={14} className="text-emerald-600" />
+                        <span className="font-semibold text-gray-700 text-xs">Google Sheets</span>
+                      </div>
+                      <button onClick={toggleGoogleSheets} disabled={togglingSheets}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${imp.google_sheets_abilitato ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${imp.google_sheets_abilitato ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">{imp.google_sheets_abilitato ? 'Integrazione attiva.' : 'Integrazione disabilitata.'}</p>
+                    {imp.google_sheets_abilitato && (
+                      <>
+                        <div className="mb-2">
+                          <div className="flex gap-2">
+                            <input type="text" placeholder="URL o ID Foglio Google" defaultValue={imp.google_sheet_id ?? ''} id="sheet-url-input"
+                              className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                            />
+                            <button onClick={async () => {
+                              const raw = (document.getElementById('sheet-url-input') as HTMLInputElement).value.trim();
+                              const match = raw.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) ?? raw.match(/^([a-zA-Z0-9_-]{20,})$/);
+                              const sheetId = match?.[1] ?? raw;
+                              if (!sheetId) return;
+                              await fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ google_sheet_id: sheetId }) });
+                              setImp(prev => ({ ...prev, google_sheet_id: sheetId }));
+                            }} className="bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700">Salva</button>
+                          </div>
+                          {imp.google_sheet_id && (
+                            <a href={`https://docs.google.com/spreadsheets/d/${imp.google_sheet_id}/edit`} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Apri foglio →</a>
+                          )}
+                        </div>
+                        <button onClick={() => syncSheets('export')} disabled={syncingSheets}
+                          className="flex items-center gap-1.5 bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          <RefreshCw size={12} className={syncingSheets ? 'animate-spin' : ''} />
+                          Esporta su Sheets
+                        </button>
+                        {msgSheets && (
+                          <div className={`mt-2 text-xs px-3 py-2 rounded ${msgSheets.includes('rrore') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{msgSheets}</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* AlloggiatiWeb */}
+                  <div className="border-t pt-4 mt-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield size={14} className="text-blue-600" />
+                      <span className="font-semibold text-gray-700 text-xs">AlloggiatiWeb</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">Credenziali per l&apos;invio automatico al portale Polizia di Stato.</p>
+                    <div className="space-y-2 mb-2">
+                      <input type="text" placeholder="Utente" value={editAlloggiatiUtente} onChange={e => setEditAlloggiatiUtente(e.target.value)}
+                        autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                      <div className="flex gap-1">
+                        <input type={mostraPasswordAlloggiati ? 'text' : 'password'} placeholder="Password"
+                          value={editAlloggiatiPassword} onChange={e => setEditAlloggiatiPassword(e.target.value)}
+                          autoComplete="new-password" className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                        <button type="button" onClick={() => setMostraPasswordAlloggiati(p => !p)} className="border rounded px-2 text-xs text-gray-500 hover:bg-gray-50">
+                          {mostraPasswordAlloggiati ? 'Nascondi' : 'Mostra'}
+                        </button>
+                      </div>
+                      <input type="text" placeholder="WsKey" value={editAlloggiatiWskey} onChange={e => setEditAlloggiatiWskey(e.target.value)}
+                        autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                    </div>
+                    <button onClick={() => salvaCredenziali(selezionata.id)}
+                      disabled={!editAlloggiatiUtente || !editAlloggiatiPassword || !editAlloggiatiWskey}
+                      className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-40"
+                    >
+                      <Save size={12} />
+                      {salvatoAlloggiati ? 'Salvato!' : 'Salva credenziali'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <input type="text" placeholder="Indirizzo (opzionale)" value={nuovaStrutturaForm.indirizzo}
-                  onChange={e => setNuovaStrutturaForm(f => ({ ...f, indirizzo: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                />
+            )}
+
+            {/* Aggiungi struttura */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <p className="text-xs font-medium text-gray-500 mb-3">Aggiungi struttura</p>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="col-span-2">
+                  <input type="text" placeholder="Nome struttura" value={nuovaStrutturaForm.nome}
+                    onChange={e => setNuovaStrutturaForm(f => ({ ...f, nome: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+                <div>
+                  <input type="text" placeholder="Indirizzo (opzionale)" value={nuovaStrutturaForm.indirizzo}
+                    onChange={e => setNuovaStrutturaForm(f => ({ ...f, indirizzo: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+                <div>
+                  <input type="number" min="1" max="20" placeholder="N° camere" value={nuovaStrutturaForm.num_camere}
+                    onChange={e => setNuovaStrutturaForm(f => ({ ...f, num_camere: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
               </div>
-              <div>
-                <input type="number" min="1" max="20" placeholder="N° camere" value={nuovaStrutturaForm.num_camere}
-                  onChange={e => setNuovaStrutturaForm(f => ({ ...f, num_camere: e.target.value }))}
-                  className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                />
-              </div>
+              <button onClick={creaNuovaStruttura} disabled={!nuovaStrutturaForm.nome.trim()}
+                className="flex items-center gap-1.5 bg-slate-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
+              >
+                <Plus size={15} /> Crea struttura
+              </button>
             </div>
-            <button onClick={creaNuovaStruttura} disabled={!nuovaStrutturaForm.nome.trim()}
-              className="flex items-center gap-1.5 bg-slate-700 text-white px-4 py-2 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
-            >
-              <Plus size={15} /> Crea struttura
-            </button>
+
           </div>
-
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── ACCOUNT ─────────────────────────────────────────────────── */}
       {sezione === 'account' && (
