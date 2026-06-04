@@ -191,7 +191,7 @@ export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
         ? a.comune_nascita.trim()
         : nomeACodiceComune(comuneNascitaClean) || nomeACodiceComune(a.comune_nascita) || '';
       comuneNascita = pad(rawComune, 9);
-      const provRaw = a.provincia_nascita?.trim() || COMUNI.find(c => c.codice === rawComune.trim())?.prov || '';
+      const provRaw = (a.provincia_nascita?.trim() || COMUNI.find(c => c.codice === rawComune.trim())?.prov || '').toUpperCase();
       provinciaNascita = pad(provRaw, 2);
     } else {
       statoNascita = pad(statoNascitaCode, 9);

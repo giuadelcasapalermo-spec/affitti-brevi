@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import { ScanLine, Loader2, CheckCircle, AlertCircle, UserPlus } from 'lucide-react';
 import { TIPI_ALLOGGIATO, TipoAlloggiato } from '@/lib/types';
 
@@ -23,7 +24,7 @@ const FORM_VUOTO = {
 
 async function compressImage(file: File): Promise<File> {
   if (file.size < 1.5 * 1024 * 1024) return file;
-  return new Promise((resolve) => {
+  const compress = new Promise<File>((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -54,10 +55,13 @@ async function compressImage(file: File): Promise<File> {
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.src = url;
   });
+  // timeout di 6s: se canvas.toBlob non risponde (bug WebView Android) usa il file originale
+  const timeout = new Promise<File>(resolve => setTimeout(() => resolve(file), 6000));
+  return Promise.race([compress, timeout]);
 }
 
-export default function RegistrazionePage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = use(params);
+export default function RegistrazionePage() {
+  const { token } = useParams() as { token: string };
 
   const [fase, setFase] = useState<Fase>('caricamento');
   const [errore, setErrore] = useState('');
@@ -99,10 +103,27 @@ export default function RegistrazionePage({ params }: { params: Promise<{ token:
     setScanning(true);
     setScanMsg(null);
     try {
+      // Limite 20 MB
+      if (file.size > 20 * 1024 * 1024) {
+        setScanMsg({ ok: false, testo: 'Immagine troppo grande (max 20 MB). Usa una foto con risoluzione minore.' });
+        return;
+      }
       const compressed = await compressImage(file);
       const fd = new FormData();
       fd.append('immagine', compressed);
-      const res = await fetch('/api/alloggiati/scan', { method: 'POST', body: fd });
+      // AbortController: annulla la richiesta dopo 25s (evita che il browser mostri "page couldn't load")
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25000);
+      let res: Response;
+      try {
+        res = await fetch('/api/alloggiati/scan', { method: 'POST', body: fd, signal: ctrl.signal });
+      } catch (fetchErr) {
+        const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError';
+        setScanMsg({ ok: false, testo: isTimeout ? 'Scansione scaduta (>25s). Riprova con una foto più nitida.' : 'Errore di rete. Riprova.' });
+        return;
+      } finally {
+        clearTimeout(timer);
+      }
       let json: Record<string, string>;
       try {
         json = await res.json();
@@ -252,7 +273,6 @@ export default function RegistrazionePage({ params }: { params: Promise<{ token:
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) scanDocument(f); e.target.value = ''; }}
             />

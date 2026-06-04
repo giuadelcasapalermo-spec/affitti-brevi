@@ -95,7 +95,9 @@ export interface PrezzoPerPeriodo {
   nome_periodo: string;
   data_inizio: string;   // yyyy-MM-dd
   data_fine: string;     // yyyy-MM-dd (inclusiva)
-  prezzo_notte: number;
+  prezzo_notte: number;        // prezzo privato (pagante diretto)
+  prezzo_booking?: number | null;
+  prezzo_airbnb?: number | null;
   created_at: string;
 }
 

@@ -8,10 +8,23 @@ export interface ComuneIT {
   prov: string;
 }
 
+function normalizzaComune(s: string): string {
+  return s
+    .toUpperCase()
+    .trim()
+    .replace(/[''`‘’`]/g, "'") // apostrofi tipografici → dritto
+    .replace(/\s+/g, ' ');                      // spazi multipli → singolo
+}
+
 export function nomeACodiceComune(nome: string): string {
   if (!nome) return '';
-  const n = nome.toUpperCase().trim();
-  return COMUNI.find(c => c.nome === n)?.codice ?? '';
+  const n = normalizzaComune(nome);
+  // 1. Match esatto normalizzato
+  const esatto = COMUNI.find(c => normalizzaComune(c.nome) === n);
+  if (esatto) return esatto.codice;
+  // 2. Match senza apostrofi (es. "AGLIE" trova "AGLIE'")
+  const senzaApostrofo = n.replace(/'/g, '');
+  return COMUNI.find(c => normalizzaComune(c.nome).replace(/'/g, '') === senzaApostrofo)?.codice ?? '';
 }
 
 export const COMUNI: ComuneIT[] = [

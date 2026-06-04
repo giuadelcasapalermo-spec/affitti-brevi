@@ -17,6 +17,8 @@ async function ensureTable(): Promise<void> {
     )
   `;
   await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`;
+  await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS prezzo_booking REAL`;
+  await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS prezzo_airbnb REAL`;
 }
 
 export async function leggiPrezziPeriodi(cameraId?: number, strutturaId?: string): Promise<PrezzoPerPeriodo[]> {
@@ -40,7 +42,9 @@ export async function creaPrezziPeriodo(
   nomePeriodo: string,
   dataInizio: string,
   dataFine: string,
-  prezzoNotte: number
+  prezzoNotte: number,
+  prezzoBooking?: number | null,
+  prezzoAirbnb?: number | null
 ): Promise<PrezzoPerPeriodo> {
   await ensureTable();
   const record: PrezzoPerPeriodo = {
@@ -51,12 +55,15 @@ export async function creaPrezziPeriodo(
     data_inizio: dataInizio,
     data_fine: dataFine,
     prezzo_notte: prezzoNotte,
+    prezzo_booking: prezzoBooking ?? null,
+    prezzo_airbnb: prezzoAirbnb ?? null,
     created_at: new Date().toISOString(),
   };
   await sql`
-    INSERT INTO prezzi_periodi (id, struttura_id, camera_id, nome_periodo, data_inizio, data_fine, prezzo_notte, created_at)
+    INSERT INTO prezzi_periodi (id, struttura_id, camera_id, nome_periodo, data_inizio, data_fine, prezzo_notte, prezzo_booking, prezzo_airbnb, created_at)
     VALUES (${record.id}, ${record.struttura_id ?? null}, ${record.camera_id}, ${record.nome_periodo},
-            ${record.data_inizio}, ${record.data_fine}, ${record.prezzo_notte}, ${record.created_at})
+            ${record.data_inizio}, ${record.data_fine}, ${record.prezzo_notte},
+            ${record.prezzo_booking ?? null}, ${record.prezzo_airbnb ?? null}, ${record.created_at})
   `;
   return record;
 }
@@ -67,7 +74,7 @@ export async function eliminaPrezziPeriodo(id: string): Promise<void> {
 
 export async function aggiornaPrezziPeriodo(
   id: string,
-  fields: Partial<Pick<PrezzoPerPeriodo, 'nome_periodo' | 'data_inizio' | 'data_fine' | 'prezzo_notte'>>
+  fields: Partial<Pick<PrezzoPerPeriodo, 'nome_periodo' | 'data_inizio' | 'data_fine' | 'prezzo_notte' | 'prezzo_booking' | 'prezzo_airbnb'>>
 ): Promise<void> {
   if (fields.nome_periodo !== undefined)
     await sql`UPDATE prezzi_periodi SET nome_periodo = ${fields.nome_periodo} WHERE id = ${id}`;
@@ -77,6 +84,10 @@ export async function aggiornaPrezziPeriodo(
     await sql`UPDATE prezzi_periodi SET data_fine = ${fields.data_fine} WHERE id = ${id}`;
   if (fields.prezzo_notte !== undefined)
     await sql`UPDATE prezzi_periodi SET prezzo_notte = ${fields.prezzo_notte} WHERE id = ${id}`;
+  if (fields.prezzo_booking !== undefined)
+    await sql`UPDATE prezzi_periodi SET prezzo_booking = ${fields.prezzo_booking ?? null} WHERE id = ${id}`;
+  if (fields.prezzo_airbnb !== undefined)
+    await sql`UPDATE prezzi_periodi SET prezzo_airbnb = ${fields.prezzo_airbnb ?? null} WHERE id = ${id}`;
 }
 
 // ── Calcolo importo ──────────────────────────────────────────────────────────

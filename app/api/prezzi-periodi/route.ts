@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
     body.data_inizio,
     body.data_fine,
     Number(body.prezzo_notte),
+    body.prezzo_booking != null ? Number(body.prezzo_booking) : null,
+    body.prezzo_airbnb  != null ? Number(body.prezzo_airbnb)  : null,
   );
   return NextResponse.json(record, { status: 201 });
 }

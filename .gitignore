@@ -42,3 +42,5 @@ next-env.d.ts
 
 # debug files con token/dati sensibili
 token_debug.xml
+
+.vercel

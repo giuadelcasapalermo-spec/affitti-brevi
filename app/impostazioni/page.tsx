@@ -26,8 +26,9 @@ interface ICalSyncResult {
 
 type MainTab = 'strutture' | 'camere' | 'account' | 'app' | 'sistema';
 type SubTab = 'camere' | 'ical' | 'prezzi';
+type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
 
-const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_fine: '', prezzo_notte: '' };
+const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_fine: '', prezzo_notte: '', prezzo_booking: '', prezzo_airbnb: '' };
 
 export default function ImpostazioniPage() {
   const camere = useCamere();
@@ -59,6 +60,7 @@ export default function ImpostazioniPage() {
   const [prezziPeriodi, setPrezziPeriodi] = useState<PrezzoPerPeriodo[]>([]);
   const [nuovoPeriodo, setNuovoPeriodo] = useState({ ...DEFAULT_PERIODO });
   const [salvatoPeriodo, setSalvatoPeriodo] = useState(false);
+  const [canalePrezzi, setCanalePrezzi] = useState<CanalePrezzi>('privato');
 
   // Sync iCal
   const [syncingIcal, setSyncingIcal] = useState(false);
@@ -186,12 +188,20 @@ export default function ImpostazioniPage() {
   }
 
   async function aggiungiPeriodo() {
-    const { camera_id, nome_periodo, data_inizio, data_fine, prezzo_notte } = nuovoPeriodo;
+    const { camera_id, nome_periodo, data_inizio, data_fine, prezzo_notte, prezzo_booking, prezzo_airbnb } = nuovoPeriodo;
     if (!data_inizio || !data_fine || !prezzo_notte) return;
     await fetch('/api/prezzi-periodi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ camera_id: Number(camera_id), nome_periodo, data_inizio, data_fine, prezzo_notte: Number(prezzo_notte) }),
+      body: JSON.stringify({
+        camera_id: Number(camera_id),
+        nome_periodo,
+        data_inizio,
+        data_fine,
+        prezzo_notte:   Number(prezzo_notte),
+        prezzo_booking: prezzo_booking  ? Number(prezzo_booking)  : null,
+        prezzo_airbnb:  prezzo_airbnb   ? Number(prezzo_airbnb)   : null,
+      }),
     });
     setNuovoPeriodo({ ...DEFAULT_PERIODO });
     setSalvatoPeriodo(true);
@@ -354,8 +364,8 @@ export default function ImpostazioniPage() {
 
   const SUB_TABS: { id: SubTab; label: string }[] = [
     { id: 'camere', label: 'Camere' },
-    { id: 'ical',   label: 'iCal'   },
     { id: 'prezzi', label: 'Prezzi' },
+    { id: 'ical',   label: 'iCal'   },
   ];
 
   return (
@@ -590,6 +600,21 @@ export default function ImpostazioniPage() {
                       <h3 className="font-semibold text-gray-700 text-sm">Prezzi per periodo</h3>
                     </div>
 
+                    {/* Filtro canale */}
+                    <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
+                      {([['privato', 'Privato'], ['booking', 'Booking'], ['airbnb', 'Airbnb']] as [CanalePrezzi, string][]).map(([id, label]) => (
+                        <button key={id} onClick={() => setCanalePrezzi(id)}
+                          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                            canalePrezzi === id
+                              ? 'bg-white shadow text-gray-800'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
                     {idsEditCamere.map(id => {
                       const nomeCamera = editNomiCamere[id] || `Camera ${id}`;
                       const periodiCamera = periodiAttiva.filter(p => p.camera_id === id);
@@ -601,16 +626,29 @@ export default function ImpostazioniPage() {
                             <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{nomeCamera}</span>
                           </div>
                           <div className="space-y-1">
-                            {periodiCamera.map(p => (
-                              <div key={p.id} className="flex items-center gap-2 text-xs bg-gray-50 rounded px-3 py-1.5">
-                                <span className="font-medium text-gray-700 w-28 truncate">{p.nome_periodo || '—'}</span>
-                                <span className="text-gray-500">{p.data_inizio} → {p.data_fine}</span>
-                                <span className="ml-auto font-semibold text-green-700">€{p.prezzo_notte}/notte</span>
-                                <button onClick={() => eliminaPeriodo(p.id)} className="ml-1 text-gray-400 hover:text-red-500">
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            ))}
+                            {periodiCamera.map(p => {
+                              const prezzoCanale = canalePrezzi === 'booking'
+                                ? (p.prezzo_booking ?? p.prezzo_notte)
+                                : canalePrezzi === 'airbnb'
+                                  ? (p.prezzo_airbnb ?? p.prezzo_notte)
+                                  : p.prezzo_notte;
+                              const isDefault = canalePrezzi !== 'privato' && (
+                                (canalePrezzi === 'booking' && p.prezzo_booking == null) ||
+                                (canalePrezzi === 'airbnb'  && p.prezzo_airbnb  == null)
+                              );
+                              return (
+                                <div key={p.id} className="flex items-center gap-2 text-xs bg-gray-50 rounded px-3 py-1.5">
+                                  <span className="font-medium text-gray-700 w-24 truncate">{p.nome_periodo || '—'}</span>
+                                  <span className="text-gray-400">{p.data_inizio} → {p.data_fine}</span>
+                                  <span className={`ml-auto font-semibold ${isDefault ? 'text-gray-400' : 'text-green-700'}`}>
+                                    €{prezzoCanale}/notte{isDefault ? ' (=priv.)' : ''}
+                                  </span>
+                                  <button onClick={() => eliminaPeriodo(p.id)} className="ml-1 text-gray-400 hover:text-red-500">
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );
@@ -650,11 +688,28 @@ export default function ImpostazioniPage() {
                             className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
                           />
                         </div>
-                        <div className="col-span-2">
-                          <label className="block text-xs text-gray-500 mb-1">Prezzo per notte (€)</label>
+                      </div>
+                      {/* Prezzi per canale */}
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Privato (€/notte) *</label>
                           <input type="number" min="0" step="0.01" placeholder="es. 90" value={nuovoPeriodo.prezzo_notte}
                             onChange={e => setNuovoPeriodo(p => ({ ...p, prezzo_notte: e.target.value }))}
                             className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Booking (€/notte)</label>
+                          <input type="number" min="0" step="0.01" placeholder="vuoto = privato" value={nuovoPeriodo.prezzo_booking}
+                            onChange={e => setNuovoPeriodo(p => ({ ...p, prezzo_booking: e.target.value }))}
+                            className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Airbnb (€/notte)</label>
+                          <input type="number" min="0" step="0.01" placeholder="vuoto = privato" value={nuovoPeriodo.prezzo_airbnb}
+                            onChange={e => setNuovoPeriodo(p => ({ ...p, prezzo_airbnb: e.target.value }))}
+                            className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-pink-400"
                           />
                         </div>
                       </div>

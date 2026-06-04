@@ -330,8 +330,8 @@ export default function AlloggiatiPage() {
         setInvioPortale('error');
         let msg = json.errore ?? 'Errore sconosciuto';
         if (json.diagnosi) {
-          const righeInfo = (json.diagnosi as Array<{i:number;tipo:string;cognome:string;nome:string;dataNascita:string;statoNascita:string;comuneNascita:string;provNascita:string;cittadinanza:string;tipoDoc:string;luogoRilascio:string;len:number;raw:string}>)
-            .map(r => `[${r.i}] ${r.cognome} ${r.nome}\n  tipo:"${r.tipo}" dataNasc:"${r.dataNascita}"\n  comune:"${r.comuneNascita}" prov:"${r.provNascita}" stato:"${r.statoNascita}"\n  citt:"${r.cittadinanza}" doc:"${r.tipoDoc}" luogo:"${r.luogoRilascio}" len:${r.len}\n  RAW:${r.raw}`)
+          const righeInfo = (json.diagnosi as Array<{i:number;tipo:string;dataArrivo:string;cognome:string;nome:string;dataNascita:string;statoNascita:string;comuneNascita:string;provNascita:string;cittadinanza:string;tipoDoc:string;luogoRilascio:string;len:number;raw:string;db_comune_nascita:string;db_luogo_rilascio:string}>)
+            .map(r => `[${r.i}] ${r.cognome} ${r.nome}\n  tipo:"${r.tipo}" dataArr:"${r.dataArrivo}" dataNasc:"${r.dataNascita}"\n  comune:"${r.comuneNascita}" prov:"${r.provNascita}" stato:"${r.statoNascita}"\n  citt:"${r.cittadinanza}" doc:"${r.tipoDoc}" luogo:"${r.luogoRilascio}" len:${r.len}\n  db_comune:"${r.db_comune_nascita}" db_luogo:"${r.db_luogo_rilascio}"\n  RAW:${r.raw}`)
             .join('\n');
           console.error('AlloggiatiWeb diagnosi:', righeInfo);
           msg += '\n\nDIAGNOSI:\n' + righeInfo;

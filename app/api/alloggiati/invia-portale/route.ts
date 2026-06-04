@@ -63,6 +63,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, errore: 'Nessun alloggiato da inviare per questa data.' }, { status: 400 });
     }
 
+    // Avviso se la data è più di 24h nel passato (il portale rifiuta invii tardivi)
+    const dataMs = new Date(data).getTime();
+    const oraMs = Date.now();
+    const oreRitardo = (oraMs - dataMs) / 3_600_000;
+    if (oreRitardo > 36) {
+      const giorni = Math.floor(oreRitardo / 24);
+      return NextResponse.json({
+        ok: false,
+        errore: `Data ${data} è ${giorni} giorn${giorni === 1 ? 'o' : 'i'} nel passato. AlloggiatiWeb richiede invio entro 24h dall'arrivo. Il portale rifiuterà la schedina con "Data di Arrivo Errata".`,
+      }, { status: 400 });
+    }
+
+    // Regole di composizione schedine AlloggiatiWeb:
+    // tipo 17 (Capofamiglia) → può avere tipo 16 (Ospite Successivo) a seguire
+    // tipo 18 (Capogruppo)   → può avere tipo 19 (Componente Gruppo) a seguire
+    // tipo 20 (Individuale)  → standalone, NON può precedere tipo 16 o 19
+    const ha16 = alloggiati.some(a => a.tipo === '16');
+    const ha17 = alloggiati.some(a => a.tipo === '17');
+    const ha19 = alloggiati.some(a => a.tipo === '19');
+    const ha18 = alloggiati.some(a => a.tipo === '18');
+    const ha20 = alloggiati.some(a => a.tipo === '20');
+    if (ha16 && !ha17) {
+      return NextResponse.json({
+        ok: false,
+        errore: `Batch non valido: tipo 16 (Ospite Successivo) presente senza tipo 17 (Capofamiglia).${ha20 ? ' Hai tipo 20 (Individuale) — cambialo in tipo 17 se è il capo famiglia.' : ' Aggiungere il Capofamiglia (tipo 17).'}`,
+      }, { status: 400 });
+    }
+    if (ha19 && !ha18) {
+      return NextResponse.json({
+        ok: false,
+        errore: 'Batch non valido: tipo 19 (Componente Gruppo) presente senza tipo 18 (Capogruppo). Aggiungere il Capogruppo (tipo 18).',
+      }, { status: 400 });
+    }
+
     const contenuto = generaFileAlloggiati(alloggiati);
 
     // Step 1: genera token di sessione
@@ -120,6 +154,7 @@ ${elencoXml}
       const diagRighe = righe.map((r, i) => ({
         i,
         tipo: r.substring(0, 2),
+        dataArrivo: r.substring(2, 12),
         cognome: r.substring(14, 64).trimEnd(),
         nome: r.substring(64, 94).trimEnd(),
         dataNascita: r.substring(95, 105),
@@ -131,6 +166,9 @@ ${elencoXml}
         luogoRilascio: r.substring(159, 168),
         len: r.length,
         raw: r,
+        // valori grezzi dal DB per diagnosi lookup falliti
+        db_comune_nascita: alloggiati[i]?.comune_nascita ?? '?',
+        db_luogo_rilascio: alloggiati[i]?.luogo_rilascio ?? '?',
       }));
       return NextResponse.json({
         ok: false,
