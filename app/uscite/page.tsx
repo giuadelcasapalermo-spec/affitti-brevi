@@ -388,91 +388,80 @@ export default function PrimaNotaPage() {
         <div className="text-center">
           <div className="text-[11px] text-gray-400">Entrate</div>
           <div className="text-base font-bold text-green-700">+€{totEntrate.toFixed(0)}</div>
+          {totaliPerFonte.length > 1 && totaliPerFonte.map(t => (
+            <div key={t.fonte} className="text-[9px] text-gray-400 leading-tight">{t.fonte}: +€{t.totE.toFixed(0)}</div>
+          ))}
         </div>
         <div className="text-center">
           <div className="text-[11px] text-gray-400">Uscite</div>
           <div className="text-base font-bold text-red-600">-€{totUscite.toFixed(0)}</div>
+          {totaliPerFonte.length > 1 && totaliPerFonte.map(t => (
+            <div key={t.fonte} className="text-[9px] text-gray-400 leading-tight">{t.fonte}: -€{t.totU.toFixed(0)}</div>
+          ))}
         </div>
         <div className="text-center">
           <div className="text-[11px] text-gray-400">Saldo</div>
           <div className={`text-base font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>{saldo >= 0 ? '+' : ''}€{saldo.toFixed(0)}</div>
+          {totaliPerFonte.length > 1 && totaliPerFonte.map(t => (
+            <div key={t.fonte} className={`text-[9px] leading-tight ${t.saldo >= 0 ? 'text-green-600' : 'text-red-500'}`}>{t.fonte}: {t.saldo >= 0 ? '+' : ''}€{t.saldo.toFixed(0)}</div>
+          ))}
         </div>
       </div>
 
       {/* KPI cards desktop */}
       <div className="hidden sm:grid sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
-          <div className="bg-green-100 rounded-full p-2"><TrendingUp size={20} className="text-green-600" /></div>
-          <div>
+        <div className="bg-white rounded-lg shadow-sm p-4 flex items-start gap-3">
+          <div className="bg-green-100 rounded-full p-2 shrink-0 mt-0.5"><TrendingUp size={20} className="text-green-600" /></div>
+          <div className="flex-1 min-w-0">
             <div className="text-sm text-gray-500">Entrate</div>
             <div className="text-lg font-bold text-green-700">+€{totEntrate.toFixed(2)}</div>
+            {totaliPerFonte.length > 1 && (
+              <div className="mt-1 space-y-0.5">
+                {totaliPerFonte.map(t => t.totE > 0 && (
+                  <div key={t.fonte} className="flex justify-between text-xs text-gray-400">
+                    <span>{t.fonte}</span><span className="text-green-600">+€{t.totE.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
-          <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
-          <div>
+        <div className="bg-white rounded-lg shadow-sm p-4 flex items-start gap-3">
+          <div className="bg-red-100 rounded-full p-2 shrink-0 mt-0.5"><TrendingDown size={20} className="text-red-600" /></div>
+          <div className="flex-1 min-w-0">
             <div className="text-sm text-gray-500">Uscite</div>
             <div className="text-lg font-bold text-red-600">-€{totUscite.toFixed(2)}</div>
+            {totaliPerFonte.length > 1 && (
+              <div className="mt-1 space-y-0.5">
+                {totaliPerFonte.map(t => t.totU > 0 && (
+                  <div key={t.fonte} className="flex justify-between text-xs text-gray-400">
+                    <span>{t.fonte}</span><span className="text-red-500">-€{t.totU.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
-          <div className={`rounded-full p-2 ${saldo >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+        <div className={`rounded-lg shadow-sm p-4 flex items-start gap-3 ${saldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
+          <div className={`rounded-full p-2 shrink-0 mt-0.5 ${saldo >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
             <Euro size={20} className={saldo >= 0 ? 'text-green-600' : 'text-red-600'} />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="text-sm text-gray-500">Saldo</div>
             <div className={`text-lg font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>{saldo >= 0 ? '+' : ''}€{saldo.toFixed(2)}</div>
+            {totaliPerFonte.length > 1 && (
+              <div className="mt-1 space-y-0.5">
+                {totaliPerFonte.map(t => (
+                  <div key={t.fonte} className="flex justify-between text-xs text-gray-400">
+                    <span>{t.fonte}</span>
+                    <span className={t.saldo >= 0 ? 'text-green-600' : 'text-red-500'}>{t.saldo >= 0 ? '+' : ''}€{t.saldo.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Totali per modalità */}
-      {totaliPerFonte.length > 1 && (
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-4 py-2 bg-gray-50 border-b flex items-center gap-2">
-            <Wallet size={13} className="text-gray-500" />
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Totali per modalità</span>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {totaliPerFonte.map(({ fonte, totE, totU, saldo: s }) => {
-              const selezionata = filtroFonti?.has(fonte) ?? true;
-              return (
-                <button
-                  key={fonte}
-                  onClick={() => {
-                    if (filtroFonti === null) {
-                      setFiltroFonti(new Set([fonte]));
-                    } else if (filtroFonti.has(fonte) && filtroFonti.size === 1) {
-                      setFiltroFonti(null);
-                    } else {
-                      const ns = new Set(filtroFonti);
-                      ns.has(fonte) ? ns.delete(fonte) : ns.add(fonte);
-                      setFiltroFonti(ns.size === fontiDisponibili.length ? null : ns);
-                    }
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${selezionata ? 'hover:bg-gray-50' : 'opacity-40 hover:opacity-60 hover:bg-gray-50'}`}
-                >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${selezionata ? 'bg-blue-400' : 'bg-gray-300'}`} />
-                  <span className="text-sm font-medium text-gray-700 flex-1">{fonte}</span>
-                  <span className="text-xs text-green-700 w-20 text-right">+€{totE.toFixed(2)}</span>
-                  <span className="text-xs text-red-600 w-20 text-right">-€{totU.toFixed(2)}</span>
-                  <span className={`text-xs font-semibold w-20 text-right ${s >= 0 ? 'text-green-700' : 'text-red-600'}`}>{s >= 0 ? '+' : ''}€{s.toFixed(2)}</span>
-                </button>
-              );
-            })}
-            {/* Riga totale */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-gray-50">
-              <span className="w-2 h-2 shrink-0" />
-              <span className="text-xs font-semibold text-gray-600 flex-1 uppercase tracking-wide">Totale</span>
-              <span className="text-xs font-bold text-green-700 w-20 text-right">+€{totaliPerFonte.reduce((s, t) => s + t.totE, 0).toFixed(2)}</span>
-              <span className="text-xs font-bold text-red-600 w-20 text-right">-€{totaliPerFonte.reduce((s, t) => s + t.totU, 0).toFixed(2)}</span>
-              <span className={`text-xs font-bold w-20 text-right ${totaliPerFonte.reduce((s, t) => s + t.saldo, 0) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                {totaliPerFonte.reduce((s, t) => s + t.saldo, 0) >= 0 ? '+' : ''}€{totaliPerFonte.reduce((s, t) => s + t.saldo, 0).toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Filtro periodo + modalità */}
       <div className="bg-white rounded-lg shadow-sm p-3">
