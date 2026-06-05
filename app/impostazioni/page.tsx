@@ -142,7 +142,15 @@ export default function ImpostazioniPage() {
   }
 
   function caricaStrutture() {
-    fetch('/api/strutture').then(r => r.json()).catch(() => {});
+    fetch('/api/strutture').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) {
+        // Aggiorna la struttura selezionata nei conti correnti se è quella corrente
+        const aggiornata = data.find((s: { id: string }) => s.id === editingDatiId);
+        if (aggiornata) {
+          setEditContiCorrenti(aggiornata.conti_correnti?.length ? [...aggiornata.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
+        }
+      }
+    }).catch(() => {});
   }
 
   async function salvaContiCorrenti(id: string) {

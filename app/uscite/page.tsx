@@ -63,6 +63,17 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
     fonte_pagamento: iniziale?.fonte_pagamento ?? defaultFonte,
   });
   const set = (k: string, v: string | number) => setF(p => ({ ...p, [k]: v }));
+
+  // Aggiorna la selezione quando la struttura carica e porta nuove modalità
+  useEffect(() => {
+    if (!iniziale?.fonte_pagamento) {
+      const nomi = contiCorrenti.map(c => c.nome);
+      if (!nomi.includes(f.fonte_pagamento)) {
+        setF(p => ({ ...p, fonte_pagamento: contiCorrenti[0]?.nome ?? 'Contanti' }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contiCorrenti]);
   function applicaVoce(data: Record<string, unknown>) {
     setF(p => ({
       ...p,
@@ -90,7 +101,7 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
       <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Importo (€) *</label>
           <input type="number" min="0" step="0.01" value={f.importo} onChange={e => set('importo', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">Fonte pagamento</label>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Modalità pagamento</label>
           <select value={f.fonte_pagamento} onChange={e => set('fonte_pagamento', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select></div>
@@ -131,6 +142,17 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
     fonte_pagamento: iniziale?.fonte_pagamento ?? defaultFonte,
   });
   const set = (k: string, v: string | number) => setF(p => ({ ...p, [k]: v }));
+
+  // Aggiorna la selezione quando la struttura carica e porta nuove modalità
+  useEffect(() => {
+    if (!iniziale?.fonte_pagamento) {
+      const nomi = contiCorrenti.map(c => c.nome);
+      if (!nomi.includes(f.fonte_pagamento)) {
+        setF(p => ({ ...p, fonte_pagamento: contiCorrenti[0]?.nome ?? 'Contanti' }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contiCorrenti]);
   function applicaVoce(data: Record<string, unknown>) {
     setF(p => ({
       ...p,
@@ -162,16 +184,14 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
           <select value={f.fonte_pagamento} onChange={e => set('fonte_pagamento', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select></div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
         <div><label className="block text-sm font-medium text-gray-700 mb-1">Camera</label>
           <select value={f.camera_id} onChange={e => set('camera_id', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             <option value="">Generale</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-          <input type="text" value={f.note} onChange={e => set('note', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" /></div>
       </div>
+      <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+        <input type="text" value={f.note} onChange={e => set('note', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" /></div>
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onAnnulla} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Annulla</button>
         <button type="submit" className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Salva entrata</button>
