@@ -441,6 +441,23 @@ export default function Dashboard() {
           <option value="tutte">Tutte</option>
           {camere.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </select>
+        {/* Select modalità — solo nel tab Prima Nota */}
+        {sezione === 'prima_nota' && contiCorrenti.length > 1 && (
+          <>
+            <div className="w-px h-5 bg-gray-200" />
+            <div className="flex items-center gap-1">
+              <Wallet size={13} className="text-gray-400 shrink-0" />
+              <select
+                value={filtroModalita}
+                onChange={e => setFiltroModalita(e.target.value)}
+                className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="tutte">Tutte le modalità</option>
+                {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+              </select>
+            </div>
+          </>
+        )}
         {filtroAttivo && (
           <button
             onClick={() => { setFiltroDal(DEFAULT_DAL); setFiltroAl(DEFAULT_AL); setFiltroCamera('tutte'); }}
@@ -700,33 +717,6 @@ export default function Dashboard() {
       {/* ═══════════════════════ SEZIONE: PRIMA NOTA ═══════════════════════ */}
       {sezione === 'prima_nota' && (
         <div className="space-y-4">
-
-          {/* Filtro modalità pagamento */}
-          {contiCorrenti.length > 1 && (
-            <div className="bg-white rounded-lg shadow-sm px-4 py-3 flex items-center gap-2 flex-wrap no-print">
-              <Wallet size={13} className="text-gray-400 shrink-0" />
-              <span className="text-xs text-gray-500 font-medium shrink-0">Modalità:</span>
-              <button
-                onClick={() => setFiltroModalita('tutte')}
-                className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${filtroModalita === 'tutte' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              >
-                Tutte
-              </button>
-              {contiCorrenti.map(c => (
-                <button key={c.id}
-                  onClick={() => setFiltroModalita(c.nome)}
-                  className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${filtroModalita === c.nome ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                >
-                  {c.nome}
-                </button>
-              ))}
-              {filtroModalita !== 'tutte' && (
-                <span className="text-xs text-blue-600 ml-1">
-                  — filtrando: <strong>{filtroModalita}</strong>
-                </span>
-              )}
-            </div>
-          )}
 
           {/* Riepilogo saldo */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
