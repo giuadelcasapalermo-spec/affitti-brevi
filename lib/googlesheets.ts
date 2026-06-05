@@ -319,7 +319,7 @@ async function importUsciteOriginale(
         const note      = String(row[C.note]??'').trim();
         const camera_id = STANZA_ID[stanza] ?? undefined;
         keyMap.set(k, uscite.length);
-        uscite.push({ id: randomUUID(), data, descrizione: desc, categoria: cat, importo: uscita, camera_id, note, created_at: now });
+        uscite.push({ id: randomUUID(), data, descrizione: desc, categoria: cat, importo: uscita, camera_id, note, fonte_pagamento: 'Contanti', created_at: now });
         importate++;
       }
     }
@@ -592,7 +592,7 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
       importate++;
     } else {
       keyMap.set(k, uscite.length);
-      uscite.push({ id: id||randomUUID(), data, descrizione, categoria: cat, importo, camera_id, note: note??'', created_at: now });
+      uscite.push({ id: id||randomUUID(), data, descrizione, categoria: cat, importo, camera_id, note: note??'', fonte_pagamento: 'Contanti', created_at: now });
       importate++;
     }
   }
