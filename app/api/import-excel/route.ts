@@ -99,12 +99,35 @@ export async function POST(req: Request) {
   let create = 0;
 
   for (const riga of righe) {
-    const match = prenotazioni.find(p =>
+    // 1. Cerca corrispondenza esatta per camera + check-in + check-out
+    let match = prenotazioni.find(p =>
       p.camera_id === riga.cameraId &&
       p.check_in  === riga.checkIn &&
       p.check_out === riga.checkOut &&
       p.stato !== 'cancellata'
     );
+
+    // 2. Se non trovata, cerca record iCal con stesso check-out e check-in
+    //    entro ±1 giorno (Booking.com spesso riporta check-in un giorno dopo)
+    if (!match) {
+      const checkOutMs = new Date(riga.checkOut).getTime();
+      const checkInMs  = new Date(riga.checkIn).getTime();
+      match = prenotazioni.find(p =>
+        p.camera_id === riga.cameraId &&
+        p.stato !== 'cancellata' &&
+        p.fonte === 'ical' &&
+        p.check_out === riga.checkOut &&
+        Math.abs(new Date(p.check_in).getTime() - checkInMs) <= 86400000 // ±1 giorno
+      ) ?? prenotazioni.find(p =>
+        // 3. Fallback: stessa camera, sovrapposizione totale delle date (record manuale)
+        p.camera_id === riga.cameraId &&
+        p.stato !== 'cancellata' &&
+        p.check_in <= riga.checkOut &&
+        p.check_out >= riga.checkIn &&
+        Math.abs(new Date(p.check_in).getTime() - checkInMs) <= 86400000 &&
+        Math.abs(new Date(p.check_out).getTime() - checkOutMs) <= 86400000
+      );
+    }
 
     if (match) {
       // Trovata: aggiorna sempre da foglio (sia booking che privato)
@@ -112,6 +135,9 @@ export async function POST(req: Request) {
       match.importo_totale = riga.importo;
       if (riga.tassa > 0) match.tassa_soggiorno = riga.tassa;
       if (riga.email) match.ospite_email = riga.email;
+      // Allinea le date al foglio Excel (fonte ufficiale)
+      match.check_in  = riga.checkIn;
+      match.check_out = riga.checkOut;
       aggiornate++;
     } else {
       // Non trovata: crea nuova prenotazione
@@ -134,16 +160,38 @@ export async function POST(req: Request) {
     }
   }
 
-  // Elimina prenotazioni senza corrispondenza né con iCal né con lo sheet:
-  // nessun nome reale (o ancora "Ospite Booking.com") E importo zero/assente
-  // E nessun riferimento iCal/Booking (ical_uid o BK: nelle note)
+  // Deduplicazione finale: rimuovi "Ospite Booking.com" generici che si sovrappongono
+  // a prenotazioni con nome reale sulla stessa camera e date simili (±1 giorno)
+  const idsDaTenere = new Set(prenotazioni.map(p => p.id));
   const prima = prenotazioni.length;
+
   const filtrate = prenotazioni.filter(p => {
+    // Rimuovi sempre: nome generico + nessun importo + nessun ical_uid (fantasma)
     const nomeGenerico = !p.ospite_nome || p.ospite_nome === 'Ospite Booking.com';
     const senzaImporto = !p.importo_totale || p.importo_totale === 0;
-    const senzaIcal   = !p.ical_uid && !p.note?.includes('BK:');
-    return !(nomeGenerico && senzaImporto && senzaIcal);
+    const haIcalUid   = !!p.ical_uid;
+
+    if (nomeGenerico && senzaImporto && !haIcalUid) return false;
+
+    // Rimuovi iCal generico se esiste già una prenotazione con nome reale
+    // sulla stessa camera con date sovrapposte (±1 giorno)
+    if (nomeGenerico && haIcalUid) {
+      const checkInMs  = new Date(p.check_in).getTime();
+      const checkOutMs = new Date(p.check_out).getTime();
+      const hasDoppione = prenotazioni.some(q =>
+        q.id !== p.id &&
+        q.camera_id === p.camera_id &&
+        q.stato !== 'cancellata' &&
+        q.ospite_nome && q.ospite_nome !== 'Ospite Booking.com' &&
+        Math.abs(new Date(q.check_in).getTime() - checkInMs) <= 86400000 &&
+        Math.abs(new Date(q.check_out).getTime() - checkOutMs) <= 86400000
+      );
+      if (hasDoppione) return false;
+    }
+
+    return true;
   });
+
   const eliminate = prima - filtrate.length;
 
   await scriviPrenotazioni(filtrate);
