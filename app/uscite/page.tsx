@@ -474,8 +474,9 @@ export default function PrimaNotaPage() {
         </div>
       )}
 
-      {/* Filtro periodo */}
-      <div className="bg-white rounded-lg shadow-sm p-3">
+      {/* Filtro periodo + modalità */}
+      <div className="bg-white rounded-lg shadow-sm p-3 space-y-2">
+        {/* Riga date */}
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100" title="Mese precedente"><ChevronLeft size={16} /></button>
           <div className="flex items-center gap-1">
@@ -490,6 +491,40 @@ export default function PrimaNotaPage() {
             </button>
           )}
         </div>
+
+        {/* Riga modalità pagamento */}
+        {fontiDisponibili.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap border-t pt-2">
+            <Wallet size={12} className="text-gray-400 shrink-0" />
+            <span className="text-[11px] text-gray-400 shrink-0">Modalità:</span>
+            <button
+              onClick={() => setFiltroFonti(null)}
+              className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium transition-colors ${!filtroFonteAttivo ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+            >
+              Tutte
+            </button>
+            {fontiDisponibili.map(fonte => {
+              const attiva = fontiAttive.has(fonte);
+              return (
+                <button key={fonte}
+                  onClick={() => {
+                    const ns = new Set(fontiAttive);
+                    ns.has(fonte) ? ns.delete(fonte) : ns.add(fonte);
+                    setFiltroFonti(ns.size === fontiDisponibili.length ? null : ns);
+                  }}
+                  className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1 transition-colors ${attiva && filtroFonteAttivo ? 'bg-blue-600 text-white' : attiva ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-gray-100 text-gray-400 line-through hover:bg-gray-200'}`}
+                >
+                  {fonte}
+                </button>
+              );
+            })}
+            {filtroFonteAttivo && (
+              <button onClick={() => setFiltroFonti(null)} className="text-[11px] text-blue-600 hover:underline ml-1">
+                Azzera
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Contenuto movimenti */}
