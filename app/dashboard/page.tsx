@@ -6,7 +6,9 @@ import { Prenotazione, Uscita, Entrata, CATEGORIE_USCITA, CATEGORIE_ENTRATA } fr
 import { useCamere } from '@/hooks/useCamere';
 import { isWithinInterval, parseISO, differenceInDays, format, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from 'date-fns';
 import { fData } from '@/lib/utils';
-import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer } from 'lucide-react';
+import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet } from 'lucide-react';
+import { useStruttura } from '@/hooks/useStruttura';
+import { ContoCorrente } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
 import { ComposedChart, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -52,10 +54,16 @@ const DEFAULT_AL = format(endOfMonth(oggi), 'yyyy-MM-dd');
 
 export default function Dashboard() {
   const camere = useCamere();
+  const { struttura } = useStruttura();
+  const contiCorrenti: ContoCorrente[] = struttura?.conti_correnti?.length
+    ? struttura.conti_correnti
+    : [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }];
+
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
   const [uscite, setUscite] = useState<Uscita[]>([]);
   const [entrate, setEntrate] = useState<Entrata[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtroModalita, setFiltroModalita] = usePersistedState<string | 'tutte'>('dash-modalita', 'tutte');
   const [syncing, setSyncing] = useState(false);
   const [syncOk, setSyncOk]   = useState<boolean | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -158,8 +166,15 @@ export default function Dashboard() {
   const maxNotti = Math.max(1, ...statsCamera.map((s) => s.notti));
 
   // ── Prima Nota ──────────────────────────────────────────────
-  const uscitePeriodo = uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl);
-  const entratePeriodo = entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl);
+  const uscitePeriodoAll = uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl);
+  const entratePeriodoAll = entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl);
+
+  const uscitePeriodo = filtroModalita === 'tutte'
+    ? uscitePeriodoAll
+    : uscitePeriodoAll.filter(u => (u.fonte_pagamento || 'Contanti') === filtroModalita);
+  const entratePeriodo = filtroModalita === 'tutte'
+    ? entratePeriodoAll
+    : entratePeriodoAll.filter(e => (e.fonte_pagamento || 'Contanti') === filtroModalita);
 
   const uscitePerCat = (CATEGORIE_USCITA as readonly string[])
     .map(cat => ({
@@ -179,12 +194,13 @@ export default function Dashboard() {
 
   const maxUscitaCat  = Math.max(1, ...uscitePerCat.map(c => c.totale));
   const maxEntrataCat = Math.max(1, ...entratePerCat.map(c => c.totale));
+  const saldoPN = entratePeriodo.reduce((s, e) => s + e.importo, 0) - uscitePeriodo.reduce((s, u) => s + u.importo, 0);
   const saldo = entrateEffettive - usciteDelPeriodo;
   const incidenzaUscite = entrateEffettive > 0 ? (usciteDelPeriodo / entrateEffettive) * 100 : 0;
 
   const movimenti = [
-    ...entratePeriodo.map(e => ({ tipo: 'entrata' as const, data: e.data, descrizione: e.descrizione, categoria: e.categoria, importo: e.importo, id: e.id })),
-    ...uscitePeriodo.map(u => ({ tipo: 'uscita' as const, data: u.data, descrizione: u.descrizione, categoria: u.categoria, importo: u.importo, id: u.id })),
+    ...entratePeriodo.map(e => ({ tipo: 'entrata' as const, data: e.data, descrizione: e.descrizione, categoria: e.categoria, importo: e.importo, id: e.id, fonte: e.fonte_pagamento || 'Contanti' })),
+    ...uscitePeriodo.map(u => ({ tipo: 'uscita' as const, data: u.data, descrizione: u.descrizione, categoria: u.categoria, importo: u.importo, id: u.id, fonte: u.fonte_pagamento || 'Contanti' })),
   ].sort((a, b) => b.data.localeCompare(a.data));
 
   function buildChartData(cameraId: number) {
@@ -328,7 +344,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPI mobile compatto */}
-      <div className="sm:hidden bg-white rounded-lg shadow-sm px-4 py-3 grid grid-cols-3 gap-y-3 divide-x divide-gray-100">
+      <div className="sm:hidden print-hidden bg-white rounded-lg shadow-sm px-4 py-3 grid grid-cols-3 gap-y-3 divide-x divide-gray-100">
         <div className="text-center">
           <div className="text-[11px] text-gray-400">Camere</div>
           <div className="text-base font-bold text-gray-800">{camereImpegnate.length}/{filtroCamera === 'tutte' ? camere.length : 1}</div>
@@ -438,7 +454,7 @@ export default function Dashboard() {
         <div className="space-y-4">
 
           {/* Statistiche per stanza — mobile */}
-          <div className="sm:hidden bg-white rounded-lg shadow-sm p-4 space-y-3">
+          <div className="sm:hidden print-hidden bg-white rounded-lg shadow-sm p-4 space-y-3">
             <h2 className="text-sm font-semibold text-gray-700">Statistiche per stanza</h2>
             {(() => {
               const nGiorniPeriodo = differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1;
@@ -524,7 +540,7 @@ export default function Dashboard() {
             const getPren = (cameraId: number, day: string) =>
               prenotazioni.find(p => p.camera_id === cameraId && p.stato !== 'cancellata' && p.check_in <= day && p.check_out > day) ?? null;
             return (
-              <div className="hidden md:block bg-white rounded-lg shadow-sm p-5">
+              <div className="hidden md:block print-block bg-white rounded-lg shadow-sm p-5">
                 <h2 className="font-semibold text-gray-700 mb-3">Andamento prenotazioni per stanza</h2>
                 <div className="overflow-x-auto">
                   <div style={{ minWidth: 'max-content' }}>
@@ -580,9 +596,9 @@ export default function Dashboard() {
           })()}
 
           {/* Grafici statistici per stanza — desktop */}
-          <div className="hidden md:block space-y-3">
+          <div className="hidden md:block print-block space-y-3">
             <h2 className="font-semibold text-gray-700">Statistiche giornaliere per stanza</h2>
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-4 print-grid-2">
               {camere
                 .filter(c => filtroCamera === 'tutte' || c.id === filtroCamera)
                 .sort((a, b) => a.id - b.id)
@@ -642,7 +658,7 @@ export default function Dashboard() {
           </div>
 
           {/* Saturazione globale stanze — desktop */}
-          <div className="hidden md:block bg-white rounded-lg shadow-sm p-5">
+          <div className="hidden md:block print-block bg-white rounded-lg shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-700">Saturazione per stanza</h2>
               <span className="text-xs text-gray-400">
@@ -685,26 +701,57 @@ export default function Dashboard() {
       {sezione === 'prima_nota' && (
         <div className="space-y-4">
 
+          {/* Filtro modalità pagamento */}
+          {contiCorrenti.length > 1 && (
+            <div className="bg-white rounded-lg shadow-sm px-4 py-3 flex items-center gap-2 flex-wrap no-print">
+              <Wallet size={13} className="text-gray-400 shrink-0" />
+              <span className="text-xs text-gray-500 font-medium shrink-0">Modalità:</span>
+              <button
+                onClick={() => setFiltroModalita('tutte')}
+                className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${filtroModalita === 'tutte' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                Tutte
+              </button>
+              {contiCorrenti.map(c => (
+                <button key={c.id}
+                  onClick={() => setFiltroModalita(c.nome)}
+                  className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${filtroModalita === c.nome ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  {c.nome}
+                </button>
+              ))}
+              {filtroModalita !== 'tutte' && (
+                <span className="text-xs text-blue-600 ml-1">
+                  — filtrando: <strong>{filtroModalita}</strong>
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Riepilogo saldo */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="text-xs text-gray-500 mb-1">Entrate effettive</div>
-              <div className="text-xl font-bold text-green-700">+€{entrateEffettive.toFixed(2)}</div>
+              <div className="text-xs text-gray-500 mb-1">Entrate {filtroModalita !== 'tutte' ? filtroModalita : 'effettive'}</div>
+              <div className="text-xl font-bold text-green-700">+€{entratePeriodo.reduce((s,e) => s+e.importo, 0).toFixed(2)}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">{entratePeriodo.length} movimenti</div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="text-xs text-gray-500 mb-1">Uscite totali</div>
-              <div className="text-xl font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</div>
+              <div className="text-xs text-gray-500 mb-1">Uscite {filtroModalita !== 'tutte' ? filtroModalita : 'totali'}</div>
+              <div className="text-xl font-bold text-red-600">-€{uscitePeriodo.reduce((s,u) => s+u.importo, 0).toFixed(2)}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">{uscitePeriodo.length} movimenti</div>
             </div>
-            <div className={`border rounded-lg p-4 ${saldo >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`border rounded-lg p-4 ${saldoPN >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
               <div className="text-xs text-gray-500 mb-1">Saldo netto</div>
-              <div className={`text-xl font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldo.toFixed(2)}</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{saldo >= 0 ? 'Positivo' : 'Negativo'}</div>
+              <div className={`text-xl font-bold ${saldoPN >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldoPN.toFixed(2)}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{saldoPN >= 0 ? 'Positivo' : 'Negativo'}</div>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="text-xs text-gray-500 mb-1">Incidenza uscite</div>
-              <div className="text-xl font-bold text-amber-700">{incidenzaUscite.toFixed(1)}%</div>
+              <div className="text-xl font-bold text-amber-700">
+                {entratePeriodo.reduce((s,e) => s+e.importo, 0) > 0
+                  ? ((uscitePeriodo.reduce((s,u) => s+u.importo, 0) / entratePeriodo.reduce((s,e) => s+e.importo, 0)) * 100).toFixed(1)
+                  : '0.0'}%
+              </div>
               <div className="text-[10px] text-gray-400 mt-0.5">delle entrate</div>
             </div>
           </div>

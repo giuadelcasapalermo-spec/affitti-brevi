@@ -24,17 +24,35 @@ body {
   nav,
   .no-print { display: none !important; }
 
-  /* Rimuovi sfondi e ombre che non stampano bene */
+  /* Rimuovi ombre */
   * { box-shadow: none !important; }
 
-  /* Assicura che il contenuto sia visibile */
-  body { background: white !important; margin: 0; }
+  /* Layout base */
+  body { background: white !important; margin: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   main { padding: 0 !important; }
 
-  /* Evita che i grafici vengano tagliati */
-  .recharts-wrapper { break-inside: avoid; }
+  /* ── Colori esatti nella stampa (sfondi, barre, grafici) ── */
+  *,
+  *::before,
+  *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
 
-  /* Tabelle stampabili su più pagine */
+  /* ── SVG e grafici Recharts ── */
+  svg { overflow: visible !important; max-width: 100% !important; }
+  .recharts-wrapper { overflow: visible !important; break-inside: avoid; page-break-inside: avoid; }
+  .recharts-surface { overflow: visible !important; }
+  .recharts-legend-wrapper { position: static !important; }
+
+  /* ── Sezioni desktop-only: visibili in stampa ── */
+  /* Tailwind hidden md:block → in stampa forziamo block */
+  .print-block { display: block !important; }
+
+  /* Nascondi sezioni mobile duplicate */
+  .print-hidden { display: none !important; }
+
+  /* Tabelle */
   tr { break-inside: avoid; }
   thead { display: table-header-group; }
+
+  /* Griglia grafici: 2 colonne nella stampa */
+  .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
 }
