@@ -1,6 +1,6 @@
 import sql from './postgres';
 import { randomUUID } from 'crypto';
-import { Struttura, AlloggiatiCredentials, ContoCorrente } from './types';
+import { Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig } from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
 const DEFAULT_CONTI: ContoCorrente[] = [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }];
@@ -25,6 +25,7 @@ async function ensureTable(): Promise<void> {
   `;
   await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_credentials JSONB DEFAULT NULL`;
   await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS conti_correnti JSONB DEFAULT '[]'`;
+  await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS channel_manager_config JSONB DEFAULT NULL`;
   _tableReady = true;
 }
 
@@ -54,6 +55,7 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     ical_urls: toNumericRecord(row.ical_urls),
     alloggiati_credentials: row.alloggiati_credentials as AlloggiatiCredentials | undefined,
     conti_correnti: conti,
+    channel_manager_config: row.channel_manager_config as BookingChannelManagerConfig | undefined,
     created_at: row.created_at as string,
   };
 }
@@ -114,6 +116,8 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET alloggiati_credentials = ${JSON.stringify(fields.alloggiati_credentials)} WHERE id = ${id}`;
   if (fields.conti_correnti !== undefined)
     await sql`UPDATE strutture SET conti_correnti = ${JSON.stringify(fields.conti_correnti)} WHERE id = ${id}`;
+  if (fields.channel_manager_config !== undefined)
+    await sql`UPDATE strutture SET channel_manager_config = ${JSON.stringify(fields.channel_manager_config)} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {

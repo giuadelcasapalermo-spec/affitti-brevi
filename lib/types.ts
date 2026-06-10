@@ -26,6 +26,21 @@ export const TIPI_CONTO: Record<TipoContoCorrente, string> = {
   altro:    'Altro',
 };
 
+export interface BookingChannelManagerConfig {
+  /** URL dove gira il channel manager (es. http://localhost:3001 o https://…) */
+  channel_manager_url: string;
+  /** Hotel ID su Booking.com */
+  hotel_id: string;
+  /** Machine account username (connect.booking.com) */
+  username: string;
+  /** Machine account password */
+  password: string;
+  /** Segreto HMAC per i webhook push (opzionale) */
+  webhook_secret?: string;
+  /** Mappa camera_id affitti-brevi → room_id channel manager */
+  room_id_map: Record<number, string>;
+}
+
 export interface Struttura {
   id: string;
   nome: string;
@@ -37,6 +52,7 @@ export interface Struttura {
   ical_urls: Record<number, string>;
   alloggiati_credentials?: AlloggiatiCredentials;
   conti_correnti: ContoCorrente[];
+  channel_manager_config?: BookingChannelManagerConfig;
   created_at: string;
 }
 
@@ -54,7 +70,7 @@ export interface Prenotazione {
   stato: 'confermata' | 'pending' | 'cancellata';
   note: string;
   created_at: string;
-  fonte: 'manuale' | 'ical' | 'sheet';
+  fonte: 'manuale' | 'ical' | 'sheet' | 'booking';
   ical_uid?: string;
 }
 

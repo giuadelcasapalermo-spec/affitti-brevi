@@ -8,6 +8,7 @@ import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
+  Plug, ArrowDownToLine, Wifi, WifiOff,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
@@ -103,6 +104,20 @@ export default function ImpostazioniPage() {
   const [mostraPasswordAlloggiati, setMostraPasswordAlloggiati] = useState(false);
   const [salvatoAlloggiati, setSalvatoAlloggiati] = useState(false);
 
+  // Booking Channel Manager (per struttura)
+  const [editCmUrl, setEditCmUrl] = useState('');
+  const [editCmHotelId, setEditCmHotelId] = useState('');
+  const [editCmUsername, setEditCmUsername] = useState('');
+  const [editCmPassword, setEditCmPassword] = useState('');
+  const [editCmWebhookSecret, setEditCmWebhookSecret] = useState('');
+  const [editCmRoomMap, setEditCmRoomMap] = useState<Record<number, string>>({});
+  const [mostraPasswordCm, setMostraPasswordCm] = useState(false);
+  const [salvatoCm, setSalvatoCm] = useState(false);
+  const [testCmLoading, setTestCmLoading] = useState(false);
+  const [testCmResult, setTestCmResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [syncCmLoading, setSyncCmLoading] = useState(false);
+  const [syncCmResult, setSyncCmResult] = useState<{ importate: number; aggiornate: number; cancellate: number; errori: string[] } | null>(null);
+
   // Sistema backup
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
@@ -178,6 +193,49 @@ export default function ImpostazioniPage() {
     });
     setSalvatoAlloggiati(true);
     setTimeout(() => setSalvatoAlloggiati(false), 2000);
+  }
+
+  async function salvaChannelManager(id: string) {
+    await fetch(`/api/strutture/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel_manager_config: {
+          channel_manager_url: editCmUrl.trim(),
+          hotel_id: editCmHotelId.trim(),
+          username: editCmUsername.trim(),
+          password: editCmPassword,
+          webhook_secret: editCmWebhookSecret.trim() || undefined,
+          room_id_map: editCmRoomMap,
+        },
+      }),
+    });
+    setSalvatoCm(true);
+    setTimeout(() => setSalvatoCm(false), 2000);
+  }
+
+  async function testChannelManager(id: string) {
+    setTestCmLoading(true);
+    setTestCmResult(null);
+    const res = await fetch('/api/channel-manager/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ struttura_id: id }),
+    });
+    setTestCmResult(await res.json());
+    setTestCmLoading(false);
+  }
+
+  async function syncChannelManager(id: string) {
+    setSyncCmLoading(true);
+    setSyncCmResult(null);
+    const res = await fetch('/api/channel-manager/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ struttura_id: id, stato: 'all' }),
+    });
+    setSyncCmResult(await res.json());
+    setSyncCmLoading(false);
   }
 
   async function salvaEditDati(id: string) {
@@ -800,6 +858,16 @@ export default function ImpostazioniPage() {
           setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
           setMostraPasswordAlloggiati(false);
           setSalvatoAlloggiati(false);
+          setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
+          setEditCmHotelId(s.channel_manager_config?.hotel_id ?? '');
+          setEditCmUsername(s.channel_manager_config?.username ?? '');
+          setEditCmPassword(s.channel_manager_config?.password ?? '');
+          setEditCmWebhookSecret(s.channel_manager_config?.webhook_secret ?? '');
+          setEditCmRoomMap(s.channel_manager_config?.room_id_map ?? {});
+          setMostraPasswordCm(false);
+          setSalvatoCm(false);
+          setTestCmResult(null);
+          setSyncCmResult(null);
           setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
           setNuovoContoNome('');
           setNuovoContoTipo('contanti');
@@ -1025,6 +1093,137 @@ export default function ImpostazioniPage() {
                       <Save size={12} />
                       {salvatoAlloggiati ? 'Salvato!' : 'Salva credenziali'}
                     </button>
+                  </div>
+
+                  {/* Booking Channel Manager */}
+                  <div className="border-t pt-4 mt-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Plug size={14} className="text-indigo-600" />
+                      <span className="font-semibold text-gray-700 text-xs">Booking.com Channel Manager</span>
+                      {editCmUrl && testCmResult && (
+                        testCmResult.ok
+                          ? <span className="flex items-center gap-1 text-[10px] text-green-700 bg-green-50 rounded px-1.5 py-0.5"><Wifi size={10}/> Connesso</span>
+                          : <span className="flex items-center gap-1 text-[10px] text-red-600 bg-red-50 rounded px-1.5 py-0.5"><WifiOff size={10}/> Errore</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3">
+                      Connetti questa struttura al Channel Manager per sincronizzare tariffe, disponibilità e prenotazioni con Booking.com.
+                    </p>
+
+                    {/* Credenziali principali */}
+                    <div className="space-y-2 mb-3">
+                      <div>
+                        <label className="block text-[10px] text-gray-500 mb-0.5">URL Channel Manager</label>
+                        <input type="url" placeholder="http://localhost:3001" value={editCmUrl}
+                          onChange={e => setEditCmUrl(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-gray-500 mb-0.5">Hotel ID (Booking.com)</label>
+                          <input type="text" placeholder="hotel-test-001" value={editCmHotelId}
+                            onChange={e => setEditCmHotelId(e.target.value)}
+                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 mb-0.5">Username</label>
+                          <input type="text" placeholder="machine-account-user" value={editCmUsername}
+                            onChange={e => setEditCmUsername(e.target.value)}
+                            autoComplete="off"
+                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <input type={mostraPasswordCm ? 'text' : 'password'} placeholder="Password"
+                          value={editCmPassword} onChange={e => setEditCmPassword(e.target.value)}
+                          autoComplete="new-password"
+                          className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                        <button type="button" onClick={() => setMostraPasswordCm(p => !p)} className="border rounded px-2 text-xs text-gray-500 hover:bg-gray-50">
+                          {mostraPasswordCm ? 'Nascondi' : 'Mostra'}
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-gray-500 mb-0.5">Webhook Secret (opzionale)</label>
+                        <input type="text" placeholder="Segreto HMAC per validare i push di Booking.com" value={editCmWebhookSecret}
+                          onChange={e => setEditCmWebhookSecret(e.target.value)}
+                          className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Mapping camere */}
+                    <div className="mb-3">
+                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                        Mapping camere → Room ID Channel Manager
+                      </p>
+                      <div className="space-y-1">
+                        {idsEditCamere.map(id => (
+                          <div key={id} className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 w-28 shrink-0">
+                              <div className={`w-2 h-2 rounded-full ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
+                              <span className="text-xs text-gray-600 truncate">{editNomiCamere[id] || `Camera ${id}`}</span>
+                            </div>
+                            <input type="text" placeholder="room-deluxe-01"
+                              value={editCmRoomMap[id] ?? ''}
+                              onChange={e => setEditCmRoomMap(prev => ({ ...prev, [id]: e.target.value }))}
+                              className="flex-1 border rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Inserisci gli ID esatti usati nel Channel Manager (es. room-deluxe-01).
+                      </p>
+                    </div>
+
+                    {/* Azioni */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button onClick={() => salvaChannelManager(selezionata.id)}
+                        disabled={!editCmUrl || !editCmHotelId}
+                        className="flex items-center gap-1.5 bg-indigo-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+                      >
+                        <Save size={12} />
+                        {salvatoCm ? 'Salvato!' : 'Salva configurazione'}
+                      </button>
+                      <button onClick={() => testChannelManager(selezionata.id)}
+                        disabled={testCmLoading || !editCmUrl}
+                        className="flex items-center gap-1.5 border border-indigo-300 text-indigo-700 px-2.5 py-1.5 rounded text-xs font-medium hover:bg-indigo-50 disabled:opacity-40"
+                      >
+                        {testCmLoading ? <Loader2 size={12} className="animate-spin" /> : <Wifi size={12} />}
+                        Test connessione
+                      </button>
+                      <button onClick={() => syncChannelManager(selezionata.id)}
+                        disabled={syncCmLoading || !editCmUrl}
+                        className="flex items-center gap-1.5 border border-green-300 text-green-700 px-2.5 py-1.5 rounded text-xs font-medium hover:bg-green-50 disabled:opacity-40"
+                      >
+                        {syncCmLoading ? <Loader2 size={12} className="animate-spin" /> : <ArrowDownToLine size={12} />}
+                        Importa prenotazioni
+                      </button>
+                    </div>
+
+                    {/* Risultato test */}
+                    {testCmResult && (
+                      <div className={`mt-2 text-xs px-3 py-2 rounded flex items-center gap-2 ${testCmResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                        {testCmResult.ok ? <Wifi size={12} /> : <WifiOff size={12} />}
+                        {testCmResult.message}
+                      </div>
+                    )}
+
+                    {/* Risultato sync */}
+                    {syncCmResult && (
+                      <div className="mt-2 text-xs space-y-1">
+                        <div className="px-3 py-2 rounded bg-blue-50 text-blue-700">
+                          Sync completato — {syncCmResult.importate} nuove, {syncCmResult.aggiornate} aggiornate, {syncCmResult.cancellate} cancellate
+                        </div>
+                        {syncCmResult.errori.length > 0 && syncCmResult.errori.map((e, i) => (
+                          <div key={i} className="px-3 py-1.5 rounded bg-red-50 text-red-600">{e}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
