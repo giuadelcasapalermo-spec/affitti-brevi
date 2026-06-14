@@ -138,32 +138,40 @@ ${elencoXml}
     const errDes = extractXmlTag(sendXml, 'ErroreDes');
     const errDet = extractXmlTag(sendXml, 'ErroreDettaglio');
     const errCod = extractXmlTag(sendXml, 'ErroreCod');
+    const numRiga = extractXmlTag(sendXml, 'NumRiga');
+    const nomeCampo = extractXmlTag(sendXml, 'NomeCampo');
 
     if (errCod || errDes) {
       const diagRighe = righe.map((r, i) => ({
         i,
         tipo: r.substring(0, 2),
         dataArrivo: r.substring(2, 12),
+        permanenza: r.substring(12, 14).trim(),
         cognome: r.substring(14, 64).trimEnd(),
         nome: r.substring(64, 94).trimEnd(),
+        sesso: r.substring(94, 95),
         dataNascita: r.substring(95, 105),
         comuneNascita: r.substring(105, 114),
         provNascita: r.substring(114, 116),
         statoNascita: r.substring(116, 125),
         cittadinanza: r.substring(125, 134),
         tipoDoc: r.substring(134, 139),
+        numeroDoc: r.substring(139, 159).trimEnd(),
         luogoRilascio: r.substring(159, 168),
         len: r.length,
         raw: r,
-        // valori grezzi dal DB per diagnosi lookup falliti
         db_comune_nascita: alloggiatiPreparati[i]?.comune_nascita ?? '?',
         db_luogo_rilascio: alloggiatiPreparati[i]?.luogo_rilascio ?? '?',
       }));
+      let errMsg = `Invio fallito: ${errDes || errCod}`;
+      if (errDet) errMsg += ` — ${errDet}`;
+      if (nomeCampo) errMsg += ` (campo: ${nomeCampo})`;
+      if (numRiga) errMsg += ` [riga ${numRiga}]`;
       return NextResponse.json({
         ok: false,
-        errore: `Invio fallito: ${errDes || errCod}${errDet ? ` — ${errDet}` : ''}`,
+        errore: errMsg,
         diagnosi: diagRighe,
-        soapResponse: sendXml,
+        soapXml: sendXml,
       });
     }
 
