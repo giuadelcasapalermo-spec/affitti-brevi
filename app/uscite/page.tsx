@@ -258,30 +258,60 @@ export default function PrimaNotaPage() {
     fetch('/api/settings').then(r => r.json()).then(d => setSheetsAbilitato(d.googleSheetsAbilitato ?? false));
   }, [carica]);
 
-  /* CRUD */
+  /* CRUD — aggiornamento ottimistico: stato locale aggiornato subito, API in background */
   async function creaEntrata(d: Partial<Entrata>) {
-    await fetch('/api/entrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-    setFormAperto(null); carica();
+    const id = crypto.randomUUID();
+    const nuova: Entrata = {
+      id,
+      data: d.data!,
+      descrizione: d.descrizione!,
+      categoria: d.categoria as CategoriaEntrata,
+      importo: Number(d.importo),
+      camera_id: d.camera_id,
+      note: d.note ?? '',
+      fonte_pagamento: d.fonte_pagamento ?? 'Contanti',
+      created_at: new Date().toISOString(),
+    };
+    setFormAperto(null);
+    setEntrate(prev => [...prev, nuova]);
+    fetch('/api/entrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, id }) });
   }
   async function aggiornaEntrata(id: string, d: Partial<Entrata>) {
-    await fetch(`/api/entrate/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-    setEditingE(null); carica();
+    setEditingE(null);
+    setEntrate(prev => prev.map(e => e.id === id ? { ...e, ...d, importo: Number(d.importo ?? e.importo) } : e));
+    fetch(`/api/entrate/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
   }
   async function eliminaEntrata(id: string) {
     if (!confirm('Eliminare questa entrata?')) return;
-    await fetch(`/api/entrate/${id}`, { method: 'DELETE' }); carica();
+    setEntrate(prev => prev.filter(e => e.id !== id));
+    fetch(`/api/entrate/${id}`, { method: 'DELETE' });
   }
   async function creaUscita(d: Partial<Uscita>) {
-    await fetch('/api/uscite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-    setFormAperto(null); carica();
+    const id = crypto.randomUUID();
+    const nuova: Uscita = {
+      id,
+      data: d.data!,
+      descrizione: d.descrizione!,
+      categoria: d.categoria as CategoriaUscita,
+      importo: Number(d.importo),
+      camera_id: d.camera_id,
+      note: d.note ?? '',
+      fonte_pagamento: d.fonte_pagamento ?? 'Contanti',
+      created_at: new Date().toISOString(),
+    };
+    setFormAperto(null);
+    setUscite(prev => [...prev, nuova]);
+    fetch('/api/uscite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, id }) });
   }
   async function aggiornaUscita(id: string, d: Partial<Uscita>) {
-    await fetch(`/api/uscite/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-    setEditingU(null); carica();
+    setEditingU(null);
+    setUscite(prev => prev.map(u => u.id === id ? { ...u, ...d, importo: Number(d.importo ?? u.importo) } : u));
+    fetch(`/api/uscite/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
   }
   async function eliminaUscita(id: string) {
     if (!confirm('Eliminare questa uscita?')) return;
-    await fetch(`/api/uscite/${id}`, { method: 'DELETE' }); carica();
+    setUscite(prev => prev.filter(u => u.id !== id));
+    fetch(`/api/uscite/${id}`, { method: 'DELETE' });
   }
 
   /* Fonti disponibili nel periodo (per filtro e totali) */

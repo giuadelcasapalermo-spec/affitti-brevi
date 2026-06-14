@@ -158,11 +158,11 @@ export const CAMERE: Camera[] = [
 ];
 
 export const TIPI_ALLOGGIATO = {
-  '16': 'Ospite Singolo',
+  '16': 'Ospite Successivo',
   '17': 'Capo Famiglia',
   '18': 'Capo Gruppo',
   '19': 'Familiare',
-  '20': 'Membro Gruppo',
+  '20': 'Ospite Singolo',
 } as const;
 export type TipoAlloggiato = keyof typeof TIPI_ALLOGGIATO;
 

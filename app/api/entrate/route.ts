@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { leggiEntrate, scriviEntrate } from '@/lib/entrate';
+import { leggiEntrate, aggiungiEntrata } from '@/lib/entrate';
 import { Entrata } from '@/lib/types';
 import { randomUUID } from 'crypto';
 
@@ -9,10 +9,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const entrate = await leggiEntrate();
 
   const nuova: Entrata = {
-    id: randomUUID(),
+    id: body.id || randomUUID(),
     data: body.data,
     descrizione: body.descrizione,
     categoria: body.categoria,
@@ -23,7 +22,6 @@ export async function POST(req: NextRequest) {
     created_at: new Date().toISOString(),
   };
 
-  entrate.push(nuova);
-  await scriviEntrate(entrate);
+  await aggiungiEntrata(nuova);
   return NextResponse.json(nuova, { status: 201 });
 }

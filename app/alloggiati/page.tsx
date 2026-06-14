@@ -20,7 +20,7 @@ type ModalState = {
 };
 
 const FORM_VUOTO = {
-  tipo: '16' as TipoAlloggiato,
+  tipo: '17' as TipoAlloggiato,
   data_arrivo: oggi,
   permanenza: 1,
   cognome: '',

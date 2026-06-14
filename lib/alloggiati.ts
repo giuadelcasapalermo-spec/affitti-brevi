@@ -165,6 +165,30 @@ function tipoDocumentoSanitizzato(raw: string): string {
   return TIPO_DOC_MAP[v] ?? raw.substring(0, 5).padEnd(5, ' ');
 }
 
+const TIPO_SORT: Record<string, number> = { '17': 0, '16': 1, '20': 2, '18': 3, '19': 4 };
+
+export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
+  let records = [...alloggiati];
+  // Auto-fix: se ci sono tipo 16 senza tipo 17, promuovi il primo tipo 16 a Capo Famiglia
+  if (records.some(a => a.tipo === '16') && !records.some(a => a.tipo === '17')) {
+    const idx = records.findIndex(a => a.tipo === '16');
+    records = records.map((a, i) => i === idx ? { ...a, tipo: '17' as Alloggiato['tipo'] } : a);
+  }
+  // Ordina per prenotazione con tipo 17 prima di 16, tipo 18 prima di 19
+  const gruppi = new Map<string, Alloggiato[]>();
+  for (const a of records) {
+    const key = a.prenotazione_id ?? '';
+    if (!gruppi.has(key)) gruppi.set(key, []);
+    gruppi.get(key)!.push(a);
+  }
+  const result: Alloggiato[] = [];
+  for (const gruppo of gruppi.values()) {
+    gruppo.sort((a, b) => (TIPO_SORT[a.tipo] ?? 99) - (TIPO_SORT[b.tipo] ?? 99));
+    result.push(...gruppo);
+  }
+  return result;
+}
+
 export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
   const righe = alloggiati.map(a => {
     const tipo = pad(a.tipo, 2);

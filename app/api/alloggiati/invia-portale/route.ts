@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
-import { leggiAlloggiati, generaFileAlloggiati } from '@/lib/alloggiati';
+import { leggiAlloggiati, generaFileAlloggiati, preparaBatchPerPortale } from '@/lib/alloggiati';
 
 const SOAP_ENDPOINT = 'https://alloggiatiweb.poliziadistato.it/service/service.asmx';
 const SOAP_NS = 'AlloggiatiService';
@@ -75,29 +75,18 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Regole di composizione schedine AlloggiatiWeb:
-    // tipo 17 (Capofamiglia) → può avere tipo 16 (Ospite Successivo) a seguire
-    // tipo 18 (Capogruppo)   → può avere tipo 19 (Componente Gruppo) a seguire
-    // tipo 20 (Individuale)  → standalone, NON può precedere tipo 16 o 19
-    const ha16 = alloggiati.some(a => a.tipo === '16');
-    const ha17 = alloggiati.some(a => a.tipo === '17');
-    const ha19 = alloggiati.some(a => a.tipo === '19');
-    const ha18 = alloggiati.some(a => a.tipo === '18');
-    const ha20 = alloggiati.some(a => a.tipo === '20');
-    if (ha16 && !ha17) {
-      return NextResponse.json({
-        ok: false,
-        errore: `Batch non valido: tipo 16 (Ospite Successivo) presente senza tipo 17 (Capofamiglia).${ha20 ? ' Hai tipo 20 (Individuale) — cambialo in tipo 17 se è il capo famiglia.' : ' Aggiungere il Capofamiglia (tipo 17).'}`,
-      }, { status: 400 });
-    }
-    if (ha19 && !ha18) {
+    // Prepara batch: auto-fix tipo 16 senza tipo 17, ordina per prenotazione
+    const alloggiatiPreparati = preparaBatchPerPortale(alloggiati);
+
+    // Validazione tipo 19 senza tipo 18 (Capogruppo)
+    if (alloggiatiPreparati.some(a => a.tipo === '19') && !alloggiatiPreparati.some(a => a.tipo === '18')) {
       return NextResponse.json({
         ok: false,
         errore: 'Batch non valido: tipo 19 (Componente Gruppo) presente senza tipo 18 (Capogruppo). Aggiungere il Capogruppo (tipo 18).',
       }, { status: 400 });
     }
 
-    const contenuto = generaFileAlloggiati(alloggiati);
+    const contenuto = generaFileAlloggiati(alloggiatiPreparati);
 
     // Step 1: genera token di sessione
     const tokenBody = `<tns:GenerateToken xmlns:tns="${SOAP_NS}">
@@ -167,8 +156,8 @@ ${elencoXml}
         len: r.length,
         raw: r,
         // valori grezzi dal DB per diagnosi lookup falliti
-        db_comune_nascita: alloggiati[i]?.comune_nascita ?? '?',
-        db_luogo_rilascio: alloggiati[i]?.luogo_rilascio ?? '?',
+        db_comune_nascita: alloggiatiPreparati[i]?.comune_nascita ?? '?',
+        db_luogo_rilascio: alloggiatiPreparati[i]?.luogo_rilascio ?? '?',
       }));
       return NextResponse.json({
         ok: false,

@@ -486,7 +486,17 @@ async function arricchisciPrenotazioniDaSheets(
       }
 
       const key  = `${camera_id}|${checkIn}|${checkOut}`;
-      const pren = byKey.get(key) ?? byCheckIn.get(`${camera_id}|${checkIn}`);
+      let pren = byKey.get(key) ?? byCheckIn.get(`${camera_id}|${checkIn}`);
+      if (!pren) {
+        for (const delta of [-1, 1]) {
+          const d = new Date(checkIn + 'T00:00:00Z');
+          d.setUTCDate(d.getUTCDate() + delta);
+          const altCheckIn = d.toISOString().split('T')[0];
+          pren = byKey.get(`${camera_id}|${altCheckIn}|${checkOut}`)
+              ?? byCheckIn.get(`${camera_id}|${altCheckIn}`);
+          if (pren) break;
+        }
+      }
 
       if (pren) {
         if (nome) pren.ospite_nome = nome;
