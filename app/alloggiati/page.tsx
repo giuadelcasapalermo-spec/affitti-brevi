@@ -20,7 +20,7 @@ type ModalState = {
 };
 
 const FORM_VUOTO = {
-  tipo: '17' as TipoAlloggiato,
+  tipo: '16' as TipoAlloggiato,
   data_arrivo: oggi,
   permanenza: 1,
   cognome: '',
@@ -852,18 +852,21 @@ export default function AlloggiatiPage() {
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-0.5">Comune Nascita</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                    Comune Nascita
+                    <span className="text-gray-400 font-normal ml-1">(solo italiani)</span>
+                  </label>
                   <input
                     type="text"
                     value={form.comune_nascita}
                     onChange={e => setF('comune_nascita', e.target.value)}
-                    placeholder="es. 419082053 o PALERMO"
+                    placeholder="PALERMO oppure codice ISTAT"
                     list="list-comuni-nascita"
                     className="w-full border rounded px-2 py-1.5 text-xs"
                   />
                   <datalist id="list-comuni-nascita">
                     {COMUNI.map(c => (
-                      <option key={c.codice} value={c.codice}>{c.nome} ({c.prov})</option>
+                      <option key={c.codice} value={c.nome}>{c.nome} ({c.prov})</option>
                     ))}
                   </datalist>
                 </div>
@@ -872,18 +875,21 @@ export default function AlloggiatiPage() {
                   <input type="text" value={form.provincia_nascita} onChange={e => setF('provincia_nascita', e.target.value)} maxLength={2} placeholder="PA" className="w-full border rounded px-2 py-1.5 text-xs" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-0.5">Stato Nascita</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                    Stato Nascita
+                    <span className="text-gray-400 font-normal ml-1">(vuoto=Italia)</span>
+                  </label>
                   <input
                     type="text"
                     value={form.stato_nascita}
                     onChange={e => setF('stato_nascita', e.target.value)}
-                    placeholder="vuoto=Italia, Z112=Germania…"
+                    placeholder="GERMANIA, FRANCIA…"
                     list="list-stati-nascita"
                     className="w-full border rounded px-2 py-1.5 text-xs"
                   />
                   <datalist id="list-stati-nascita">
                     {PAESI.map(p => (
-                      <option key={p.codice} value={p.codice}>{p.nome}</option>
+                      <option key={p.codice} value={p.nome}>{p.nome}</option>
                     ))}
                   </datalist>
                 </div>
@@ -896,20 +902,26 @@ export default function AlloggiatiPage() {
                     type="text"
                     value={form.cittadinanza}
                     onChange={e => setF('cittadinanza', e.target.value)}
-                    placeholder="100=Italiana, Z112=Tedesca…"
+                    placeholder="ITALIANA, TEDESCA, FRANCESE…"
                     list="list-cittadinanza"
                     className="w-full border rounded px-2 py-1.5 text-xs"
                   />
                   <datalist id="list-cittadinanza">
-                    <option value={CODICE_ITALIA}>ITALIA</option>
+                    <option value="ITALIANA">ITALIANA</option>
                     {PAESI.filter(p => p.codice).map(p => (
-                      <option key={p.codice} value={p.codice}>{p.nome}</option>
+                      <option key={p.codice} value={p.nome}>{p.nome}</option>
                     ))}
                   </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-0.5">Tipo Doc.</label>
-                  <input type="text" value={form.tipo_documento} onChange={e => setF('tipo_documento', e.target.value)} maxLength={5} placeholder="PP / CI" className="w-full border rounded px-2 py-1.5 text-xs" />
+                  <select value={form.tipo_documento} onChange={e => setF('tipo_documento', e.target.value)} className="w-full border rounded px-2 py-1.5 text-xs" required>
+                    <option value="">— seleziona —</option>
+                    <option value="PP">Passaporto</option>
+                    <option value="CI">Carta d'Identità Elettronica (IT)</option>
+                    <option value="ID">Carta d'Identità (stranieri)</option>
+                    <option value="DL">Patente di Guida</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-0.5">Luogo Rilascio</label>
@@ -917,13 +929,16 @@ export default function AlloggiatiPage() {
                     type="text"
                     value={form.luogo_rilascio}
                     onChange={e => setF('luogo_rilascio', e.target.value)}
-                    placeholder="es. 419082053 o PALERMO"
+                    placeholder="PALERMO (IT) o GERMANIA (straniero)"
                     list="list-comuni-rilascio"
                     className="w-full border rounded px-2 py-1.5 text-xs"
                   />
                   <datalist id="list-comuni-rilascio">
                     {COMUNI.map(c => (
-                      <option key={c.codice} value={c.codice}>{c.nome} ({c.prov})</option>
+                      <option key={c.codice} value={c.nome}>{c.nome} ({c.prov})</option>
+                    ))}
+                    {PAESI.map(p => (
+                      <option key={`p-${p.codice}`} value={p.nome}>{p.nome}</option>
                     ))}
                   </datalist>
                 </div>
