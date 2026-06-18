@@ -84,64 +84,45 @@ function tipoDocumentoSanitizzato(raw: string): string {
 const TIPO_SORT: Record<string, number> = { '17': 0, '16': 1, '20': 2, '18': 3, '19': 4 };
 
 export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
-  let records = [...alloggiati];
-  // Auto-fix: se ci sono tipo 16 senza tipo 17, promuovi il primo tipo 16 a Capo Famiglia
-  if (records.some(a => a.tipo === '16') && !records.some(a => a.tipo === '17')) {
-    const idx = records.findIndex(a => a.tipo === '16');
-    records = records.map((a, i) => i === idx ? { ...a, tipo: '17' as Alloggiato['tipo'] } : a);
-  }
   // Raggruppa per prenotazione
   const gruppi = new Map<string, Alloggiato[]>();
-  for (const a of records) {
+  for (const a of alloggiati) {
     const key = a.prenotazione_id ?? '';
     if (!gruppi.has(key)) gruppi.set(key, []);
     gruppi.get(key)!.push(a);
   }
-  // Tipi validi per stranieri:
-  //   18 = Capo Nucleo / Ospite Singolo straniero (può stare da solo O come testa di gruppo)
-  //   19 = Membro del nucleo (segue il tipo 18)
-  //   17 = Capo Famiglia italiano (richiede tipo 16 a seguire — NON valido da solo)
-  //   20 = tipo non riconosciuto come standalone dal portale
-  //
-  // Auto-fix: tipo 20 o tipo 17 senza membri nel gruppo → promuovi a tipo 18 (unico tipo
-  // valido per ospite straniero singolo O testa di nucleo familiare straniero).
-  for (const [key, gruppo] of [...gruppi.entries()]) {
-    const haMembers = gruppo.some(a => a.tipo === '16' || a.tipo === '19');
-    if (!haMembers) {
-      // Gruppo senza membri: il primo record deve essere tipo 18 (standalone straniero)
-      let promoted = false;
-      gruppi.set(key, gruppo.map(a => {
-        if (!promoted && (a.tipo === '17' || a.tipo === '20')) {
-          promoted = true;
-          return { ...a, tipo: '18' as Alloggiato['tipo'] };
-        }
-        return a;
-      }));
-    }
-  }
+
   const result: Alloggiato[] = [];
+
   for (const gruppo of gruppi.values()) {
-    gruppo.sort((a, b) => (TIPO_SORT[a.tipo] ?? 99) - (TIPO_SORT[b.tipo] ?? 99));
-    result.push(...gruppo);
-  }
-  // Auto-fix globale: due tipo 17 consecutivi → il secondo diventa tipo 19 (Familiare).
-  // tipo 16 = solo italiani (rifiutato silenziosamente per stranieri).
-  // tipo 20 = membro di Capo Gruppo (tipo 18), NON di Capo Famiglia (tipo 17).
-  // tipo 19 = Familiare, il membro corretto per un Capo Famiglia (tipo 17) straniero.
-  for (let i = 1; i < result.length; i++) {
-    if (result[i].tipo === '17' && result[i - 1].tipo === '17') {
-      result[i] = { ...result[i], tipo: '19' as Alloggiato['tipo'] };
+    if (gruppo.length === 1) {
+      // Ospite singolo: tipo 16 è l'unico tipo standalone accettato dal portale.
+      // Tipo 17 e 18 richiedono ospiti a seguire; tipo 19 e 20 richiedono un capo precedente.
+      result.push({ ...gruppo[0], tipo: '16' as Alloggiato['tipo'] });
+      continue;
     }
-  }
-  // Auto-fix: tipo 16 per stranieri → tipo 19 (tipo 16 è valido solo per cittadini italiani)
-  for (let i = 0; i < result.length; i++) {
-    if (result[i].tipo === '16') {
-      const statoCode = codicePaeseSanitizzato(result[i].stato_nascita);
-      if (statoCode && statoCode !== '100000100') {
-        result[i] = { ...result[i], tipo: '19' as Alloggiato['tipo'] };
+
+    // Gruppo multi-ospite: distingui italiani (17+16) da stranieri (18+19)
+    let g = [...gruppo];
+    const primoStato = codicePaeseSanitizzato(g[0].stato_nascita);
+    const isGruppoItaliano = !primoStato || primoStato === '100000100';
+
+    if (isGruppoItaliano) {
+      // Gruppo italiano: tipo 17 (capo) + tipo 16 (membri)
+      if (!g.some(a => a.tipo === '17')) {
+        const idx = g.findIndex(a => a.tipo !== '17');
+        g = g.map((a, i) => i === idx ? { ...a, tipo: '17' as Alloggiato['tipo'] } : { ...a, tipo: '16' as Alloggiato['tipo'] });
       }
+    } else {
+      // Gruppo straniero: tipo 18 (capo) + tipo 19 (membri)
+      const headIdx = g.findIndex(a => a.tipo === '18') >= 0 ? g.findIndex(a => a.tipo === '18') : 0;
+      g = g.map((a, i) => i === headIdx ? { ...a, tipo: '18' as Alloggiato['tipo'] } : { ...a, tipo: '19' as Alloggiato['tipo'] });
     }
+
+    g.sort((a, b) => (TIPO_SORT[a.tipo] ?? 99) - (TIPO_SORT[b.tipo] ?? 99));
+    result.push(...g);
   }
+
   return result;
 }
 
