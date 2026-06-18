@@ -300,6 +300,7 @@ export function codiceStatoNascita(code9: string): string {
 
 function normalizzaNome(raw: string): string {
   return raw.trim().toUpperCase()
+    // alias italiani
     .replace(/\bGRAN\s+BRETAGNA\b/, 'REGNO UNITO')
     .replace(/\bOLAND[AE]\b/, 'PAESI BASSI')
     .replace(/\bUCRAIN[AE]\b/, 'UCRAINA')
@@ -309,7 +310,59 @@ function normalizzaNome(raw: string): string {
     .replace(/\bSLOVACCHIA\b/, 'REPUBBLICA SLOVACCA')
     .replace(/\bCECIA\b/, 'REPUBBLICA CECA')
     .replace(/\bBIRMANIA\b/, 'MYANMAR-BIRMANIA')
-    .replace(/\bSUD\s+AFRICA\b/, 'SUDAFRICA');
+    .replace(/\bSUD\s+AFRICA\b/, 'SUDAFRICA')
+    // nomi inglesi → italiano
+    .replace(/\bGERMANY\b/, 'GERMANIA')
+    .replace(/\bFRANCE\b/, 'FRANCIA')
+    .replace(/\bSPAIN\b/, 'SPAGNA')
+    .replace(/\bITALY\b/, 'ITALIA')
+    .replace(/\bSWITZERLAND\b/, 'SVIZZERA')
+    .replace(/\bNETHERLANDS\b/, 'PAESI BASSI')
+    .replace(/\bHOLLAND\b/, 'PAESI BASSI')
+    .replace(/\bPOLAND\b/, 'POLONIA')
+    .replace(/\bUKRAINE\b/, 'UCRAINA')
+    .replace(/\bUNITED\s+KINGDOM\b/, 'REGNO UNITO')
+    .replace(/\bUNITED\s+STATES(\s+OF\s+AMERICA)?\b/, 'STATI UNITI')
+    .replace(/\bCHINA\b/, 'CINA')
+    .replace(/\bJAPAN\b/, 'GIAPPONE')
+    .replace(/\bBRAZIL\b/, 'BRASILE')
+    .replace(/\bTURKEY\b/, 'TURCHIA')
+    .replace(/\bMOROCCO\b/, 'MAROCCO')
+    .replace(/\bEGYPT\b/, 'EGITTO')
+    .replace(/\bBELGIUM\b/, 'BELGIO')
+    .replace(/\bSWEDEN\b/, 'SVEZIA')
+    .replace(/\bPORTUGAL\b/, 'PORTOGALLO')
+    .replace(/\bHUNGARY\b/, 'UNGHERIA')
+    .replace(/\bCZECH\s+REPUBLIC\b/, 'REPUBBLICA CECA')
+    .replace(/\bSLOVAKIA\b/, 'REPUBBLICA SLOVACCA')
+    .replace(/\bALBANIA\b/, 'ALBANIA')
+    .replace(/\bMEXICO\b/, 'MESSICO')
+    .replace(/\bCHILE\b/, 'CILE')
+    .replace(/\bPHILIPPINES\b/, 'FILIPPINE')
+    .replace(/\bINDIA\b/, 'INDIA')
+    .replace(/\bPAKISTAN\b/, 'PAKISTAN')
+    .replace(/\bAUSTRIA\b/, 'AUSTRIA')
+    .replace(/\bAUSTRALIA\b/, 'AUSTRALIA')
+    .replace(/\bCOLOMBIA\b/, 'COLOMBIA')
+    .replace(/\bVENEZUELA\b/, 'VENEZUELA')
+    .replace(/\bECUADOR\b/, 'ECUADOR')
+    .replace(/\bCUBA\b/, 'CUBA')
+    .replace(/\bPERU\b/, 'PERU')
+    .replace(/\bROMANIA\b/, 'ROMANIA')
+    .replace(/\bGREECE\b/, 'GRECIA')
+    .replace(/\bDENMARK\b/, 'DANIMARCA')
+    .replace(/\bFINLAND\b/, 'FINLANDIA')
+    .replace(/\bNORWAY\b/, 'NORVEGIA')
+    .replace(/\bIRELAND\b/, 'IRLANDA')
+    .replace(/\bCROATIA\b/, 'CROAZIA')
+    .replace(/\bSERBIA\b/, 'SERBIA')
+    .replace(/\bBULGARIA\b/, 'BULGARIA')
+    .replace(/\bSLOVENIA\b/, 'SLOVENIA')
+    .replace(/\bLITHUANIA\b/, 'LITUANIA')
+    .replace(/\bLATVIA\b/, 'LETTONIA')
+    .replace(/\bESTONIA\b/, 'ESTONIA')
+    .replace(/\bTUNISIA\b/, 'TUNISIA')
+    .replace(/\bKOREA\b/, 'COREA DEL SUD');
 }
 
 export function nomePaeseACodice(nome: string): string {
@@ -387,6 +440,48 @@ const AGGETTIVI_CITTADINANZA: Record<string, string> = {
   'ECUADORIANO':  '100000609',
   'CUBANA':       '100000514',
   'CUBANO':       '100000514',
+  // aggettivi / nomi inglesi
+  'GERMAN':       '100000216',
+  'FRENCH':       '100000215',
+  'SPANISH':      '100000239',
+  'ITALIAN':      CODICE_ITALIA,
+  'SWISS':        '100000241',
+  'DUTCH':        '100000232',
+  'POLISH':       '100000233',
+  'ROMANIAN':     '100000235',
+  'ALBANIAN':     '100000201',
+  'UKRAINIAN':    '100000243',
+  'RUSSIAN':      '100000245',
+  'CHINESE':      '100000314',
+  'AMERICAN':     '100000536',
+  'BRAZILIAN':    '100000605',
+  'ARGENTINIAN':  '100000602',
+  'ARGENTINE':    '100000602',
+  'BRITISH':      '100000219',
+  'ENGLISH':      '100000219',
+  'AUSTRIAN':     '100000203',
+  'BELGIAN':      '100000206',
+  'GREEK':        '100000220',
+  'TURKISH':      '100000351',
+  'MOROCCAN':     '100000436',
+  'TUNISIAN':     '100000460',
+  'EGYPTIAN':     '100000419',
+  'INDIAN':       '100000330',
+  'PAKISTANI':    '100000344',
+  'FILIPINO':     '100000323',
+  'PHILIPPINE':   '100000323',
+  'JAPANESE':     '100000326',
+  'AUSTRALIAN':   '100000701',
+  'SWEDISH':      '100000240',
+  'PORTUGUESE':   '100000234',
+  'HUNGARIAN':    '100000244',
+  'COLOMBIAN':    '100000608',
+  'VENEZUELAN':   '100000619',
+  'MEXICAN':      '100000527',
+  'CHILEAN':      '100000606',
+  'PERUVIAN':     '100000615',
+  'ECUADORIAN':   '100000609',
+  'CUBAN':        '100000514',
 };
 
 export function aggettivoCittadinanzaACodice(aggettivo: string): string {
