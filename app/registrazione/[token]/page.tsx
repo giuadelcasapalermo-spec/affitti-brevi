@@ -116,7 +116,7 @@ export default function RegistrazionePage() {
       const timer = setTimeout(() => ctrl.abort(), 25000);
       let res: Response;
       try {
-        res = await fetch('/api/alloggiati/scan', { method: 'POST', body: fd, signal: ctrl.signal });
+        res = await fetch('/api/registrazione/scan', { method: 'POST', body: fd, signal: ctrl.signal });
       } catch (fetchErr) {
         const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError';
         setScanMsg({ ok: false, testo: isTimeout ? 'Scansione scaduta (>25s). Riprova con una foto più nitida.' : 'Errore di rete. Riprova.' });
@@ -269,24 +269,24 @@ export default function RegistrazionePage() {
               </div>
             )}
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) scanDocument(f); e.target.value = ''; }}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={scanning}
-              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg py-3 text-sm font-medium transition-colors disabled:opacity-60"
+            {/* Label wrapper: più affidabile del click() programmatico su iOS/WebView */}
+            <label
+              className={`w-full flex items-center justify-center gap-2 border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 rounded-lg py-3 text-sm font-medium transition-colors cursor-pointer select-none ${scanning ? 'opacity-60 pointer-events-none' : 'hover:bg-blue-100 active:bg-blue-200'}`}
             >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                disabled={scanning}
+                onChange={e => { const f = e.target.files?.[0]; if (f) scanDocument(f); e.target.value = ''; }}
+              />
               {scanning
                 ? <><Loader2 size={16} className="animate-spin" /> Lettura in corso...</>
                 : <><ScanLine size={16} /> Scansiona documento</>
               }
-            </button>
+            </label>
             {scanMsg && (
               <div className={`text-xs px-3 py-2 rounded ${scanMsg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                 {scanMsg.testo}

@@ -160,22 +160,56 @@ function PrenotazioniInner() {
     setTimeout(() => setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'idle' })), 5000);
   }
 
-  async function crea(data: Partial<Prenotazione>) {
-    await fetch('/api/prenotazioni', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  function crea(data: Partial<Prenotazione>) {
+    const id = crypto.randomUUID();
+    const optimistic: Prenotazione = {
+      id,
+      struttura_id: '',
+      camera_id: data.camera_id!,
+      ospite_nome: data.ospite_nome ?? '',
+      ospite_telefono: data.ospite_telefono ?? '',
+      ospite_email: data.ospite_email ?? '',
+      check_in: data.check_in ?? '',
+      check_out: data.check_out ?? '',
+      importo_totale: data.importo_totale ?? 0,
+      tassa_soggiorno: data.tassa_soggiorno,
+      stato: data.stato ?? 'confermata',
+      note: data.note ?? '',
+      created_at: new Date().toISOString(),
+      fonte: 'manuale',
+    };
+    setPrenotazioni(prev => [...prev, optimistic].sort((a, b) => a.check_in.localeCompare(b.check_in)));
     setMostraForm(false);
-    carica();
+    fetch('/api/prenotazioni', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, id }),
+    })
+      .then(r => r.json())
+      .then(saved => setPrenotazioni(prev => prev.map(p => p.id === id ? saved : p)))
+      .catch(() => setPrenotazioni(prev => prev.filter(p => p.id !== id)));
   }
 
-  async function aggiorna(id: string, data: Partial<Prenotazione>) {
-    await fetch(`/api/prenotazioni/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  function aggiorna(id: string, data: Partial<Prenotazione>) {
+    setPrenotazioni(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
     setEditingId(null);
-    carica();
+    setEditingCard(null);
+    fetch(`/api/prenotazioni/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+      .then(r => r.json())
+      .then(saved => setPrenotazioni(prev => prev.map(p => p.id === id ? saved : p)))
+      .catch(() => carica());
   }
 
-  async function elimina(id: string) {
+  function elimina(id: string) {
     if (!confirm('Eliminare questa prenotazione?')) return;
-    await fetch(`/api/prenotazioni/${id}`, { method: 'DELETE' });
-    carica();
+    const backup = prenotazioni.find(p => p.id === id);
+    setPrenotazioni(prev => prev.filter(p => p.id !== id));
+    fetch(`/api/prenotazioni/${id}`, { method: 'DELETE' })
+      .catch(() => { if (backup) setPrenotazioni(prev => [...prev, backup].sort((a, b) => a.check_in.localeCompare(b.check_in))); });
   }
 
   function startEdit(p: Prenotazione) {
@@ -187,15 +221,14 @@ function PrenotazioniInner() {
     setEditValues(prev => ({ ...prev, [k]: v }));
   }
 
-  async function aggiornaCard(data: Partial<Prenotazione>) {
+  function aggiornaCard(data: Partial<Prenotazione>) {
     if (!editingCard) return;
-    await aggiorna(editingCard.id, data);
-    setEditingCard(null);
+    aggiorna(editingCard.id, data);
   }
 
-  async function salvaInline() {
+  function salvaInline() {
     if (!editingId) return;
-    await aggiorna(editingId, {
+    aggiorna(editingId, {
       ...editValues,
       importo_totale:  Number(editValues.importo_totale)  || 0,
       tassa_soggiorno: editValues.tassa_soggiorno ? Number(editValues.tassa_soggiorno) : undefined,
@@ -432,7 +465,7 @@ function PrenotazioniInner() {
                     {/* Nome + badge */}
                     <div className="flex items-center gap-2 mb-2.5 pr-16 flex-wrap">
                       <span className="font-bold text-gray-900 text-[15px]">{p.ospite_nome}</span>
-                      {p.fonte === 'ical' && (
+                      {(p.fonte === 'ical' || p.fonte === 'booking') && (
                         <span className="bg-blue-600 text-white text-[11px] font-bold px-2 py-0.5 rounded">
                           Booking
                         </span>
@@ -717,7 +750,7 @@ function PrenotazioniInner() {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-gray-800">{p.ospite_nome}</span>
-                        {p.fonte === 'ical' && (
+                        {(p.fonte === 'ical' || p.fonte === 'booking') && (
                           <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">BK</span>
                         )}
                       </div>

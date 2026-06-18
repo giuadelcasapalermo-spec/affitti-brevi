@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { aggiornaAlloggiato, eliminaAlloggiato } from '@/lib/alloggiati';
+import { aggiornaAlloggiato, eliminaAlloggiato } from '@/lib/alloggiati-db';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
-import { leggiAlloggiati, creaAlloggiato } from '@/lib/alloggiati';
+import { leggiAlloggiati, creaAlloggiato } from '@/lib/alloggiati-db';
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();

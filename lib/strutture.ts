@@ -23,9 +23,11 @@ async function ensureTable(): Promise<void> {
       created_at TEXT NOT NULL
     )
   `;
-  await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_credentials JSONB DEFAULT NULL`;
-  await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS conti_correnti JSONB DEFAULT '[]'`;
-  await sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS channel_manager_config JSONB DEFAULT NULL`;
+  await Promise.all([
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_credentials JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS conti_correnti JSONB DEFAULT '[]'`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS channel_manager_config JSONB DEFAULT NULL`,
+  ]);
   _tableReady = true;
 }
 
@@ -175,10 +177,14 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
 export async function migraStruttura(): Promise<string> {
   if (_migrated) return '';
   const s = await getOrCreateDefaultStruttura();
-  await sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS struttura_id TEXT`;
-  await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`;
-  await sql`UPDATE prenotazioni SET struttura_id = ${s.id} WHERE struttura_id IS NULL`;
-  await sql`UPDATE prezzi_periodi SET struttura_id = ${s.id} WHERE struttura_id IS NULL`;
+  await Promise.all([
+    sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
+    sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
+  ]);
+  await Promise.all([
+    sql`UPDATE prenotazioni SET struttura_id = ${s.id} WHERE struttura_id IS NULL`,
+    sql`UPDATE prezzi_periodi SET struttura_id = ${s.id} WHERE struttura_id IS NULL`,
+  ]);
   _migrated = true;
   return s.id;
 }

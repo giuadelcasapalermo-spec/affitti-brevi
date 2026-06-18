@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { leggiLink } from '@/lib/link-alloggiati';
-import { creaAlloggiato } from '@/lib/alloggiati';
+import { creaAlloggiato } from '@/lib/alloggiati-db';
 import { TipoAlloggiato } from '@/lib/types';
 
 export async function GET(

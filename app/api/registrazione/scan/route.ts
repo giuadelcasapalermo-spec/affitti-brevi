@@ -46,11 +46,9 @@ export async function POST(req: NextRequest) {
       PROMPT,
     ]);
     const rawText = result.response.text().trim();
-    // Estrai il blocco JSON dalla risposta (gestisce ```json ... ``` e testo libero prima/dopo)
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Risposta non contiene JSON valido');
     const json = JSON.parse(jsonMatch[0]);
-    // Converti nomi paese/nazionalità in codici AlloggiatiWeb
     json.codice_stato_nascita  = nomePaeseACodice(json.paese_nascita ?? '');
     json.codice_cittadinanza   = aggettivoCittadinanzaACodice(json.cittadinanza_testo ?? '')
                                  || nomePaeseACodice(json.paese_nascita ?? '');
@@ -58,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(json);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[alloggiati/scan]', msg);
+    console.error('[registrazione/scan]', msg);
     return NextResponse.json({ errore: `Errore elaborazione: ${msg}` }, { status: 500 });
   }
 }
