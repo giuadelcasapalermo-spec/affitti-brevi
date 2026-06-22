@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { syncToSheets, importFromSheets } from '@/lib/googlesheets';
+import { getStrutturaAttiva } from '@/lib/strutture';
 
 export async function POST(req: NextRequest) {
   const { direzione } = await req.json() as { direzione: 'export' | 'import' };
@@ -12,13 +14,17 @@ export async function POST(req: NextRequest) {
   };
 
   try {
+    const cookieStore = await cookies();
+    const strutturaId = cookieStore.get('struttura_id')?.value;
+    const struttura = await getStrutturaAttiva(strutturaId);
+
     if (direzione === 'export') {
       await syncToSheets();
       return NextResponse.json({ ok: true, messaggio: 'Dati esportati su Google Sheets' });
     }
 
     if (direzione === 'import') {
-      const { importate, ignorate, rimosse, doppioniRimossi, prenotazioniArricchite } = await importFromSheets();
+      const { importate, ignorate, rimosse, doppioniRimossi, prenotazioniArricchite } = await importFromSheets(struttura.id);
       const extra = [
         rimosse > 0 ? `rimossi ${rimosse} obsoleti` : '',
         doppioniRimossi > 0 ? `rimossi ${doppioniRimossi} doppioni` : '',

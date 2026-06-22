@@ -4,6 +4,7 @@ import { Entrata, Uscita, CATEGORIE_USCITA, Impostazioni, Prenotazione } from '.
 import { leggiEntrate, scriviEntrate } from './entrate';
 import { leggiUscite, scriviUscite } from './uscite';
 import { leggiPrenotazioni, scriviPrenotazioni } from './db';
+import { getStrutturaAttiva } from './strutture';
 import { leggiImpostazioni } from './ical';
 import { randomUUID } from 'crypto';
 
@@ -402,8 +403,9 @@ async function arricchisciPrenotazioniDaSheets(
   sheets: ReturnType<typeof google.sheets>,
   tabEsistenti: Set<string>,
   sid: string,
+  struttura_id?: string,
 ): Promise<{ modificate: number; saltate: string[] }> {
-  const prenotazioni = await leggiPrenotazioni();
+  const prenotazioni = await leggiPrenotazioni(struttura_id);
 
   const attive = prenotazioni.filter(p => p.stato !== 'cancellata');
   // Indice esatto: camera|check_in|check_out → prenotazione
@@ -507,6 +509,7 @@ async function arricchisciPrenotazioniDaSheets(
       } else {
         const nuova: Prenotazione = {
           id: randomUUID(),
+          struttura_id,
           camera_id,
           ospite_nome: nome || 'Sconosciuto',
           ospite_telefono: telefono,
@@ -528,7 +531,7 @@ async function arricchisciPrenotazioniDaSheets(
   }
 
   if (modificate > 0) {
-    await scriviPrenotazioni(prenotazioni);
+    await scriviPrenotazioni(prenotazioni, struttura_id);
   }
   return { modificate, saltate };
 }
@@ -543,7 +546,7 @@ export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate
 }
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
-export async function importFromSheets(): Promise<{ importate: number; ignorate: number; rimosse: number; doppioniRimossi: number; prenotazioniArricchite: number }> {
+export async function importFromSheets(struttura_id?: string): Promise<{ importate: number; ignorate: number; rimosse: number; doppioniRimossi: number; prenotazioniArricchite: number }> {
   const sid     = await getSpreadsheetId();
   const sheets  = await getSheetsClient();
   const meta    = await sheets.spreadsheets.get({ spreadsheetId: sid });
@@ -617,7 +620,7 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   const doppioniRimossi = await dedupPrenotazioniIcal();
 
   // 4. Arricchisci prenotazioni iCal con nome ospite e importo dai tab mensili
-  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
+  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid, struttura_id);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }
