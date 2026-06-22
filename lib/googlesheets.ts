@@ -554,14 +554,13 @@ export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
 export async function importFromSheets(): Promise<{ importate: number; ignorate: number; rimosse: number; doppioniRimossi: number; prenotazioniArricchite: number }> {
-  // Avvia tutti i fetch in parallelo: spreadsheet ID, client sheets, dati locali
-  const [{ sid, sheets }, uscite, prenotazioni] = await Promise.all([
+  // Avvia i fetch in parallelo: spreadsheet ID, client sheets, uscite locali
+  const [{ sid, sheets }, uscite] = await Promise.all([
     (async () => {
       const [sid, sheets] = await Promise.all([getSpreadsheetId(), getSheetsClient()]);
       return { sid, sheets };
     })(),
     leggiUscite(),
-    leggiPrenotazioni(),
   ]);
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
@@ -653,39 +652,13 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   const { importate: nuoveImportate, aggiornate: nuoveAggiornate, rimosse: rimosse2 } = await importUsciteOriginale(tabDataMap, uscite, tabEsistenti);
   importate += nuoveImportate + nuoveAggiornate;
 
-  // 3. Dedup prenotazioni iCal in-memory (evita DB read/write extra)
-  let doppioniRimossi = 0;
-  {
-    const manuali = prenotazioni.filter(p => !p.ical_uid && p.stato !== 'cancellata');
-    const chiaviCamera = new Set(manuali.map(p => `${p.camera_id}|${p.check_in}|${p.check_out}`));
-    const chiaviNome = new Set(
-      manuali.filter(p => p.ospite_nome?.trim())
-        .map(p => `${p.ospite_nome.toLowerCase().trim()}|${p.check_in}|${p.check_out}`)
-    );
-    const doppioni = new Set(prenotazioni
-      .filter(p => p.ical_uid && (
-        chiaviCamera.has(`${p.camera_id}|${p.check_in}|${p.check_out}`) ||
-        (p.ospite_nome?.trim() && chiaviNome.has(`${p.ospite_nome.toLowerCase().trim()}|${p.check_in}|${p.check_out}`))
-      ))
-      .map(p => p.id)
-    );
-    if (doppioni.size > 0) {
-      prenotazioni.splice(0, prenotazioni.length, ...prenotazioni.filter(p => !doppioni.has(p.id)));
-      doppioniRimossi = doppioni.size;
-    }
-  }
+  await scriviUscite(uscite);
 
-  // 4. Arricchisci prenotazioni con nome ospite e importo dai tab mensili (in-memory, passa le prenotazioni già caricate)
-  const { modificate: prenotazioniArricchite, prenotazioni: prenAggiornate } =
-    await arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti, prenotazioni);
+  // 3. Rimuovi prenotazioni iCal doppione (legge e scrive autonomamente)
+  const doppioniRimossi = await dedupPrenotazioniIcal();
 
-  // 5. Scrivi uscite e prenotazioni in parallelo
-  await Promise.all([
-    scriviUscite(uscite),
-    (doppioniRimossi > 0 || prenotazioniArricchite > 0)
-      ? scriviPrenotazioni(prenAggiornate)
-      : Promise.resolve(),
-  ]);
+  // 4. Arricchisci prenotazioni dai tab mensili (legge e scrive autonomamente, usando i dati già scaricati)
+  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }
