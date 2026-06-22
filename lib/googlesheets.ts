@@ -252,12 +252,30 @@ async function exportUsciteToTabs(
   return processate;
 }
 
+// ── Fetch tutti i tab mensili in una sola chiamata batchGet ──────────────
+async function fetchTabDataMap(
+  sheets: ReturnType<typeof google.sheets>,
+  tabs: string[],
+  sid: string,
+): Promise<Map<string, (string|number)[][]>> {
+  if (tabs.length === 0) return new Map();
+  const res = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: sid,
+    ranges: tabs.map(t => `'${t}'!A:P`),
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const map = new Map<string, (string|number)[][]>();
+  (res.data.valueRanges ?? []).forEach((vr, i) => {
+    map.set(tabs[i], (vr.values ?? []) as (string|number)[][]);
+  });
+  return map;
+}
+
 // ── Tab mensili → App (uscite con data inizio) ────────────────────────────
 async function importUsciteOriginale(
-  sheets: ReturnType<typeof google.sheets>,
+  tabDataMap: Map<string, (string|number)[][]>,
   uscite: Uscita[],
   tabEsistenti: Set<string>,
-  sid: string,
 ): Promise<{ importate: number; aggiornate: number; rimosse: number }> {
   let importate = 0;
   let aggiornate = 0;
@@ -276,12 +294,7 @@ async function importUsciteOriginale(
   for (const tab of tabEsistenti) {
     if (tab === SHEET_NAME) continue;
 
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: sid,
-      range: `'${tab}'!A:P`,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-    });
-    const rows = (res.data.values ?? []) as (string|number)[][];
+    const rows = tabDataMap.get(tab) ?? [];
 
     const hIdx = rows.findIndex(r => String(r[0]??'').trim() === 'Tipologia');
     if (hIdx === -1) continue;
@@ -399,9 +412,8 @@ export async function dedupPrenotazioniIcal(): Promise<number> {
 //   - Se trovata → aggiorna nome/importo/tassa
 //   - Se non trovata → inserisce nuovo record
 async function arricchisciPrenotazioniDaSheets(
-  sheets: ReturnType<typeof google.sheets>,
+  tabDataMap: Map<string, (string|number)[][]>,
   tabEsistenti: Set<string>,
-  sid: string,
 ): Promise<{ modificate: number; saltate: string[] }> {
   const prenotazioni = await leggiPrenotazioni();
 
@@ -422,12 +434,7 @@ async function arricchisciPrenotazioniDaSheets(
   for (const tab of tabEsistenti) {
     if (tab === SHEET_NAME) continue;
 
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: sid,
-      range: `'${tab}'!A:P`,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-    });
-    const rows = (res.data.values ?? []) as (string|number)[][];
+    const rows = tabDataMap.get(tab) ?? [];
 
     const hIdx = rows.findIndex(r => String(r[0]??'').trim() === 'Tipologia');
     if (hIdx === -1) continue;
@@ -539,17 +546,50 @@ export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate
   const sheets = await getSheetsClient();
   const meta   = await sheets.spreadsheets.get({ spreadsheetId: sid });
   const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
-  return arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
+  const monthlyTabs = [...tabEsistenti].filter(t => t !== SHEET_NAME);
+  const tabDataMap = await fetchTabDataMap(sheets, monthlyTabs, sid);
+  return arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti);
 }
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
 export async function importFromSheets(): Promise<{ importate: number; ignorate: number; rimosse: number; doppioniRimossi: number; prenotazioniArricchite: number }> {
-  const sid     = await getSpreadsheetId();
-  const sheets  = await getSheetsClient();
-  const meta    = await sheets.spreadsheets.get({ spreadsheetId: sid });
+  const sid    = await getSpreadsheetId();
+  const sheets = await getSheetsClient();
+
+  // Fetch metadati sheet e uscite locali in parallelo
+  const [meta, uscite] = await Promise.all([
+    sheets.spreadsheets.get({ spreadsheetId: sid }),
+    leggiUscite(),
+  ]);
   const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
 
-  const uscite = await leggiUscite();
+  // Crea il tab "Prima Nota App" se non esiste
+  if (!tabEsistenti.has(SHEET_NAME)) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sid,
+      requestBody: { requests: [{ addSheet: { properties: { title: SHEET_NAME } } }] },
+    });
+    tabEsistenti.add(SHEET_NAME);
+  }
+
+  // Scarica tutti i tab (Prima Nota App + mensili) in UNA sola chiamata batchGet
+  const monthlyTabs = [...tabEsistenti].filter(t => t !== SHEET_NAME);
+  const allRanges = [
+    `'${SHEET_NAME}'!A:H`,
+    ...monthlyTabs.map(t => `'${t}'!A:P`),
+  ];
+  const batchRes = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: sid,
+    ranges: allRanges,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+  });
+  const valueRanges = batchRes.data.valueRanges ?? [];
+  const mainRows = (valueRanges[0]?.values ?? []) as (string|number)[][];
+  const tabDataMap = new Map<string, (string|number)[][]>();
+  for (let i = 0; i < monthlyTabs.length; i++) {
+    tabDataMap.set(monthlyTabs[i], (valueRanges[i + 1]?.values ?? []) as (string|number)[][]);
+  }
+
   const now = new Date().toISOString();
 
   // ── Deduplicazione legacy: per ogni data|categoria tieni la voce con descrizione più lunga ──
@@ -586,10 +626,8 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   }
 
   // 1. Legge il foglio "Prima Nota App" — importa SOLO uscite (le entrate vengono gestite dall'app)
-  const sheetName = await ensureSheet(sheets, sid);
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: `'${sheetName}'!A:H` });
-  for (const row of (res.data.values ?? []).slice(1).filter(r => r[0] && r[1] && r[2] && r[3])) {
-    const [id, tipo, data, descrizione, categoria, importoStr, cameraIdStr, note] = row;
+  for (const row of mainRows.slice(1).filter(r => r[0] && r[1] && r[2] && r[3])) {
+    const [id, tipo, data, descrizione, categoria, importoStr, cameraIdStr, note] = row as string[];
     if (tipo !== 'uscita') { ignorate++; continue; }
     const importo   = parseFloat(importoStr) || 0;
     const camera_id = cameraIdStr ? parseInt(cameraIdStr) || undefined : undefined;
@@ -608,7 +646,7 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   }
 
   // 2. Legge tab mensili — importa uscite con data inizio
-  const { importate: nuoveImportate, aggiornate: nuoveAggiornate, rimosse: rimosse2 } = await importUsciteOriginale(sheets, uscite, tabEsistenti, sid);
+  const { importate: nuoveImportate, aggiornate: nuoveAggiornate, rimosse: rimosse2 } = await importUsciteOriginale(tabDataMap, uscite, tabEsistenti);
   importate += nuoveImportate + nuoveAggiornate;
 
   await scriviUscite(uscite);
@@ -617,7 +655,7 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   const doppioniRimossi = await dedupPrenotazioniIcal();
 
   // 4. Arricchisci prenotazioni iCal con nome ospite e importo dai tab mensili
-  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
+  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }
