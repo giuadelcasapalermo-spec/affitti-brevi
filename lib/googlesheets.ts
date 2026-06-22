@@ -412,11 +412,11 @@ export async function dedupPrenotazioniIcal(): Promise<number> {
 //   - Se trovata → aggiorna nome/importo/tassa
 //   - Se non trovata → inserisce nuovo record
 async function arricchisciPrenotazioniDaSheets(
-  tabDataMap: Map<string, (string|number)[][]>,
+  sheets: ReturnType<typeof google.sheets>,
   tabEsistenti: Set<string>,
-  prenotazioni?: Prenotazione[],
-): Promise<{ modificate: number; saltate: string[]; prenotazioni: Prenotazione[] }> {
-  const pren = prenotazioni ?? await leggiPrenotazioni();
+  sid: string,
+): Promise<{ modificate: number; saltate: string[] }> {
+  const pren = await leggiPrenotazioni();
 
   const attive = pren.filter(p => p.stato !== 'cancellata');
   // Indice esatto: camera|check_in|check_out → prenotazione
@@ -435,7 +435,12 @@ async function arricchisciPrenotazioniDaSheets(
   for (const tab of tabEsistenti) {
     if (tab === SHEET_NAME) continue;
 
-    const rows = tabDataMap.get(tab) ?? [];
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sid,
+      range: `'${tab}'!A:P`,
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    });
+    const rows = (res.data.values ?? []) as (string|number)[][];
 
     const hIdx = rows.findIndex(r => String(r[0]??'').trim() === 'Tipologia');
     if (hIdx === -1) continue;
@@ -535,10 +540,10 @@ async function arricchisciPrenotazioniDaSheets(
     }
   }
 
-  if (modificate > 0 && !prenotazioni) {
+  if (modificate > 0) {
     await scriviPrenotazioni(pren);
   }
-  return { modificate, saltate, prenotazioni: pren };
+  return { modificate, saltate };
 }
 
 // ── Arricchisci prenotazioni iCal da sheet (wrapper pubblico) ────────────
@@ -547,9 +552,7 @@ export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate
   const sheets = await getSheetsClient();
   const meta   = await sheets.spreadsheets.get({ spreadsheetId: sid });
   const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
-  const monthlyTabs = [...tabEsistenti].filter(t => t !== SHEET_NAME);
-  const tabDataMap = await fetchTabDataMap(sheets, monthlyTabs, sid);
-  return arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti);
+  return arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
 }
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
@@ -657,8 +660,8 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   // 3. Rimuovi prenotazioni iCal doppione (legge e scrive autonomamente)
   const doppioniRimossi = await dedupPrenotazioniIcal();
 
-  // 4. Arricchisci prenotazioni dai tab mensili (legge e scrive autonomamente, usando i dati già scaricati)
-  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti);
+  // 4. Arricchisci prenotazioni dai tab mensili (legge e scrive autonomamente, fetch per tab)
+  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }
