@@ -24,7 +24,7 @@ export async function POST() {
   let sheetsErrore: string | null = null;
   if (sheetsConfigurato) {
     try {
-      const res = await arricchisciPrenotazioniDaSheetsAll();
+      const res = await arricchisciPrenotazioniDaSheetsAll(struttura.id);
       prenotazioniArricchite = res.modificate;
       righeSkippate = res.saltate;
     } catch (err) {

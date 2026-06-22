@@ -537,12 +537,12 @@ async function arricchisciPrenotazioniDaSheets(
 }
 
 // ── Arricchisci prenotazioni iCal da sheet (wrapper pubblico) ────────────
-export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate: number; saltate: string[] }> {
+export async function arricchisciPrenotazioniDaSheetsAll(struttura_id?: string): Promise<{ modificate: number; saltate: string[] }> {
   const sid    = await getSpreadsheetId();
   const sheets = await getSheetsClient();
   const meta   = await sheets.spreadsheets.get({ spreadsheetId: sid });
   const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
-  return arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid);
+  return arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid, struttura_id);
 }
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
