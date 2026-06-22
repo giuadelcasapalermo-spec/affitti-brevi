@@ -24,29 +24,23 @@ export async function scriviUscite(uscite: Uscita[]): Promise<void> {
     await sql`DELETE FROM uscite`;
     return;
   }
-  const ids    = uscite.map(u => u.id);
-  const datas  = uscite.map(u => u.data);
-  const descs  = uscite.map(u => u.descrizione);
-  const cats   = uscite.map(u => u.categoria);
-  const imps   = uscite.map(u => u.importo);
-  const cams   = uscite.map(u => u.camera_id ?? null);
-  const notes  = uscite.map(u => u.note);
-  const fontes = uscite.map(u => u.fonte_pagamento ?? 'Contanti');
-  const crats  = uscite.map(u => u.created_at);
-  await Promise.all([
-    sql`DELETE FROM uscite WHERE id != ALL(${ids})`,
-    sql`
-      INSERT INTO uscite (id, data, descrizione, categoria, importo, camera_id, note, fonte_pagamento, created_at)
-      SELECT * FROM unnest(
-        ${ids}::text[], ${datas}::text[], ${descs}::text[], ${cats}::text[],
-        ${imps}::numeric[], ${cams}::int[], ${notes}::text[], ${fontes}::text[], ${crats}::text[]
-      ) AS t(id, data, descrizione, categoria, importo, camera_id, note, fonte_pagamento, created_at)
-      ON CONFLICT (id) DO UPDATE SET
-        data = EXCLUDED.data, descrizione = EXCLUDED.descrizione, categoria = EXCLUDED.categoria,
-        importo = EXCLUDED.importo, camera_id = EXCLUDED.camera_id, note = EXCLUDED.note,
-        fonte_pagamento = EXCLUDED.fonte_pagamento
-    `,
-  ]);
+  const ids = uscite.map((u) => u.id);
+  await sql`DELETE FROM uscite WHERE id != ALL(${ids})`;
+  await Promise.all(uscite.map(u => sql`
+    INSERT INTO uscite (id, data, descrizione, categoria, importo, camera_id, note, fonte_pagamento, created_at)
+    VALUES (
+      ${u.id}, ${u.data}, ${u.descrizione}, ${u.categoria}, ${u.importo},
+      ${u.camera_id ?? null}, ${u.note}, ${u.fonte_pagamento ?? 'Contanti'}, ${u.created_at}
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      data = EXCLUDED.data,
+      descrizione = EXCLUDED.descrizione,
+      categoria = EXCLUDED.categoria,
+      importo = EXCLUDED.importo,
+      camera_id = EXCLUDED.camera_id,
+      note = EXCLUDED.note,
+      fonte_pagamento = EXCLUDED.fonte_pagamento
+  `));
 }
 
 export async function aggiungiUscita(u: Uscita): Promise<void> {
