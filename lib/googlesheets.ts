@@ -414,10 +414,11 @@ export async function dedupPrenotazioniIcal(): Promise<number> {
 async function arricchisciPrenotazioniDaSheets(
   tabDataMap: Map<string, (string|number)[][]>,
   tabEsistenti: Set<string>,
-): Promise<{ modificate: number; saltate: string[] }> {
-  const prenotazioni = await leggiPrenotazioni();
+  prenotazioni?: Prenotazione[],
+): Promise<{ modificate: number; saltate: string[]; prenotazioni: Prenotazione[] }> {
+  const pren = prenotazioni ?? await leggiPrenotazioni();
 
-  const attive = prenotazioni.filter(p => p.stato !== 'cancellata');
+  const attive = pren.filter(p => p.stato !== 'cancellata');
   // Indice esatto: camera|check_in|check_out → prenotazione
   const byKey = new Map<string, Prenotazione>(
     attive.map(p => [`${p.camera_id}|${p.check_in}|${p.check_out}`, p])
@@ -493,23 +494,23 @@ async function arricchisciPrenotazioniDaSheets(
       }
 
       const key  = `${camera_id}|${checkIn}|${checkOut}`;
-      let pren = byKey.get(key) ?? byCheckIn.get(`${camera_id}|${checkIn}`);
-      if (!pren) {
+      let match = byKey.get(key) ?? byCheckIn.get(`${camera_id}|${checkIn}`);
+      if (!match) {
         for (const delta of [-1, 1]) {
           const d = new Date(checkIn + 'T00:00:00Z');
           d.setUTCDate(d.getUTCDate() + delta);
           const altCheckIn = d.toISOString().split('T')[0];
-          pren = byKey.get(`${camera_id}|${altCheckIn}|${checkOut}`)
-              ?? byCheckIn.get(`${camera_id}|${altCheckIn}`);
-          if (pren) break;
+          match = byKey.get(`${camera_id}|${altCheckIn}|${checkOut}`)
+               ?? byCheckIn.get(`${camera_id}|${altCheckIn}`);
+          if (match) break;
         }
       }
 
-      if (pren) {
-        if (nome) pren.ospite_nome = nome;
-        pren.importo_totale = importo;
-        if (tassa > 0) pren.tassa_soggiorno = tassa;
-        if (telefono) pren.ospite_telefono = telefono;
+      if (match) {
+        if (nome) match.ospite_nome = nome;
+        match.importo_totale = importo;
+        if (tassa > 0) match.tassa_soggiorno = tassa;
+        if (telefono) match.ospite_telefono = telefono;
         modificate++;
       } else {
         const nuova: Prenotazione = {
@@ -527,17 +528,17 @@ async function arricchisciPrenotazioniDaSheets(
           created_at: now,
           fonte: 'sheet',
         };
-        prenotazioni.push(nuova);
+        pren.push(nuova);
         byKey.set(key, nuova);
         modificate++;
       }
     }
   }
 
-  if (modificate > 0) {
-    await scriviPrenotazioni(prenotazioni);
+  if (modificate > 0 && !prenotazioni) {
+    await scriviPrenotazioni(pren);
   }
-  return { modificate, saltate };
+  return { modificate, saltate, prenotazioni: pren };
 }
 
 // ── Arricchisci prenotazioni iCal da sheet (wrapper pubblico) ────────────
@@ -553,14 +554,17 @@ export async function arricchisciPrenotazioniDaSheetsAll(): Promise<{ modificate
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
 export async function importFromSheets(): Promise<{ importate: number; ignorate: number; rimosse: number; doppioniRimossi: number; prenotazioniArricchite: number }> {
-  const sid    = await getSpreadsheetId();
-  const sheets = await getSheetsClient();
-
-  // Fetch metadati sheet e uscite locali in parallelo
-  const [meta, uscite] = await Promise.all([
-    sheets.spreadsheets.get({ spreadsheetId: sid }),
+  // Avvia tutti i fetch in parallelo: spreadsheet ID, client sheets, dati locali
+  const [{ sid, sheets }, uscite, prenotazioni] = await Promise.all([
+    (async () => {
+      const [sid, sheets] = await Promise.all([getSpreadsheetId(), getSheetsClient()]);
+      return { sid, sheets };
+    })(),
     leggiUscite(),
+    leggiPrenotazioni(),
   ]);
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
   const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
 
   // Crea il tab "Prima Nota App" se non esiste
@@ -649,13 +653,39 @@ export async function importFromSheets(): Promise<{ importate: number; ignorate:
   const { importate: nuoveImportate, aggiornate: nuoveAggiornate, rimosse: rimosse2 } = await importUsciteOriginale(tabDataMap, uscite, tabEsistenti);
   importate += nuoveImportate + nuoveAggiornate;
 
-  await scriviUscite(uscite);
+  // 3. Dedup prenotazioni iCal in-memory (evita DB read/write extra)
+  let doppioniRimossi = 0;
+  {
+    const manuali = prenotazioni.filter(p => !p.ical_uid && p.stato !== 'cancellata');
+    const chiaviCamera = new Set(manuali.map(p => `${p.camera_id}|${p.check_in}|${p.check_out}`));
+    const chiaviNome = new Set(
+      manuali.filter(p => p.ospite_nome?.trim())
+        .map(p => `${p.ospite_nome.toLowerCase().trim()}|${p.check_in}|${p.check_out}`)
+    );
+    const doppioni = new Set(prenotazioni
+      .filter(p => p.ical_uid && (
+        chiaviCamera.has(`${p.camera_id}|${p.check_in}|${p.check_out}`) ||
+        (p.ospite_nome?.trim() && chiaviNome.has(`${p.ospite_nome.toLowerCase().trim()}|${p.check_in}|${p.check_out}`))
+      ))
+      .map(p => p.id)
+    );
+    if (doppioni.size > 0) {
+      prenotazioni.splice(0, prenotazioni.length, ...prenotazioni.filter(p => !doppioni.has(p.id)));
+      doppioniRimossi = doppioni.size;
+    }
+  }
 
-  // 3. Rimuovi prenotazioni iCal doppione
-  const doppioniRimossi = await dedupPrenotazioniIcal();
+  // 4. Arricchisci prenotazioni con nome ospite e importo dai tab mensili (in-memory, passa le prenotazioni già caricate)
+  const { modificate: prenotazioniArricchite, prenotazioni: prenAggiornate } =
+    await arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti, prenotazioni);
 
-  // 4. Arricchisci prenotazioni iCal con nome ospite e importo dai tab mensili
-  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(tabDataMap, tabEsistenti);
+  // 5. Scrivi uscite e prenotazioni in parallelo
+  await Promise.all([
+    scriviUscite(uscite),
+    (doppioniRimossi > 0 || prenotazioniArricchite > 0)
+      ? scriviPrenotazioni(prenAggiornate)
+      : Promise.resolve(),
+  ]);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }
