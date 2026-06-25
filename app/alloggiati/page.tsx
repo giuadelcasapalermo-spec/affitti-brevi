@@ -316,33 +316,123 @@ export default function AlloggiatiPage() {
   async function inviaAlPortale() {
     setInvioPortale('loading');
     setInvioPortaleMsg('');
+    let msgTimeout = 8000;
+
+    function xmlTag(xml: string, tag: string): string {
+      const m = xml.match(new RegExp(`<(?:[\\w]*:)?${tag}>([\\s\\S]*?)<\\/(?:[\\w]*:)?${tag}>`, 'i'));
+      return m?.[1]?.trim() ?? '';
+    }
+
     try {
-      const res = await fetch('/api/alloggiati/invia-portale', {
+      // Step 1: il server prepara i dati e gli envelope SOAP (nessuna chiamata al portale)
+      const prepRes = await fetch('/api/alloggiati/prepara-portale', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data }),
       });
-      const json = await res.json();
-      if (json.ok) {
-        setInvioPortale('ok');
-        setInvioPortaleMsg(json.messaggio ?? 'Inviato!');
+      const prep = await prepRes.json();
+      if (!prep.ok) {
+        setInvioPortale('error');
+        setInvioPortaleMsg(prep.errore ?? 'Errore preparazione dati');
+        setTimeout(() => { setInvioPortale('idle'); setInvioPortaleMsg(''); }, 8000);
+        return;
+      }
+
+      // Relay via Cloudflare Worker (CORS ok, IP diverso da Vercel)
+      const PROXY = 'https://alloggiati-soap-proxy.innogea.workers.dev';
+
+      async function callProxy(method: string, envelope: string): Promise<string> {
+        const r = await fetch(PROXY, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method, envelope }),
+        });
+        return r.text();
+      }
+
+      // Step 2: GenerateToken via Worker
+      const tokenXml = await callProxy('GenerateToken', prep.tokenEnvelope);
+
+      if (tokenXml.includes('<faultstring>') || tokenXml.includes(':Fault>')) {
+        throw new Error(`SOAP fault: ${xmlTag(tokenXml, 'faultstring')}`);
+      }
+      if (xmlTag(tokenXml, 'esito') !== 'true') {
+        const des = xmlTag(tokenXml, 'ErroreDes') || xmlTag(tokenXml, 'ErroreCod');
+        throw new Error(`Autenticazione fallita: ${des || 'esito false'}`);
+      }
+      const token = xmlTag(tokenXml, 'token');
+      if (!token) throw new Error('Token non ricevuto dal portale');
+
+      // Step 3: Send via Worker
+      const sendEnvelope = prep.sendEnvelopeTemplate.replace('__TOKEN__', token);
+      const sendXml = await callProxy('Send', sendEnvelope);
+
+      if (sendXml.includes('<faultstring>') || sendXml.includes(':Fault>')) {
+        throw new Error(`SOAP fault invio: ${xmlTag(sendXml, 'faultstring')}`);
+      }
+
+      const schedineValide = parseInt(xmlTag(sendXml, 'SchedineValide')) || 0;
+      if (schedineValide < prep.numRighe) {
+        // Cerca tutti i blocchi EsitoOperazioneServizio (gestisce prefissi namespace)
+        let errDes = '', errCod = '', errDet = '', numRiga = '', nomeCampo = '';
+        const esitoRegex = /<(?:[\w]*:)?EsitoOperazioneServizio>([\s\S]*?)<\/(?:[\w]*:)?EsitoOperazioneServizio>/g;
+        let m: RegExpExecArray | null;
+        const tuttiErrori: string[] = [];
+        while ((m = esitoRegex.exec(sendXml)) !== null) {
+          // Il portale usa esito=true per indicare un errore nella singola schedina
+          const esito = xmlTag(m[1], 'esito');
+          const cod = xmlTag(m[1], 'ErroreCod');
+          const des = xmlTag(m[1], 'ErroreDes');
+          if (esito === 'true' && cod) {
+            const det = xmlTag(m[1], 'ErroreDettaglio');
+            if (!errCod) { errCod = cod; errDes = des; errDet = det; }
+            tuttiErrori.push([cod, des, det].filter(Boolean).join(' | '));
+          }
+        }
+        if (!errCod) errCod = xmlTag(sendXml, 'ErroreCod');
+        if (!errDes) errDes = xmlTag(sendXml, 'ErroreDes');
+        if (!errDet) errDet = xmlTag(sendXml, 'ErroreDettaglio');
+        numRiga = xmlTag(sendXml, 'NumRiga');
+        nomeCampo = xmlTag(sendXml, 'NomeCampo');
+        let msg = `Invio fallito: ${errDes || errCod || 'errore sconosciuto'}`;
+        if (errDet) msg += ` — ${errDet}`;
+        if (nomeCampo) msg += ` (campo: ${nomeCampo})`;
+        if (numRiga) msg += ` [riga ${numRiga}]`;
+        if (tuttiErrori.length > 1) msg += `\nTutti gli errori:\n` + tuttiErrori.map((e, i) => `  [${i}] ${e}`).join('\n');
+        if (prep.righeInfo) {
+          msg += '\n\nDIAGNOSI RIGHE:\n' + (prep.righeInfo as Array<{i:number;tipo:string;dataArrivo:string;permanenza:string;cognome:string;nome:string;sesso:string;dataNascita:string;comuneNascita:string;provNascita:string;statoNascita:string;cittadinanza:string;tipoDoc:string;numeroDoc:string;luogoRilascio:string;len:number;raw?:string}>)
+            .map(r => `[${r.i}] tipo:"${r.tipo}" arr:"${r.dataArrivo}" notti:"${r.permanenza}" len:${r.len}\n  ${r.cognome} ${r.nome} sesso:${r.sesso} nasc:${r.dataNascita}\n  comune:"${r.comuneNascita}" prov:"${r.provNascita}" stato:"${r.statoNascita}"\n  citt:"${r.cittadinanza}" doc:"${r.tipoDoc}" num:"${r.numeroDoc}" luogo:"${r.luogoRilascio}"${r.raw ? `\n  raw:"${r.raw}"` : ''}`)
+            .join('\n');
+        }
+        msg += '\n\nRISPOSTA XML:\n' + sendXml.substring(0, 1500);
+        throw new Error(msg);
+      }
+
+      setInvioPortale('ok');
+      setInvioPortaleMsg(`${schedineValide} schedine inviate con successo`);
+
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Errore';
+      const isNetwork = msg.toLowerCase().includes('failed to fetch') ||
+                        msg.toLowerCase().includes('networkerror') ||
+                        msg.toLowerCase().includes('load failed');
+      if (isNetwork) {
+        // CORS bloccato dal portale — scarica il file per upload manuale
+        window.open(`/api/alloggiati/export?data=${data}`, '_blank');
+        setInvioPortale('error');
+        setInvioPortaleMsg(
+          '⚠️ Il portale non risponde (CORS bloccato).\n\n' +
+          'Il file è stato scaricato automaticamente.\n\n' +
+          'Caricalo su: https://alloggiatiweb.poliziadistato.it\n' +
+          '→ Accedi → Invio dati → seleziona il file scaricato'
+        );
+        msgTimeout = 30000;
       } else {
         setInvioPortale('error');
-        let msg = json.errore ?? 'Errore sconosciuto';
-        if (json.diagnosi) {
-          const righeInfo = (json.diagnosi as Array<{i:number;tipo:string;dataArrivo:string;permanenza:string;cognome:string;nome:string;sesso:string;dataNascita:string;statoNascita:string;comuneNascita:string;provNascita:string;cittadinanza:string;tipoDoc:string;numeroDoc:string;luogoRilascio:string;len:number;raw:string;db_comune_nascita:string;db_luogo_rilascio:string}>)
-            .map(r => `[${r.i}] ${r.cognome} ${r.nome}\n  tipo:"${r.tipo}" dataArr:"${r.dataArrivo}" notti:"${r.permanenza}" dataNasc:"${r.dataNascita}" sesso:"${r.sesso}"\n  comune:"${r.comuneNascita}" prov:"${r.provNascita}" stato:"${r.statoNascita}"\n  citt:"${r.cittadinanza}" doc:"${r.tipoDoc}" numDoc:"${r.numeroDoc}" luogo:"${r.luogoRilascio}" len:${r.len}\n  db_comune:"${r.db_comune_nascita}" db_luogo:"${r.db_luogo_rilascio}"\n  RAW:${r.raw}`)
-            .join('\n');
-          msg += '\n\nDIAGNOSI:\n' + righeInfo;
-          if (json.soapXml) msg += '\n\nSOAP:\n' + json.soapXml;
-        }
         setInvioPortaleMsg(msg);
       }
-    } catch {
-      setInvioPortale('error');
-      setInvioPortaleMsg('Errore di rete');
     }
-    setTimeout(() => { setInvioPortale('idle'); setInvioPortaleMsg(''); }, 8000);
+    setTimeout(() => { setInvioPortale('idle'); setInvioPortaleMsg(''); }, msgTimeout);
   }
 
   const dataLabel = format(parseISO(data), 'EEEE d MMMM yyyy', { locale: it });

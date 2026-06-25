@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { Agent } from 'undici';
 import { getStrutturaAttiva } from '@/lib/strutture';
+
+export const preferredRegion = 'fra1'; // Il portale PS blocca IP USA — usa Francoforte (EU)
 import { leggiAlloggiati, generaFileAlloggiati, preparaBatchPerPortale, validaBatch } from '@/lib/alloggiati';
 
 const SOAP_ENDPOINT = 'https://alloggiatiweb.poliziadistato.it/service/service.asmx';
 const SOAP_NS = 'AlloggiatiService';
+
+// Il portale AlloggiatiWeb (Polizia di Stato) usa certificati SSL non verificabili
+// dal runtime Node.js di Vercel — necessario bypassare la verifica per questo host specifico
+const soapAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
 function escapeXml(s: string): string {
   return s
@@ -36,6 +43,8 @@ async function callSoap(method: string, body: string): Promise<string> {
     },
     body: envelope,
     signal: AbortSignal.timeout(30000),
+    // @ts-ignore
+    dispatcher: soapAgent,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} dal portale AlloggiatiWeb`);
   return await res.text();
@@ -217,7 +226,13 @@ ${elencoXml}
       messaggio: `${valide} schedine inviate al portale con successo`,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Errore sconosciuto';
-    return NextResponse.json({ ok: false, errore: msg }, { status: 500 });
+    const err = e instanceof Error ? e : new Error(String(e));
+    const cause = (err as unknown as { cause?: Error }).cause;
+    const msg = cause instanceof Error ? `${err.message}: ${cause.message}` : err.message;
+    const irraggiungibile = msg.toLowerCase().includes('timeout') || msg.includes('ECONNREFUSED') || msg.includes('fetch failed');
+    return NextResponse.json(
+      { ok: false, errore: msg, tipo: irraggiungibile ? 'portale_irraggiungibile' : undefined },
+      { status: 500 }
+    );
   }
 }

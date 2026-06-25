@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { Agent } from 'undici';
 import { getStrutturaAttiva } from '@/lib/strutture';
+
+export const preferredRegion = 'fra1'; // Il portale PS blocca IP USA — usa Francoforte (EU)
 
 const SOAP_ENDPOINT = 'https://alloggiatiweb.poliziadistato.it/service/service.asmx';
 const SOAP_NS = 'AlloggiatiService';
+
+const soapAgent = new Agent({ connect: { rejectUnauthorized: false } });
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
@@ -24,6 +29,8 @@ async function callSoap(method: string, body: string): Promise<string> {
     headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': `"${SOAP_NS}/${method}"` },
     body: envelope,
     signal: AbortSignal.timeout(30000),
+    // @ts-ignore
+    dispatcher: soapAgent,
   });
   return await res.text();
 }

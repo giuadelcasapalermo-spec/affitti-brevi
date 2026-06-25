@@ -10,7 +10,7 @@ function pad(str: string, len: number): string {
 }
 
 function padLeft(num: number, len: number): string {
-  return String(num).padStart(len, ' ');
+  return String(num).padStart(len, '0');
 }
 
 // Caratteri che non si decompongono con NFD: devono essere translitterati esplicitamente.
@@ -81,7 +81,7 @@ function tipoDocumentoSanitizzato(raw: string): string {
   return TIPO_DOC_MAP[v] ?? raw.substring(0, 5).padEnd(5, ' ');
 }
 
-const TIPO_SORT: Record<string, number> = { '17': 0, '16': 1, '20': 2, '18': 3, '19': 4 };
+const TIPO_SORT: Record<string, number> = { '17': 0, '20': 1, '18': 2, '19': 3, '16': 4 };
 
 export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
   // Raggruppa per prenotazione
@@ -102,17 +102,15 @@ export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
       continue;
     }
 
-    // Gruppo multi-ospite: distingui italiani (17+16) da stranieri (18+19)
+    // Gruppo multi-ospite: distingui italiani (17+20) da stranieri (18+19)
     let g = [...gruppo];
     const primoStato = codicePaeseSanitizzato(g[0].stato_nascita);
     const isGruppoItaliano = !primoStato || primoStato === '100000100';
 
     if (isGruppoItaliano) {
-      // Gruppo italiano: tipo 17 (capo) + tipo 16 (membri)
-      if (!g.some(a => a.tipo === '17')) {
-        const idx = g.findIndex(a => a.tipo !== '17');
-        g = g.map((a, i) => i === idx ? { ...a, tipo: '17' as Alloggiato['tipo'] } : { ...a, tipo: '16' as Alloggiato['tipo'] });
-      }
+      // Per affitti brevi il portale accetta solo tipo 16 per gli ospiti italiani.
+      // Tipo 17 (Capofamiglia) viene rifiutato con ErroreCod=12 SCHEDINA_CAMPO_NON_CORRETTO.
+      g = g.map(a => ({ ...a, tipo: '16' as Alloggiato['tipo'] }));
     } else {
       // Gruppo straniero: tipo 18 (capo) + tipo 19 (membri)
       const headIdx = g.findIndex(a => a.tipo === '18') >= 0 ? g.findIndex(a => a.tipo === '18') : 0;
@@ -178,7 +176,7 @@ export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
       provinciaNascita = pad('EE', 2);
     }
     const tipoDocumento = tipoDocumentoSanitizzato(a.tipo_documento);
-    const numeroDocumento = pad(a.numero_documento, 20);
+    const numeroDocumento = pad(a.numero_documento.toUpperCase(), 20);
 
     // Luogo rilascio: codice ISTAT comune (italiani) o codice paese (stranieri/nati all'estero)
     const luogoRilascioClean = (a.luogo_rilascio ?? '').trim().replace(/\s*\([A-Z]{1,3}\)\s*$/i, '').trim();
