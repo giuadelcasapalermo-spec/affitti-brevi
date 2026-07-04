@@ -49,10 +49,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, errore: `Dati non validi — correggi prima di inviare. ${desc}`, erroriValidazione: errori }, { status: 400 });
     }
 
-    if (preparati.some(a => a.tipo === '19') && !preparati.some(a => a.tipo === '17' || a.tipo === '18')) {
+    if (preparati.some(a => a.tipo === '19') && !preparati.some(a => a.tipo === '17')) {
       return NextResponse.json({
         ok: false,
-        errore: 'Batch non valido: tipo 19 presente senza Capo Famiglia (17) né Capo Gruppo (18).',
+        errore: 'Batch non valido: tipo 19 (Familiare) presente senza Capo Famiglia (17).',
+      }, { status: 400 });
+    }
+    if (preparati.some(a => a.tipo === '20') && !preparati.some(a => a.tipo === '18')) {
+      return NextResponse.json({
+        ok: false,
+        errore: 'Batch non valido: tipo 20 (Componente gruppo) presente senza Capo Gruppo (18).',
       }, { status: 400 });
     }
 

@@ -99,14 +99,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validazione tipo 19 senza alcun capo (tipo 17 o tipo 18)
+    // Validazione tipo 19 senza Capo Famiglia (17) o tipo 20 senza Capo Gruppo (18)
     if (
       alloggiatiPreparati.some(a => a.tipo === '19') &&
-      !alloggiatiPreparati.some(a => a.tipo === '17' || a.tipo === '18')
+      !alloggiatiPreparati.some(a => a.tipo === '17')
     ) {
       return NextResponse.json({
         ok: false,
-        errore: 'Batch non valido: tipo 19 (Familiare) presente senza Capo Famiglia (tipo 17) né Capo Gruppo (tipo 18).',
+        errore: 'Batch non valido: tipo 19 (Familiare) presente senza Capo Famiglia (tipo 17).',
+      }, { status: 400 });
+    }
+    if (
+      alloggiatiPreparati.some(a => a.tipo === '20') &&
+      !alloggiatiPreparati.some(a => a.tipo === '18')
+    ) {
+      return NextResponse.json({
+        ok: false,
+        errore: 'Batch non valido: tipo 20 (Componente gruppo) presente senza Capo Gruppo (tipo 18).',
       }, { status: 400 });
     }
 

@@ -81,7 +81,7 @@ function tipoDocumentoSanitizzato(raw: string): string {
   return TIPO_DOC_MAP[v] ?? raw.substring(0, 5).padEnd(5, ' ');
 }
 
-const TIPO_SORT: Record<string, number> = { '17': 0, '20': 1, '18': 2, '19': 3, '16': 4 };
+const TIPO_SORT: Record<string, number> = { '17': 0, '19': 1, '18': 2, '20': 3, '16': 4 };
 
 export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
   // Raggruppa per prenotazione
@@ -112,9 +112,11 @@ export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
       // Tipo 17 (Capofamiglia) viene rifiutato con ErroreCod=12 SCHEDINA_CAMPO_NON_CORRETTO.
       g = g.map(a => ({ ...a, tipo: '16' as Alloggiato['tipo'] }));
     } else {
-      // Gruppo straniero: tipo 18 (capo) + tipo 19 (membri)
+      // Gruppo straniero: tipo 18 (capogruppo) + tipo 20 (componenti del gruppo).
+      // Tipo 19 (Familiare) richiede un capofamiglia (17), non un capogruppo (18): abbinarlo
+      // a tipo 18 causa l'errore "Ospite con Capo Gruppo o Capo Famiglia Mancante".
       const headIdx = g.findIndex(a => a.tipo === '18') >= 0 ? g.findIndex(a => a.tipo === '18') : 0;
-      g = g.map((a, i) => i === headIdx ? { ...a, tipo: '18' as Alloggiato['tipo'] } : { ...a, tipo: '19' as Alloggiato['tipo'] });
+      g = g.map((a, i) => i === headIdx ? { ...a, tipo: '18' as Alloggiato['tipo'] } : { ...a, tipo: '20' as Alloggiato['tipo'] });
     }
 
     g.sort((a, b) => (TIPO_SORT[a.tipo] ?? 99) - (TIPO_SORT[b.tipo] ?? 99));
