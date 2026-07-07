@@ -61,6 +61,7 @@ function PrenotazioniInner() {
   const [syncing, setSyncing] = useState(false);
   const [syncOk, setSyncOk]   = useState<boolean | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [righeSkippate, setRigheSkippate] = useState<string[]>([]);
   const [checkinStatus, setCheckinStatus] = useState<Record<string, CheckinStatus>>({});
   const [editingCard, setEditingCard] = useState<Prenotazione | null>(null);
   const [invioWA, setInvioWA] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({});
@@ -90,6 +91,7 @@ function PrenotazioniInner() {
     setSyncing(true);
     setSyncOk(null);
     setSyncMsg(null);
+    setRigheSkippate([]);
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
       const json = await res.json();
@@ -99,11 +101,16 @@ function PrenotazioniInner() {
       const arricchite = json.prenotazioniArricchite ?? 0;
       const sheetsOff = !json.sheetsConfigurato;
       const sheetsErr = json.sheetsErrore;
+      const skippate: string[] = json.righeSkippate ?? [];
       let msg = `iCal: +${totIcal}`;
       if (sheetsOff)  msg += ' · Sheet: non configurato';
       else if (sheetsErr) msg += ` · Sheet errore: ${sheetsErr}`;
-      else msg += ` · Sheet: ${arricchite} aggiornate`;
+      else {
+        msg += ` · Sheet: ${arricchite} aggiornate`;
+        if (skippate.length > 0) msg += ` · ${skippate.length} righe saltate`;
+      }
       setSyncMsg(msg);
+      setRigheSkippate(skippate);
       carica();
     } catch {
       setSyncOk(false);
@@ -289,6 +296,22 @@ function PrenotazioniInner() {
 
   return (
     <div className="space-y-5">
+      {righeSkippate.length > 0 && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-sm text-amber-800">
+          <div className="flex-1">
+            <p className="font-medium mb-1">{righeSkippate.length} righe dello sheet non arricchite:</p>
+            <ul className="list-disc list-inside space-y-0.5 text-xs text-amber-700">
+              {righeSkippate.map((riga, i) => <li key={i}>{riga}</li>)}
+            </ul>
+          </div>
+          <button
+            onClick={() => setRigheSkippate([])}
+            className="text-amber-500 hover:text-amber-700 shrink-0"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Prenotazioni</h1>
         <div className="flex items-center gap-2">

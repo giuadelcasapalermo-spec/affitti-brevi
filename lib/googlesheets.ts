@@ -502,6 +502,8 @@ async function arricchisciPrenotazioniDaSheets(
 
       if (pren) {
         if (nome) pren.ospite_nome = nome;
+        pren.check_in = checkIn;
+        pren.check_out = checkOut;
         pren.importo_totale = importo;
         if (tassa > 0) pren.tassa_soggiorno = tassa;
         if (telefono) pren.ospite_telefono = telefono;
