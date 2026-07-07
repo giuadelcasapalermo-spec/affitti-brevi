@@ -169,6 +169,19 @@ export interface SyncResult {
   errore?: string;
 }
 
+// ── UID iCal da ignorare permanentemente (blocchi/prenotazioni fantasma eliminate manualmente) ──
+export async function leggiUidIgnorati(): Promise<Set<string>> {
+  const rows = await sql`SELECT chiave FROM impostazioni WHERE tipo = 'ical_ignora'`;
+  return new Set(rows.map((r) => r.chiave as string));
+}
+
+export async function ignoraUidIcal(uid: string, cameraId: number): Promise<void> {
+  await sql`
+    INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('ical_ignora', ${uid}, ${String(cameraId)})
+    ON CONFLICT (tipo, chiave) DO NOTHING
+  `;
+}
+
 export async function sincronizzaCalendario(
   cameraId: number,
   url: string,
@@ -199,10 +212,12 @@ export async function sincronizzaCalendario(
   const esistentiIcal = prenotazioni.filter(
     (p) => p.camera_id === cameraId && p.fonte === 'ical'
   );
+  const uidIgnorati = await leggiUidIgnorati();
 
   const daAggiungere: Prenotazione[] = [];
 
   for (const ev of eventiRemoti) {
+    if (uidIgnorati.has(ev.uid)) continue;
     const giaPresente = esistentiIcal.find((p) => p.ical_uid === ev.uid);
     if (giaPresente) continue;
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/postgres';
+import { ignoraUidIcal } from '@/lib/ical';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,7 +34,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const rows = await sql`DELETE FROM prenotazioni WHERE id = ${id} RETURNING id`;
+  const rows = await sql`DELETE FROM prenotazioni WHERE id = ${id} RETURNING id, camera_id, fonte, ical_uid`;
   if (rows.length === 0) return NextResponse.json({ error: 'Non trovata' }, { status: 404 });
+  const deleted = rows[0];
+  if (deleted.fonte === 'ical' && deleted.ical_uid) {
+    await ignoraUidIcal(deleted.ical_uid as string, deleted.camera_id as number);
+  }
   return NextResponse.json({ ok: true });
 }
