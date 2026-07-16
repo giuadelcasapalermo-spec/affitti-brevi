@@ -9,8 +9,8 @@ const PROMPT = `Sei un sistema OCR specializzato in documenti d'identità. Anali
 
 Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
 {
-  "cognome": "<solo cognome/surname, MAIUSCOLO>",
-  "nome": "<solo nome/given names, MAIUSCOLO>",
+  "cognome": "<solo cognome/surname, MAIUSCOLO, SEMPRE in caratteri latini/ASCII — se il documento è in cirillico o altro alfabeto, traslittera (es. ЧОЛАКОВА → CHOLAKOVA)>",
+  "nome": "<solo nome/given names, MAIUSCOLO, SEMPRE in caratteri latini/ASCII — se il documento è in cirillico o altro alfabeto, traslittera (es. РАЛИЦА → RALITSA)>",
   "sesso": "<M o F — se il documento mostra K o W converti in F, altrimenti M>",
   "data_nascita": "<YYYY-MM-DD — converti qualsiasi formato di data>",
   "tipo_documento": "<PP per passaporto, CI per carta d'identità elettronica italiana, ID per carta d'identità o permesso di soggiorno di un cittadino straniero, DL per patente di guida>",

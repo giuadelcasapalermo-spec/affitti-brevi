@@ -24,6 +24,16 @@ const TRANSLITERATE_NOMI: Record<string, string> = {
   'Ł': 'L', 'ł': 'L',
   'Ŋ': 'N', 'ŋ': 'N',
   'Ħ': 'H', 'ħ': 'H',
+  // Cirillico (russo/bulgaro/ucraino/serbo) → latino: senza questa mappa il nome
+  // viene azzerato dallo strip ASCII finale e il portale rifiuta la schedina
+  // con "SCHEDINA_CAMPO_NON_CORRETTO — Cognome non valido"
+  'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'YO',
+  'Ж': 'ZH', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+  'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+  'Ф': 'F', 'Х': 'H', 'Ц': 'TS', 'Ч': 'CH', 'Ш': 'SH', 'Щ': 'SHT',
+  'Ъ': 'A', 'Ь': '', 'Ю': 'YU', 'Я': 'YA', 'Ы': 'Y', 'Э': 'E',
+  'І': 'I', 'Ї': 'YI', 'Є': 'YE', 'Ґ': 'G',
+  'Ђ': 'DJ', 'Љ': 'LJ', 'Њ': 'NJ', 'Ћ': 'C', 'Џ': 'DZ',
 };
 
 // Normalizza cognome/nome in ASCII 7-bit per il formato a larghezza fissa del portale.
@@ -211,7 +221,9 @@ export function validaBatch(alloggiati: Alloggiato[]): ErroreValidazione[] {
     const ospite = [a.cognome, a.nome].filter(Boolean).join(' ').trim() || `[ospite ${i + 1}]`;
 
     if (!a.cognome.trim()) errori.push('Cognome mancante');
+    else if (!normalizzaNome(a.cognome)) errori.push('Cognome non traslitterabile in caratteri latini — correggi manualmente');
     if (!a.nome.trim()) errori.push('Nome mancante');
+    else if (!normalizzaNome(a.nome)) errori.push('Nome non traslitterabile in caratteri latini — correggi manualmente');
     if (!a.data_nascita) errori.push('Data di nascita mancante');
     if (!a.tipo_documento.trim()) {
       errori.push('Tipo documento mancante (es. PP, CI, PASSE, IDELE)');
