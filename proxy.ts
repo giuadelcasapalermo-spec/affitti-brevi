@@ -59,7 +59,10 @@ export async function proxy(request: NextRequest) {
       return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
     }
     const url = request.nextUrl.clone();
+    const destinazione = url.pathname + url.search;
     url.pathname = '/login';
+    url.search = '';
+    if (destinazione !== '/login') url.searchParams.set('redirect', destinazione);
     return NextResponse.redirect(url);
   }
 

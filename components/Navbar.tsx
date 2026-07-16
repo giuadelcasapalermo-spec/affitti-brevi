@@ -65,7 +65,7 @@ export default function Navbar() {
 
   const morePiuUna = strutture.length > 1;
 
-  if (pathname.startsWith('/registrazione')) return null;
+  if (pathname.startsWith('/registrazione') || pathname === '/login') return null;
 
   return (
     <>

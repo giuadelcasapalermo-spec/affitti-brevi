@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useNomeApp } from '@/hooks/useNomeApp';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { nome: nomeApp } = useNomeApp();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -28,7 +29,11 @@ export default function LoginPage() {
     if (res.ok) {
       const data = await res.json();
       sessionStorage.setItem('sc', data.solo_calendario ? '1' : '0');
-      router.push(data.solo_calendario ? '/calendario' : '/');
+      const redirect = searchParams.get('redirect');
+      const destinazione = redirect && redirect.startsWith('/') && !redirect.startsWith('//')
+        ? redirect
+        : (data.solo_calendario ? '/calendario' : '/');
+      router.push(destinazione);
       router.refresh();
     } else {
       const data = await res.json();
@@ -83,5 +88,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <LoginForm />
+    </Suspense>
   );
 }
