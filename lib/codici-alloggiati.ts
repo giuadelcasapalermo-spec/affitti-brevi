@@ -298,7 +298,7 @@ export function codiceStatoNascita(code9: string): string {
   return z ?? code9; // Z-code se disponibile, altrimenti 9-cifre come fallback
 }
 
-function normalizzaNome(raw: string): string {
+export function normalizzaNome(raw: string): string {
   return raw.trim().toUpperCase()
     // alias italiani
     .replace(/\bGRAN\s+BRETAGNA\b/, 'REGNO UNITO')
@@ -327,6 +327,7 @@ function normalizzaNome(raw: string): string {
     .replace(/\bJAPAN\b/, 'GIAPPONE')
     .replace(/\bBRAZIL\b/, 'BRASILE')
     .replace(/\bTURKEY\b/, 'TURCHIA')
+    .replace(/\bNORTH\s+MACEDONIA\b/, 'MACEDONIA DEL NORD')
     .replace(/\bMOROCCO\b/, 'MAROCCO')
     .replace(/\bEGYPT\b/, 'EGITTO')
     .replace(/\bBELGIUM\b/, 'BELGIO')
@@ -440,6 +441,7 @@ const AGGETTIVI_CITTADINANZA: Record<string, string> = {
   'ECUADORIANO':  '100000609',
   'CUBANA':       '100000514',
   'CUBANO':       '100000514',
+  'MACEDONE':     '100000997',
   // aggettivi / nomi inglesi
   'GERMAN':       '100000216',
   'FRENCH':       '100000215',
@@ -482,6 +484,7 @@ const AGGETTIVI_CITTADINANZA: Record<string, string> = {
   'PERUVIAN':     '100000615',
   'ECUADORIAN':   '100000609',
   'CUBAN':        '100000514',
+  'MACEDONIAN':   '100000997',
 };
 
 export function aggettivoCittadinanzaACodice(aggettivo: string): string {

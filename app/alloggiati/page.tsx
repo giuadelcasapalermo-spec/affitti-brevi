@@ -166,7 +166,9 @@ export default function AlloggiatiPage() {
         numero_documento: json.numero_documento || prev.numero_documento,
         stato_nascita:    json.codice_stato_nascita !== undefined ? json.codice_stato_nascita : prev.stato_nascita,
         cittadinanza:     json.codice_cittadinanza  || prev.cittadinanza,
-        comune_nascita:   json.luogo_nascita_testo  || prev.comune_nascita,
+        // Comune/prov. di nascita valgono solo per chi è nato in Italia: per gli stranieri vanno lasciati vuoti
+        comune_nascita:   json.nato_in_italia ? (json.luogo_nascita_testo || prev.comune_nascita) : '',
+        provincia_nascita: json.nato_in_italia ? prev.provincia_nascita : '',
         luogo_rilascio:   json.codice_luogo_rilascio || prev.luogo_rilascio,
       }));
       setScanMsg({ ok: true, testo: `Documento letto: ${json.cognome} ${json.nome}` });
