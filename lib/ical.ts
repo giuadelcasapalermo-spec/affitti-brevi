@@ -208,6 +208,7 @@ export async function sincronizzaCalendario(
   }
 
   const eventiRemoti = parseIcal(testo);
+  const remoteUids = new Set(eventiRemoti.map((e) => e.uid));
   const prenotazioni = await leggiPrenotazioni(strutturaId);
   const esistentiIcal = prenotazioni.filter(
     (p) => p.camera_id === cameraId && p.fonte === 'ical'
@@ -248,13 +249,31 @@ export async function sincronizzaCalendario(
     });
   }
 
-  const aggiornate = [...prenotazioni, ...daAggiungere];
+  // Prenotazioni iCal sparite dal feed (cancellate su Booking.com): marcale come
+  // 'cancellata' invece di eliminarle, per non rompere il collegamento con l'anagrafica
+  // alloggiati (prenotazione_id) già associata a queste prenotazioni
+  let rimosse = 0;
+  const esistentiAggiornate = prenotazioni.map((p) => {
+    if (
+      p.camera_id === cameraId &&
+      p.fonte === 'ical' &&
+      p.stato !== 'cancellata' &&
+      !uidIgnorati.has(p.ical_uid ?? '') &&
+      !remoteUids.has(p.ical_uid ?? '')
+    ) {
+      rimosse++;
+      return { ...p, stato: 'cancellata' as const };
+    }
+    return p;
+  });
+
+  const aggiornate = [...esistentiAggiornate, ...daAggiungere];
   await scriviPrenotazioni(aggiornate, strutturaId);
 
   return {
     camera_id: cameraId,
     aggiunte: daAggiungere.length,
-    rimosse: 0,
+    rimosse,
   };
 }
 
