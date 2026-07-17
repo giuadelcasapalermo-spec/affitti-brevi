@@ -283,7 +283,12 @@ export async function sincronizzaCalendario(
   // Prenotazioni iCal sparite dal feed (cancellate su Booking.com, e non riassegnate a un
   // nuovo UID sopra): marcale come 'cancellata' invece di eliminarle, per non rompere il
   // collegamento con l'anagrafica alloggiati (prenotazione_id) già associata a queste
-  // prenotazioni
+  // prenotazioni.
+  // IMPORTANTE: lo facciamo solo se il check-in è ancora futuro. Il feed di Booking.com
+  // smette di includere una prenotazione appena il check-in è passato, anche se l'ospite
+  // è ancora in casa (stessa "finestra scorrevole" dei blocchi generici) — quindi la sua
+  // sparizione dal feed dopo il check-in non è un segnale affidabile di cancellazione reale.
+  const oggi = format(new Date(), 'yyyy-MM-dd');
   let rimosse = 0;
   const esistentiAggiornate = prenotazioni.map((p) => {
     const aggiornata = daAggiornare.get(p.id);
@@ -292,6 +297,7 @@ export async function sincronizzaCalendario(
       p.camera_id === cameraId &&
       p.fonte === 'ical' &&
       p.stato !== 'cancellata' &&
+      p.check_in > oggi &&
       !uidIgnorati.has(p.ical_uid ?? '') &&
       !remoteUids.has(p.ical_uid ?? '')
     ) {
