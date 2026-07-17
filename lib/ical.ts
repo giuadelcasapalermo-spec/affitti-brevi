@@ -162,6 +162,15 @@ function parseIcal(text: string): ICalEvent[] {
   return events;
 }
 
+// Blocchi di disponibilità che Booking.com ripubblica ogni giorno con UID e date diverse
+// (finestra "rolling"): non sono prenotazioni reali, quindi non vanno importate — altrimenti
+// ogni sync ne crea una copia nuova e marca quella del giorno prima come cancellata,
+// accumulando fantasmi all'infinito.
+function isBloccoGenerico(summary: string): boolean {
+  const s = summary.toLowerCase();
+  return s.includes('closed') || s.includes('blocked') || s.includes('not available');
+}
+
 export interface SyncResult {
   camera_id: number;
   aggiunte: number;
@@ -215,21 +224,43 @@ export async function sincronizzaCalendario(
   );
   const uidIgnorati = await leggiUidIgnorati();
 
+  // Prenotazioni il cui UID iCal non compare più nel feed: Booking.com a volte rigenera
+  // l'UID di una prenotazione esistente quando viene modificata (es. il cliente la
+  // completa/aggiorna), quindi prima di considerarle cancellate proviamo ad abbinarle a un
+  // evento remoto "nuovo" con le stesse date, per non perdere il collegamento con
+  // l'anagrafica alloggiati (prenotazione_id) già associato a queste prenotazioni
+  const orfane = esistentiIcal.filter(
+    (p) => !uidIgnorati.has(p.ical_uid ?? '') && !remoteUids.has(p.ical_uid ?? '')
+  );
+  const orfaneRiassegnate = new Set<string>();
+
   const daAggiungere: Prenotazione[] = [];
+  const daAggiornare = new Map<string, Prenotazione>();
 
   for (const ev of eventiRemoti) {
     if (uidIgnorati.has(ev.uid)) continue;
+    if (isBloccoGenerico(ev.summary)) continue; // blocco di disponibilità, non una prenotazione reale
     const giaPresente = esistentiIcal.find((p) => p.ical_uid === ev.uid);
     if (giaPresente) continue;
 
-    const summaryLower = ev.summary.toLowerCase();
-    const ospiteNome =
-      ev.summary &&
-      !summaryLower.includes('closed') &&
-      !summaryLower.includes('blocked') &&
-      !summaryLower.includes('not available')
-        ? ev.summary
-        : 'Ospite Booking.com';
+    const ospiteNome = ev.summary || 'Ospite Booking.com';
+
+    const checkIn = format(ev.start, 'yyyy-MM-dd');
+    const checkOut = format(ev.end, 'yyyy-MM-dd');
+
+    const rinominata = orfane.find(
+      (p) => !orfaneRiassegnate.has(p.id) && p.check_in === checkIn && p.check_out === checkOut
+    );
+    if (rinominata) {
+      orfaneRiassegnate.add(rinominata.id);
+      daAggiornare.set(rinominata.id, {
+        ...rinominata,
+        ospite_nome: ospiteNome,
+        ical_uid: ev.uid,
+        stato: rinominata.stato === 'cancellata' ? 'confermata' : rinominata.stato,
+      });
+      continue;
+    }
 
     daAggiungere.push({
       id: randomUUID(),
@@ -238,8 +269,8 @@ export async function sincronizzaCalendario(
       ospite_nome: ospiteNome,
       ospite_telefono: '',
       ospite_email: '',
-      check_in: format(ev.start, 'yyyy-MM-dd'),
-      check_out: format(ev.end, 'yyyy-MM-dd'),
+      check_in: checkIn,
+      check_out: checkOut,
       importo_totale: 0,
       stato: 'confermata',
       note: 'Importata da Booking.com (iCal)',
@@ -249,11 +280,14 @@ export async function sincronizzaCalendario(
     });
   }
 
-  // Prenotazioni iCal sparite dal feed (cancellate su Booking.com): marcale come
-  // 'cancellata' invece di eliminarle, per non rompere il collegamento con l'anagrafica
-  // alloggiati (prenotazione_id) già associata a queste prenotazioni
+  // Prenotazioni iCal sparite dal feed (cancellate su Booking.com, e non riassegnate a un
+  // nuovo UID sopra): marcale come 'cancellata' invece di eliminarle, per non rompere il
+  // collegamento con l'anagrafica alloggiati (prenotazione_id) già associata a queste
+  // prenotazioni
   let rimosse = 0;
   const esistentiAggiornate = prenotazioni.map((p) => {
+    const aggiornata = daAggiornare.get(p.id);
+    if (aggiornata) return aggiornata;
     if (
       p.camera_id === cameraId &&
       p.fonte === 'ical' &&
