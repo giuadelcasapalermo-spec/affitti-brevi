@@ -9,7 +9,7 @@ import {
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
-import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
 
 /* ── colori ───────────────────────────────────────────── */
@@ -231,6 +231,7 @@ export default function PrimaNotaPage() {
   const [filtroE, setFiltroE] = useState<Set<string>>(new Set(CATEGORIE_ENTRATA));
   const [filtroU, setFiltroU] = useState<Set<string>>(new Set(CATEGORIE_USCITA));
   const [filtroFonti, setFiltroFonti] = useState<Set<string> | null>(null); // null = tutte
+  const [filtroTesto, setFiltroTesto] = useState('');
 
   function toggleCatE(cat: string) {
     setFiltroE(prev => { const s = new Set(prev); s.has(cat) ? s.delete(cat) : s.add(cat); return s; });
@@ -330,9 +331,10 @@ export default function PrimaNotaPage() {
   }).filter(t => t.totE > 0 || t.totU > 0);
 
   /* Lista unificata ordinata per data desc */
+  const testoRicerca = filtroTesto.trim().toLowerCase();
   const righe: Riga[] = [
-    ...entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl && filtroE.has(e.categoria) && fontiAttive.has(e.fonte_pagamento || 'Contanti')).map(e => ({ tipo: 'entrata' as const, rec: e })),
-    ...uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl && filtroU.has(u.categoria) && fontiAttive.has(u.fonte_pagamento || 'Contanti')).map(u => ({ tipo: 'uscita' as const, rec: u })),
+    ...entrate.filter(e => e.data >= filtroDal && e.data <= filtroAl && filtroE.has(e.categoria) && fontiAttive.has(e.fonte_pagamento || 'Contanti') && (!testoRicerca || e.descrizione?.toLowerCase().includes(testoRicerca))).map(e => ({ tipo: 'entrata' as const, rec: e })),
+    ...uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl && filtroU.has(u.categoria) && fontiAttive.has(u.fonte_pagamento || 'Contanti') && (!testoRicerca || u.descrizione?.toLowerCase().includes(testoRicerca))).map(u => ({ tipo: 'uscita' as const, rec: u })),
   ].sort((a, b) => b.rec.data.localeCompare(a.rec.data));
 
   /* KPI */
@@ -524,6 +526,17 @@ export default function PrimaNotaPage() {
               </div>
             </>
           )}
+          <span className="text-gray-200 hidden sm:inline">|</span>
+          <div className="flex items-center gap-1">
+            <Search size={12} className="text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={filtroTesto}
+              onChange={e => setFiltroTesto(e.target.value)}
+              placeholder="Cerca descrizione..."
+              className="border rounded px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+            />
+          </div>
         </div>
       </div>
 
