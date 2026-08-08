@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { sincronizzaTutti, leggiImpostazioni } from '@/lib/ical';
+import { sincronizzaTutti, leggiImpostazioni, riconciliaBlocchiIcal } from '@/lib/ical';
 import { arricchisciPrenotazioniDaSheetsAll } from '@/lib/googlesheets';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
@@ -29,5 +29,8 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ ok: true, risultati: risultatiIcal, prenotazioniArricchite, righeSkippate, sheetsErrore, sheetsConfigurato });
+  // 3. Restringe/cancella i blocchi iCal ormai coperti da prenotazioni reali (manuali o da sheet)
+  const blocchiRiconciliati = await riconciliaBlocchiIcal(struttura.id);
+
+  return NextResponse.json({ ok: true, risultati: risultatiIcal, prenotazioniArricchite, righeSkippate, sheetsErrore, sheetsConfigurato, blocchiRiconciliati });
 }

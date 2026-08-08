@@ -5,7 +5,7 @@ import { leggiEntrate, scriviEntrate } from './entrate';
 import { leggiUscite, scriviUscite } from './uscite';
 import { leggiPrenotazioni, scriviPrenotazioni } from './db';
 import { getStrutturaAttiva } from './strutture';
-import { leggiImpostazioni } from './ical';
+import { leggiImpostazioni, riconciliaBlocchiIcal } from './ical';
 import { randomUUID } from 'crypto';
 
 const SPREADSHEET_ID_FALLBACK = '1t8sY-JBkSDAnIBhQA_xwotRjxAzRCJ1XMUrxbpHlJpM';
@@ -627,6 +627,9 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
 
   // 4. Arricchisci prenotazioni iCal con nome ospite e importo dai tab mensili
   const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid, struttura_id);
+
+  // 5. Restringe/cancella i blocchi iCal ormai coperti dalle prenotazioni reali appena arricchite
+  await riconciliaBlocchiIcal(struttura_id);
 
   return { importate, ignorate, rimosse: rimosse2, doppioniRimossi, prenotazioniArricchite };
 }

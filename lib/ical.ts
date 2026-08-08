@@ -337,6 +337,85 @@ export async function sincronizzaCalendario(
   };
 }
 
+// ── Riconcilia blocchi iCal con le prenotazioni reali (manuali/da sheet) ──────
+// Il feed iCal gratuito di Booking.com esporta finestre di indisponibilità contigue,
+// non singole prenotazioni: se due soggiorni sono consecutivi senza una notte libera
+// in mezzo, Booking.com li unisce in un unico blocco (verificato sul feed reale — non
+// è un problema del nostro parsing). Quando le prenotazioni reali più granulari
+// (manuali o dal foglio) arrivano per la stessa camera, il blocco iCal "fantasma" che
+// le copre resta comunque a coprire tutto il periodo, sovrapponendosi a loro.
+// Qui, per ogni prenotazione iCal, calcoliamo quanto del suo periodo è già coperto da
+// prenotazioni reali sulla stessa camera: se è coperto per intero la cancelliamo (è un
+// doppione), se resta scoperta solo la parte iniziale o finale la restringiamo a quella —
+// senza mai eliminare periodi non ancora confermati da nessuna fonte.
+export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<number> {
+  const prenotazioni = await leggiPrenotazioni(struttura_id);
+  const reali = prenotazioni.filter((p) => p.fonte !== 'ical' && p.stato !== 'cancellata');
+  const ghosts = prenotazioni.filter((p) => p.fonte === 'ical' && p.stato !== 'cancellata');
+
+  let modificate = 0;
+
+  for (const ghost of ghosts) {
+    const sovrapposte = reali
+      .filter(
+        (p) =>
+          p.camera_id === ghost.camera_id &&
+          p.check_in < ghost.check_out &&
+          p.check_out > ghost.check_in
+      )
+      .sort((a, b) => a.check_in.localeCompare(b.check_in));
+    if (sovrapposte.length === 0) continue;
+
+    // Unisce gli intervalli reali sovrapposti/adiacenti, poi li ritaglia al periodo del ghost
+    const uniti: [string, string][] = [];
+    for (const p of sovrapposte) {
+      const ultimo = uniti[uniti.length - 1];
+      if (ultimo && p.check_in <= ultimo[1]) {
+        if (p.check_out > ultimo[1]) ultimo[1] = p.check_out;
+      } else {
+        uniti.push([p.check_in, p.check_out]);
+      }
+    }
+    const coperti = uniti
+      .map(([s, e]): [string, string] => [
+        s < ghost.check_in ? ghost.check_in : s,
+        e > ghost.check_out ? ghost.check_out : e,
+      ])
+      .filter(([s, e]) => s < e);
+
+    // Calcola la parte del periodo del ghost non coperta da nessuna prenotazione reale
+    const scoperti: [string, string][] = [];
+    let cursore = ghost.check_in;
+    for (const [s, e] of coperti) {
+      if (s > cursore) scoperti.push([cursore, s]);
+      if (e > cursore) cursore = e;
+    }
+    if (cursore < ghost.check_out) scoperti.push([cursore, ghost.check_out]);
+
+    if (scoperti.length === 0) {
+      ghost.stato = 'cancellata';
+      modificate++;
+    } else if (scoperti.length === 1) {
+      const [s, e] = scoperti[0];
+      const isPrefisso = s === ghost.check_in;
+      const isSuffisso = e === ghost.check_out;
+      if ((isPrefisso || isSuffisso) && (s !== ghost.check_in || e !== ghost.check_out)) {
+        ghost.check_in = s;
+        ghost.check_out = e;
+        modificate++;
+      }
+      // se la parte scoperta è un "buco" in mezzo (coperta prima e dopo), non tocchiamo
+      // il ghost: non sappiamo se il buco è reale o solo un limite del merge di Booking.
+    }
+    // più di una parte scoperta: caso ambiguo, non tocchiamo il ghost.
+  }
+
+  if (modificate > 0) {
+    await scriviPrenotazioni(prenotazioni, struttura_id);
+  }
+  return modificate;
+}
+
 export async function sincronizzaTutti(icalUrls: Record<number, string>, strutturaId: string): Promise<SyncResult[]> {
   const risultati: SyncResult[] = [];
 
