@@ -354,6 +354,7 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
   const ghosts = prenotazioni.filter((p) => p.fonte === 'ical' && p.stato !== 'cancellata');
 
   let modificate = 0;
+  const daEliminareDelTutto = new Set<string>();
 
   for (const ghost of ghosts) {
     const sovrapposte = reali
@@ -393,7 +394,12 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     if (cursore < ghost.check_out) scoperti.push([cursore, ghost.check_out]);
 
     if (scoperti.length === 0) {
+      // Coperto per intero da prenotazioni reali: è un doppione fantasma. Lo marchiamo
+      // 'cancellata' e lo segnaliamo per l'eliminazione definitiva (sotto, dopo aver
+      // verificato che non sia collegato a un'anagrafica alloggiati) — altrimenti resta
+      // visibile come "duplicato" nelle liste che mostrano anche le prenotazioni cancellate.
       ghost.stato = 'cancellata';
+      daEliminareDelTutto.add(ghost.id);
       modificate++;
     } else if (scoperti.length === 1) {
       const [s, e] = scoperti[0];
@@ -410,9 +416,30 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     // più di una parte scoperta: caso ambiguo, non tocchiamo il ghost.
   }
 
-  if (modificate > 0) {
-    await scriviPrenotazioni(prenotazioni, struttura_id);
+  // Sweep di pulizia: elimina anche i ghost placeholder ("Ospite Booking.com") già marcati
+  // cancellata da esecuzioni precedenti di questa funzione (prima che eliminasse anche il
+  // record, non solo lo stato) — MAI le prenotazioni iCal cancellate con un nome vero, che
+  // rappresentano soggiorni reali cancellati su Booking.com e vanno tenute per lo storico.
+  for (const p of prenotazioni) {
+    if (p.fonte === 'ical' && p.stato === 'cancellata' && p.ospite_nome === 'Ospite Booking.com') {
+      daEliminareDelTutto.add(p.id);
+    }
   }
+
+  if (modificate === 0 && daEliminareDelTutto.size === 0) return 0;
+
+  let daScrivere = prenotazioni;
+  if (daEliminareDelTutto.size > 0) {
+    const idsArray = Array.from(daEliminareDelTutto);
+    const collegati = await sql`
+      SELECT DISTINCT prenotazione_id FROM alloggiati WHERE prenotazione_id = ANY(${idsArray})
+    `;
+    const idsCollegati = new Set(collegati.map((r) => r.prenotazione_id as string));
+    for (const id of idsCollegati) daEliminareDelTutto.delete(id); // mantiene il link anagrafica
+    daScrivere = prenotazioni.filter((p) => !daEliminareDelTutto.has(p.id));
+  }
+
+  await scriviPrenotazioni(daScrivere, struttura_id);
   return modificate;
 }
 
