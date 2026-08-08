@@ -166,9 +166,22 @@ function parseIcal(text: string): ICalEvent[] {
 // (finestra "rolling"): non sono prenotazioni reali, quindi non vanno importate — altrimenti
 // ogni sync ne crea una copia nuova e marca quella del giorno prima come cancellata,
 // accumulando fantasmi all'infinito.
-function isBloccoGenerico(summary: string): boolean {
+// NB: Booking.com usa lo stesso SUMMARY generico ("CLOSED - Not available") sia per i blocchi
+// manuali sia per le prenotazioni reali (non pubblica mai il nome ospite in iCal) — il testo da
+// solo non basta a distinguerli, altrimenti si perdono tutte le prenotazioni reali. Due segnali
+// affidabili che indicano un blocco e non una prenotazione:
+//  1. DTSTART = oggi — il blocco "rolling" viene ripubblicato ogni giorno a partire dalla
+//     data del sync, mentre una prenotazione reale ha un check-in futuro fisso.
+//  2. Durata > 60 notti — nessun soggiorno reale dura così a lungo; sono i blocchi di "fine
+//     finestra di prenotabilità" di Booking.com (identici su tutte le camere).
+const DURATA_MASSIMA_SOGGIORNO_GIORNI = 60;
+function isBloccoGenerico(summary: string, start: Date, end: Date, oggi: string): boolean {
   const s = summary.toLowerCase();
-  return s.includes('closed') || s.includes('blocked') || s.includes('not available');
+  const isGenerico = s.includes('closed') || s.includes('blocked') || s.includes('not available');
+  if (!isGenerico) return false;
+  if (format(start, 'yyyy-MM-dd') === oggi) return true;
+  const notti = (end.getTime() - start.getTime()) / 86_400_000;
+  return notti > DURATA_MASSIMA_SOGGIORNO_GIORNI;
 }
 
 export interface SyncResult {
@@ -233,17 +246,25 @@ export async function sincronizzaCalendario(
     (p) => !uidIgnorati.has(p.ical_uid ?? '') && !remoteUids.has(p.ical_uid ?? '')
   );
   const orfaneRiassegnate = new Set<string>();
+  const oggi = format(new Date(), 'yyyy-MM-dd');
 
   const daAggiungere: Prenotazione[] = [];
   const daAggiornare = new Map<string, Prenotazione>();
 
   for (const ev of eventiRemoti) {
     if (uidIgnorati.has(ev.uid)) continue;
-    if (isBloccoGenerico(ev.summary)) continue; // blocco di disponibilità, non una prenotazione reale
+    if (isBloccoGenerico(ev.summary, ev.start, ev.end, oggi)) continue; // blocco di disponibilità, non una prenotazione reale
     const giaPresente = esistentiIcal.find((p) => p.ical_uid === ev.uid);
     if (giaPresente) continue;
 
-    const ospiteNome = ev.summary || 'Ospite Booking.com';
+    const summaryLower = ev.summary.toLowerCase();
+    const ospiteNome =
+      ev.summary &&
+      !summaryLower.includes('closed') &&
+      !summaryLower.includes('blocked') &&
+      !summaryLower.includes('not available')
+        ? ev.summary
+        : 'Ospite Booking.com';
 
     const checkIn = format(ev.start, 'yyyy-MM-dd');
     const checkOut = format(ev.end, 'yyyy-MM-dd');
@@ -288,7 +309,6 @@ export async function sincronizzaCalendario(
   // smette di includere una prenotazione appena il check-in è passato, anche se l'ospite
   // è ancora in casa (stessa "finestra scorrevole" dei blocchi generici) — quindi la sua
   // sparizione dal feed dopo il check-in non è un segnale affidabile di cancellazione reale.
-  const oggi = format(new Date(), 'yyyy-MM-dd');
   let rimosse = 0;
   const esistentiAggiornate = prenotazioni.map((p) => {
     const aggiornata = daAggiornare.get(p.id);
