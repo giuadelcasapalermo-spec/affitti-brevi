@@ -368,9 +368,13 @@ export async function syncToSheets(): Promise<void> {
 }
 
 // ── Dedup prenotazioni iCal: rimuove Booking-duplicate di prenotazioni manuali ──
+// Confronta solo con prenotazioni inserite a mano (fonte 'manuale'): le prenotazioni
+// create da arricchisciPrenotazioniDaSheets (fonte 'sheet') sono placeholder, non
+// conferme che la prenotazione Booking sia un doppione — non devono causare la
+// rimozione di clienti Booking che nello sheet non sono ancora presenti.
 export async function dedupPrenotazioniIcal(): Promise<number> {
   const prenotazioni = await leggiPrenotazioni();
-  const manuali = prenotazioni.filter(p => !p.ical_uid && p.stato !== 'cancellata');
+  const manuali = prenotazioni.filter(p => p.fonte === 'manuale' && p.stato !== 'cancellata');
   // Chiave 1: camera + date (corrispondenza esatta)
   const chiaviCamera = new Set(manuali.map(p => `${p.camera_id}|${p.check_in}|${p.check_out}`));
   // Chiave 2: nome ospite + date (gestisce discrepanze camera_id tra iCal ed Excel)
