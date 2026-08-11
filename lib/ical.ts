@@ -416,16 +416,6 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     // più di una parte scoperta: caso ambiguo, non tocchiamo il ghost.
   }
 
-  // Sweep di pulizia: elimina anche i ghost placeholder ("Ospite Booking.com") già marcati
-  // cancellata da esecuzioni precedenti di questa funzione (prima che eliminasse anche il
-  // record, non solo lo stato) — MAI le prenotazioni iCal cancellate con un nome vero, che
-  // rappresentano soggiorni reali cancellati su Booking.com e vanno tenute per lo storico.
-  for (const p of prenotazioni) {
-    if (p.fonte === 'ical' && p.stato === 'cancellata' && p.ospite_nome === 'Ospite Booking.com') {
-      daEliminareDelTutto.add(p.id);
-    }
-  }
-
   if (modificate === 0 && daEliminareDelTutto.size === 0) return 0;
 
   let daScrivere = prenotazioni;
