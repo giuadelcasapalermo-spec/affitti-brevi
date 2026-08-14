@@ -420,6 +420,19 @@ async function arricchisciPrenotazioniDaSheets(
   const byCheckIn = new Map<string, Prenotazione>(
     attive.map(p => [`${p.camera_id}|${p.check_in}`, p])
   );
+  // Il fallback byCheckIn ignora il check_out: va bene quando iCal e sheet riportano lo
+  // stesso soggiorno con un checkout leggermente diverso, ma Booking.com unisce soggiorni
+  // consecutivi in un unico blocco iCal (stesso camera_id, un solo check_in ma un periodo
+  // molto più lungo). Se lo lasciassimo abbinare anche in quel caso, il rigo sheet di UNO
+  // dei soggiorni sovrascriverebbe le date dell'intero blocco, cancellando ogni traccia
+  // degli altri soggiorni ancora non registrati sul foglio. Accettiamo il match solo se il
+  // check_out esistente è vicino a quello del rigo sheet (entro un giorno).
+  function matchByCheckIn(map: Map<string, Prenotazione>, key: string, checkOut: string): Prenotazione | undefined {
+    const cand = map.get(key);
+    if (!cand) return undefined;
+    const diffGiorni = Math.abs(new Date(cand.check_out).getTime() - new Date(checkOut).getTime()) / 86_400_000;
+    return diffGiorni <= 1 ? cand : undefined;
+  }
 
   let modificate = 0;
   const saltate: string[] = [];
@@ -492,14 +505,14 @@ async function arricchisciPrenotazioniDaSheets(
       }
 
       const key  = `${camera_id}|${checkIn}|${checkOut}`;
-      let pren = byKey.get(key) ?? byCheckIn.get(`${camera_id}|${checkIn}`);
+      let pren = byKey.get(key) ?? matchByCheckIn(byCheckIn, `${camera_id}|${checkIn}`, checkOut);
       if (!pren) {
         for (const delta of [-1, 1]) {
           const d = new Date(checkIn + 'T00:00:00Z');
           d.setUTCDate(d.getUTCDate() + delta);
           const altCheckIn = d.toISOString().split('T')[0];
           pren = byKey.get(`${camera_id}|${altCheckIn}|${checkOut}`)
-              ?? byCheckIn.get(`${camera_id}|${altCheckIn}`);
+              ?? matchByCheckIn(byCheckIn, `${camera_id}|${altCheckIn}`, checkOut);
           if (pren) break;
         }
       }
