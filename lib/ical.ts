@@ -394,19 +394,10 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     if (cursore < ghost.check_out) scoperti.push([cursore, ghost.check_out]);
 
     if (scoperti.length === 0) {
-      // Coperto per intero da prenotazioni reali: prima di cancellarlo definitivamente
-      // richiediamo che la copertura includa almeno una prenotazione 'manuale' — i
-      // placeholder creati da arricchisciPrenotazioniDaSheets (fonte 'sheet') sono dedotti
-      // automaticamente dal foglio e da soli non confermano che il ghost sia un doppione:
-      // un cliente Booking reale non ancora presente sul foglio potrebbe risultare
-      // "coperto" per coincidenza di camera/date e sparire per sempre (vedi e64ef83, stesso
-      // problema per dedupPrenotazioniIcal).
-      if (!sovrapposte.some((p) => p.fonte === 'manuale')) continue;
-
-      // È un doppione fantasma confermato: lo marchiamo 'cancellata' e lo segnaliamo per
-      // l'eliminazione definitiva (sotto, dopo aver verificato che non sia collegato a
-      // un'anagrafica alloggiati) — altrimenti resta visibile come "duplicato" nelle liste
-      // che mostrano anche le prenotazioni cancellate.
+      // Coperto per intero da prenotazioni reali: è un doppione fantasma. Lo marchiamo
+      // 'cancellata' e lo segnaliamo per l'eliminazione definitiva (sotto, dopo aver
+      // verificato che non sia collegato a un'anagrafica alloggiati) — altrimenti resta
+      // visibile come "duplicato" nelle liste che mostrano anche le prenotazioni cancellate.
       ghost.stato = 'cancellata';
       daEliminareDelTutto.add(ghost.id);
       modificate++;
