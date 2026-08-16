@@ -162,24 +162,21 @@ function parseIcal(text: string): ICalEvent[] {
   return events;
 }
 
-// Blocchi di disponibilità che Booking.com ripubblica ogni giorno con UID e date diverse
-// (finestra "rolling"): non sono prenotazioni reali, quindi non vanno importate — altrimenti
-// ogni sync ne crea una copia nuova e marca quella del giorno prima come cancellata,
-// accumulando fantasmi all'infinito.
-// NB: Booking.com usa lo stesso SUMMARY generico ("CLOSED - Not available") sia per i blocchi
-// manuali sia per le prenotazioni reali (non pubblica mai il nome ospite in iCal) — il testo da
-// solo non basta a distinguerli, altrimenti si perdono tutte le prenotazioni reali. Due segnali
-// affidabili che indicano un blocco e non una prenotazione:
-//  1. DTSTART = oggi — il blocco "rolling" viene ripubblicato ogni giorno a partire dalla
-//     data del sync, mentre una prenotazione reale ha un check-in futuro fisso.
-//  2. Durata > 60 notti — nessun soggiorno reale dura così a lungo; sono i blocchi di "fine
-//     finestra di prenotabilità" di Booking.com (identici su tutte le camere).
+// Blocco di "fine finestra di prenotabilità" che Booking.com ripubblica ogni giorno (stesso
+// SUMMARY generico, durata sempre > 60 notti, identico su tutte le camere): non è una
+// prenotazione reale, quindi non va importato.
+// NB: Booking.com usa lo stesso SUMMARY generico ("CLOSED - Not available") sia per questo
+// blocco sia per le prenotazioni reali (non pubblica mai il nome ospite in iCal) — il testo da
+// solo non basta a distinguerli. In passato veniva scartato anche ogni evento con DTSTART =
+// oggi (assumendo fosse sempre un altro tipo di blocco "rolling"), ma questo scartava anche le
+// prenotazioni reali con check-in lo stesso giorno del sync (es. prenotazioni last-minute):
+// nessun soggiorno reale supera invece i 60 notti, quindi la sola durata è un segnale
+// inequivocabile e non genera falsi positivi.
 const DURATA_MASSIMA_SOGGIORNO_GIORNI = 60;
-function isBloccoGenerico(summary: string, start: Date, end: Date, oggi: string): boolean {
+function isBloccoGenerico(summary: string, start: Date, end: Date): boolean {
   const s = summary.toLowerCase();
   const isGenerico = s.includes('closed') || s.includes('blocked') || s.includes('not available');
   if (!isGenerico) return false;
-  if (format(start, 'yyyy-MM-dd') === oggi) return true;
   const notti = (end.getTime() - start.getTime()) / 86_400_000;
   return notti > DURATA_MASSIMA_SOGGIORNO_GIORNI;
 }
@@ -253,7 +250,7 @@ export async function sincronizzaCalendario(
 
   for (const ev of eventiRemoti) {
     if (uidIgnorati.has(ev.uid)) continue;
-    if (isBloccoGenerico(ev.summary, ev.start, ev.end, oggi)) continue; // blocco di disponibilità, non una prenotazione reale
+    if (isBloccoGenerico(ev.summary, ev.start, ev.end)) continue; // blocco di disponibilità, non una prenotazione reale
     const giaPresente = esistentiIcal.find((p) => p.ical_uid === ev.uid);
     if (giaPresente) continue;
 
