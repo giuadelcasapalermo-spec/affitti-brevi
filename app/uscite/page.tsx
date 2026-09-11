@@ -495,8 +495,8 @@ export default function PrimaNotaPage() {
         </div>
       </div>
 
-      {/* Filtro periodo + modalità */}
-      <div className="bg-white rounded-lg shadow-sm p-3">
+      {/* Filtro periodo + modalità — desktop (invariato) */}
+      <div className="hidden sm:block bg-white rounded-lg shadow-sm p-3">
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100" title="Mese precedente"><ChevronLeft size={16} /></button>
           <div className="flex items-center gap-1">
@@ -540,6 +540,24 @@ export default function PrimaNotaPage() {
         </div>
       </div>
 
+      {/* Filtro periodo — mobile (data compatta) */}
+      <div className="sm:hidden bg-white rounded-lg shadow-sm p-3">
+        <div className="flex items-center gap-1 flex-nowrap">
+          <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese precedente"><ChevronLeft size={16} /></button>
+          <div className="flex items-center gap-0.5 min-w-0">
+            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-1 py-1 text-[11px] w-[90px]" />
+            <span className="text-gray-400 text-xs shrink-0">→</span>
+            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1 py-1 text-[11px] w-[90px]" />
+          </div>
+          <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese successivo"><ChevronRight size={16} /></button>
+          {filtroModificato && (
+            <button onClick={() => { setFiltroDal(DEFAULT_DAL_PN); setFiltroAl(DEFAULT_AL_PN); }} className="text-[11px] text-blue-600 hover:underline shrink-0 ml-auto">
+              Mese corrente
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Contenuto movimenti */}
       <>
 
@@ -558,7 +576,19 @@ export default function PrimaNotaPage() {
 
         {filtriFiltriAperti && (
           <div className="px-4 pb-4 space-y-2.5 border-t border-gray-100">
-            <div className="flex justify-end pt-2">
+            {/* Cerca descrizione — solo mobile (su desktop è nella barra sopra) */}
+            <div className="sm:hidden flex items-center gap-1 pt-2">
+              <Search size={12} className="text-gray-400 shrink-0" />
+              <input
+                type="text"
+                value={filtroTesto}
+                onChange={e => setFiltroTesto(e.target.value)}
+                placeholder="Cerca descrizione..."
+                className="border rounded px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+              />
+            </div>
+
+            <div className="flex justify-end pt-2 sm:pt-2">
               {(filtroAttivo || filtroFonteAttivo) && (
                 <button
                   onClick={() => { setFiltroE(new Set(CATEGORIE_ENTRATA)); setFiltroU(new Set(CATEGORIE_USCITA)); setFiltroFonti(null); }}

@@ -13,9 +13,9 @@ const ALL_LINKS: { href: string; label: string; icon: React.ElementType; sheets:
   { href: '/calendario',   label: 'Calendario',  icon: CalendarDays,  sheets: false },
   { href: '/prenotazioni', label: 'Prenotazioni', icon: BookOpen,       sheets: false },
   { href: '/uscite',       label: 'Prima Nota',   icon: BookMarked,    sheets: false },
-  { href: '/sheets',       label: 'Sheets',       icon: Table2,        sheets: true  },
+  { href: '/sheets',       label: 'Sheets',       icon: Table2,        sheets: true, webOnly: true },
   { href: '/dashboard',    label: 'Dashboard',    icon: Home,          sheets: false },
-  { href: '/alloggiati',   label: 'Alloggiati',   icon: UserCheck,     sheets: false, webOnly: true },
+  { href: '/alloggiati',   label: 'Alloggiati',   icon: UserCheck,     sheets: false },
   { href: '/impostazioni', label: 'Altro',         icon: Settings,      sheets: false },
 ];
 
@@ -207,13 +207,13 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-1">
-            {!soloCalendario && (
+            {!soloCalendario && sheetsAbilitato && (
               <Link
-                href="/alloggiati"
-                className={`p-1.5 rounded hover:bg-white/10 ${pathname === '/alloggiati' ? 'bg-white/20' : ''}`}
-                title="Alloggiati"
+                href="/sheets"
+                className={`p-1.5 rounded hover:bg-white/10 ${pathname === '/sheets' ? 'bg-white/20' : ''}`}
+                title="Sheets"
               >
-                <UserCheck size={16} />
+                <Table2 size={16} />
               </Link>
             )}
             <Link

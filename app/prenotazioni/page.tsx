@@ -6,7 +6,7 @@ import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO, format, startOfMonth, endOfMonth, addMonths, isToday, isTomorrow } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { fData } from '@/lib/utils';
-import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, Mail, MessageCircle, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Mail, MessageCircle, Loader2 } from 'lucide-react';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -67,6 +67,7 @@ function PrenotazioniInner() {
   const [filtroOspite, setFiltroOspite] = usePersistedState('pren-ospite',  '');
   const [filtroDal, setFiltroDal] = usePersistedState('pren-dal', DEFAULT_DAL);
   const [filtroAl,  setFiltroAl]  = usePersistedState('pren-al',  DEFAULT_AL);
+  const [filtriAperti, setFiltriAperti] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncOk, setSyncOk]   = useState<boolean | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -288,6 +289,7 @@ function PrenotazioniInner() {
   const kpiImporto      = confermate.reduce((s, p) => s + p.importo_totale, 0);
   const kpiTassa        = confermate.reduce((s, p) => s + (p.tassa_soggiorno ?? 0), 0);
   const filtroModificato = filtroDal !== DEFAULT_DAL || filtroAl !== DEFAULT_AL;
+  const filtroExtraAttivo = filtroStato !== 'tutti' || filtroCamera !== 'tutte' || filtroOspite !== '';
 
   function checkinBadge(prenId: string, email: string) {
     const s = checkinStatus[prenId];
@@ -399,8 +401,8 @@ function PrenotazioniInner() {
         </div>
       )}
 
-      {/* Filtri */}
-      <div className="bg-white rounded-lg shadow-sm p-3">
+      {/* Filtri — desktop (invariato) */}
+      <div className="hidden sm:block bg-white rounded-lg shadow-sm p-3">
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100" title="Mese precedente"><ChevronLeft size={16} /></button>
           <div className="flex items-center gap-1">
@@ -448,6 +450,73 @@ function PrenotazioniInner() {
           </div>
           <span className="text-xs text-gray-500 ml-auto">{filtrate.length} trovate</span>
         </div>
+      </div>
+
+      {/* Filtri — mobile (data compatta + pannello comprimibile) */}
+      <div className="sm:hidden bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="flex items-center gap-1 px-3 pt-3 pb-2 flex-nowrap">
+          <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese precedente"><ChevronLeft size={16} /></button>
+          <div className="flex items-center gap-0.5 min-w-0">
+            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-1 py-1 text-[11px] w-[90px]" />
+            <span className="text-gray-400 text-xs shrink-0">→</span>
+            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1 py-1 text-[11px] w-[90px]" />
+          </div>
+          <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese successivo"><ChevronRight size={16} /></button>
+          {filtroModificato && (
+            <button onClick={() => { setFiltroDal(DEFAULT_DAL); setFiltroAl(DEFAULT_AL); }} className="text-[11px] text-blue-600 hover:underline shrink-0 ml-auto">
+              Reset
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={() => setFiltriAperti(v => !v)}
+          className="w-full flex items-center justify-between px-3 py-2.5 border-t border-gray-100 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filtri</span>
+            {filtroExtraAttivo && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">attivi</span>}
+            <span className="text-xs text-gray-400">{filtrate.length} trovate</span>
+          </div>
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${filtriAperti ? 'rotate-180' : ''}`} />
+        </button>
+
+        {filtriAperti && (
+          <div className="px-3 pb-3 pt-1 space-y-2 border-t border-gray-100">
+            <select value={filtroStato} onChange={e => setFiltroStato(e.target.value)} className="border rounded px-2 py-1.5 text-xs w-full">
+              <option value="tutti">Tutti gli stati</option>
+              <option value="confermata">Confermata</option>
+              <option value="pending">In attesa</option>
+              <option value="cancellata">Cancellata</option>
+              <option value="da_completare">Da completare{daCompletareCount > 0 ? ` (${daCompletareCount})` : ''}</option>
+            </select>
+            <select value={filtroCamera} onChange={e => setFiltroCamera(e.target.value)} className="border rounded px-2 py-1.5 text-xs w-full">
+              <option value="tutte">Tutte le camere</option>
+              {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <div className="relative">
+              <input
+                type="text"
+                list="ospiti-list-mobile"
+                value={filtroOspite}
+                onChange={e => setFiltroOspite(e.target.value)}
+                placeholder="Ospite..."
+                className="border rounded px-2 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              {filtroOspite && (
+                <button
+                  onClick={() => setFiltroOspite('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={12} />
+                </button>
+              )}
+              <datalist id="ospiti-list-mobile">
+                {nomiOspiti.map(n => <option key={n} value={n} />)}
+              </datalist>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal modifica prenotazione (mobile) */}

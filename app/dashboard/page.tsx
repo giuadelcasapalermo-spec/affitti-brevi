@@ -420,16 +420,16 @@ export default function Dashboard() {
       </div>
 
       {/* Filtro periodo + camera */}
-      <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4 flex-wrap">
-        <span className="text-sm font-medium text-gray-600">Periodo:</span>
-        <div className="flex items-center gap-1">
-          <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100"><ChevronLeft size={16} /></button>
+      <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-2 sm:gap-4 flex-wrap">
+        <div className="flex items-center gap-1 flex-nowrap">
+          <span className="hidden sm:inline text-sm font-medium text-gray-600">Periodo:</span>
+          <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100 shrink-0"><ChevronLeft size={16} /></button>
           <input type="date" value={filtroDal} onChange={(e) => setFiltroDal(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-          <span className="text-gray-400 text-sm">→</span>
+            className="border border-gray-300 rounded px-1 py-1 text-[11px] w-[90px] sm:w-auto sm:text-sm sm:px-2 sm:py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <span className="text-gray-400 text-xs sm:text-sm shrink-0">→</span>
           <input type="date" value={filtroAl} onChange={(e) => setFiltroAl(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-          <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100"><ChevronRight size={16} /></button>
+            className="border border-gray-300 rounded px-1 py-1 text-[11px] w-[90px] sm:w-auto sm:text-sm sm:px-2 sm:py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0"><ChevronRight size={16} /></button>
         </div>
         <div className="w-px h-5 bg-gray-200" />
         <span className="text-sm font-medium text-gray-600">Camera:</span>
