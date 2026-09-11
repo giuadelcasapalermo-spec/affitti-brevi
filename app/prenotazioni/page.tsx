@@ -457,9 +457,9 @@ function PrenotazioniInner() {
         <div className="flex items-center gap-1 px-3 pt-3 pb-2 flex-nowrap">
           <button onClick={() => spostaMese(-1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese precedente"><ChevronLeft size={16} /></button>
           <div className="flex items-center gap-0.5 min-w-0">
-            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-1 py-1 text-[11px] w-[90px]" />
+            <input type="date" value={filtroDal} onChange={e => setFiltroDal(e.target.value)} className="border rounded px-1.5 py-1 text-xs w-[112px]" />
             <span className="text-gray-400 text-xs shrink-0">→</span>
-            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1 py-1 text-[11px] w-[90px]" />
+            <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1.5 py-1 text-xs w-[112px]" />
           </div>
           <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese successivo"><ChevronRight size={16} /></button>
           {filtroModificato && (
