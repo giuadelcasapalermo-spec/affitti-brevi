@@ -473,6 +473,17 @@ export default function AlloggiatiPage() {
         </pre>
       )}
 
+      <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex gap-6">
+        <div>
+          <div className="text-2xl font-bold text-gray-800">{alloggiati.length}</div>
+          <div className="text-xs text-gray-400">alloggiati</div>
+        </div>
+        <div className="border-l border-gray-100 pl-6">
+          <div className="text-2xl font-bold text-gray-800">{numPrenotazioniCollegate}</div>
+          <div className="text-xs text-gray-400">prenotazioni collegate</div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between gap-3">
         <button onClick={() => spostaDi(-1)} className="p-1.5 rounded hover:bg-gray-100">
           <ChevronLeft size={18} />
@@ -491,17 +502,6 @@ export default function AlloggiatiPage() {
         <button onClick={() => spostaDi(1)} className="p-1.5 rounded hover:bg-gray-100">
           <ChevronRight size={18} />
         </button>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex gap-6">
-        <div>
-          <div className="text-2xl font-bold text-gray-800">{alloggiati.length}</div>
-          <div className="text-xs text-gray-400">alloggiati</div>
-        </div>
-        <div className="border-l border-gray-100 pl-6">
-          <div className="text-2xl font-bold text-gray-800">{numPrenotazioniCollegate}</div>
-          <div className="text-xs text-gray-400">prenotazioni collegate</div>
-        </div>
       </div>
 
       {loading ? (
