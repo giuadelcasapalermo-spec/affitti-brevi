@@ -463,8 +463,12 @@ function PrenotazioniInner() {
           </div>
           <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese successivo"><ChevronRight size={16} /></button>
           {filtroModificato && (
-            <button onClick={() => { setFiltroDal(DEFAULT_DAL); setFiltroAl(DEFAULT_AL); }} className="text-[11px] text-blue-600 hover:underline shrink-0 ml-auto">
-              Reset
+            <button
+              onClick={() => { setFiltroDal(DEFAULT_DAL); setFiltroAl(DEFAULT_AL); }}
+              title="Reset filtro date"
+              className="shrink-0 ml-auto p-1 rounded text-blue-600 hover:bg-blue-50"
+            >
+              <X size={14} />
             </button>
           )}
         </div>

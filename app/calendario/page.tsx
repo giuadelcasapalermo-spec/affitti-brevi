@@ -194,46 +194,32 @@ export default function CalendarioPage() {
 
   // Filtro giorno versione compatta (senza mese/anno) — accanto al filtro mese su mobile
   const giornoNavCompactJSX = (
-    <div className="flex items-center gap-1">
-      <div className="flex items-center gap-0">
-        <button onClick={() => navigaGiorno(-1)} className="p-0.5 rounded hover:bg-gray-200">
-          <ChevronLeft size={14} />
-        </button>
-        <h2 className="font-semibold text-gray-700 text-xs capitalize text-center min-w-[46px]">
-          {format(giornoSelezionato, 'EEE d', { locale: it })}
-        </h2>
-        <button onClick={() => navigaGiorno(1)} className="p-0.5 rounded hover:bg-gray-200">
-          <ChevronRight size={14} />
-        </button>
-      </div>
-      {!isSameDay(giornoSelezionato, today) && (
-        <button onClick={() => setGiornoSelezionato(today)} className="text-[10px] text-gray-400 hover:text-blue-600 hover:underline">
-          Oggi
-        </button>
-      )}
+    <div className="flex items-center gap-0">
+      <button onClick={() => navigaGiorno(-1)} className="p-0.5 rounded hover:bg-gray-200">
+        <ChevronLeft size={14} />
+      </button>
+      <h2 className="font-semibold text-gray-700 text-xs capitalize text-center min-w-[46px]">
+        {format(giornoSelezionato, 'EEE d', { locale: it })}
+      </h2>
+      <button onClick={() => navigaGiorno(1)} className="p-0.5 rounded hover:bg-gray-200">
+        <ChevronRight size={14} />
+      </button>
     </div>
   );
 
   // Filtro giorno versione estesa (con mese/anno) — accanto al filtro mese su desktop,
   // ripetuto sopra i dettagli dei clienti presenti su mobile
   const giornoNavJSX = (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-0.5">
-        <button onClick={() => navigaGiorno(-1)} className="p-1 rounded hover:bg-gray-200">
-          <ChevronLeft size={15} />
-        </button>
-        <h2 className="font-semibold text-gray-700 text-sm capitalize text-center min-w-[180px]">
-          {format(giornoSelezionato, 'EEEE d MMMM yyyy', { locale: it })}
-        </h2>
-        <button onClick={() => navigaGiorno(1)} className="p-1 rounded hover:bg-gray-200">
-          <ChevronRight size={15} />
-        </button>
-      </div>
-      {!isSameDay(giornoSelezionato, today) && (
-        <button onClick={() => setGiornoSelezionato(today)} className="text-xs text-gray-400 hover:text-blue-600 hover:underline">
-          Oggi
-        </button>
-      )}
+    <div className="flex items-center gap-0.5">
+      <button onClick={() => navigaGiorno(-1)} className="p-1 rounded hover:bg-gray-200">
+        <ChevronLeft size={15} />
+      </button>
+      <h2 className="font-semibold text-gray-700 text-sm capitalize text-center min-w-[180px]">
+        {format(giornoSelezionato, 'EEEE d MMMM yyyy', { locale: it })}
+      </h2>
+      <button onClick={() => navigaGiorno(1)} className="p-1 rounded hover:bg-gray-200">
+        <ChevronRight size={15} />
+      </button>
     </div>
   );
 
