@@ -26,6 +26,7 @@ function csvRow(fields: (string | number)[]): string {
 }
 
 export async function GET(req: NextRequest) {
+  await sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_esenti INT NOT NULL DEFAULT 0`;
   const cookieStore = await cookies();
   const strutturaId = cookieStore.get('struttura_id')?.value;
   const struttura = await getStrutturaAttiva(strutturaId);

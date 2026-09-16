@@ -24,6 +24,7 @@ async function ensureTable() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tsd_struttura_anno_trim
     ON tassa_soggiorno_dichiarazioni(struttura_id, anno, trimestre)
   `;
+  await sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_esenti INT NOT NULL DEFAULT 0`;
   _tableReady = true;
 }
 

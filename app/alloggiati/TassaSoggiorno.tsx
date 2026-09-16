@@ -67,15 +67,24 @@ export default function TassaSoggiorno() {
   const [editingVal, setEditingVal] = useState('');
   const [editingEsentiId, setEditingEsentiId] = useState<string | null>(null);
   const [editingEsentiVal, setEditingEsentiVal] = useState('');
+  const [errore, setErrore] = useState<string | null>(null);
 
   const carica = useCallback(async (a: number, t: number, m: number, tipo: Periodo) => {
     setLoading(true);
+    setErrore(null);
     const url = tipo === 'mese'
       ? `/api/tassa-soggiorno?anno=${a}&mese=${m}`
       : `/api/tassa-soggiorno?anno=${a}&trimestre=${t}`;
-    const res = await fetch(url);
-    setDati(await res.json());
-    setLoading(false);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Errore ${res.status}`);
+      setDati(await res.json());
+    } catch {
+      setDati(null);
+      setErrore('Impossibile caricare i dati. Riprova.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { carica(anno, trim, mese, periodo); }, [anno, trim, mese, periodo, carica]);
@@ -287,6 +296,10 @@ export default function TassaSoggiorno() {
       {loading ? (
         <div className="py-10 text-center text-gray-400">
           <Loader2 size={20} className="animate-spin mx-auto" />
+        </div>
+      ) : errore ? (
+        <div className="bg-red-50 border border-red-200 rounded-xl py-6 text-center text-sm text-red-600">
+          {errore}
         </div>
       ) : !dati ? null : (
         <>
