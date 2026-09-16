@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Download, CheckCircle2, Clock, Loader2, X, Euro, Users, BedDouble, Receipt, Pencil, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, CheckCircle2, Clock, Loader2, X, Receipt, Pencil, FileText } from 'lucide-react';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 
@@ -303,22 +303,28 @@ export default function TassaSoggiorno() {
         </div>
       ) : !dati ? null : (
         <>
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { icon: BedDouble, label: 'Prenotazioni', value: dati.prenotazioni.length, color: 'text-blue-600' },
-              { icon: Users,     label: 'Adulti / Esenti', value: `${dati.adulti_totali} / ${dati.esenti_totali}`, color: 'text-violet-600' },
-              { icon: Clock,     label: 'Notti tassabili', value: dati.notti_totali,      color: 'text-amber-600' },
-              { icon: Euro,      label: 'Tassa riscossa', value: `€${dati.totale_riscosso.toFixed(2)}`, color: 'text-green-600' },
-            ].map(({ icon: Icon, label, value, color }) => (
-              <div key={label} className="bg-white rounded-xl shadow-sm px-4 py-3">
-                <div className={`flex items-center gap-1.5 ${color} mb-1`}>
-                  <Icon size={14} />
-                  <span className="text-xs text-gray-500">{label}</span>
-                </div>
-                <div className="text-xl font-bold text-gray-800">{value}</div>
-              </div>
-            ))}
+          {/* Totali (stesso layout della tab Alloggiati) */}
+          <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex flex-wrap gap-x-6 gap-y-3">
+            <div>
+              <div className="text-2xl font-bold text-gray-800">{dati.prenotazioni.length}</div>
+              <div className="text-xs text-gray-400">prenotazioni</div>
+            </div>
+            <div className="border-l border-gray-100 pl-6">
+              <div className="text-2xl font-bold text-gray-800">{dati.adulti_totali}</div>
+              <div className="text-xs text-gray-400">adulti</div>
+            </div>
+            <div className="border-l border-gray-100 pl-6">
+              <div className="text-2xl font-bold text-gray-800">{dati.esenti_totali}</div>
+              <div className="text-xs text-gray-400">esenti</div>
+            </div>
+            <div className="border-l border-gray-100 pl-6">
+              <div className="text-2xl font-bold text-amber-600">{dati.notti_totali}</div>
+              <div className="text-xs text-gray-400">notti tassabili</div>
+            </div>
+            <div className="border-l border-gray-100 pl-6">
+              <div className="text-2xl font-bold text-green-600">€{dati.totale_riscosso.toFixed(2)}</div>
+              <div className="text-xs text-gray-400">tassa riscossa</div>
+            </div>
           </div>
 
           {/* Stato dichiarazione (solo trimestrale) */}
