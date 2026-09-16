@@ -179,6 +179,7 @@ export async function migraStruttura(): Promise<string> {
   const s = await getOrCreateDefaultStruttura();
   await Promise.all([
     sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
+    sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_esenti INT NOT NULL DEFAULT 0`,
     sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
   ]);
   await Promise.all([

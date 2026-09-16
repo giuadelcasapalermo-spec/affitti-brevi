@@ -14,6 +14,13 @@ function trimestreBounds(anno: number, trim: number): { dal: string; al: string 
   return { dal, al };
 }
 
+function meseBounds(anno: number, mese: number): { dal: string; al: string } {
+  const dal = `${anno}-${String(mese).padStart(2, '0')}-01`;
+  const ultimoGiorno = new Date(anno, mese, 0).getDate();
+  const al = `${anno}-${String(mese).padStart(2, '0')}-${ultimoGiorno}`;
+  return { dal, al };
+}
+
 function csvRow(fields: (string | number)[]): string {
   return fields.map(f => `"${String(f).replace(/"/g, '""')}"`).join(';');
 }
@@ -24,11 +31,13 @@ export async function GET(req: NextRequest) {
   const struttura = await getStrutturaAttiva(strutturaId);
 
   const anno = parseInt(req.nextUrl.searchParams.get('anno') ?? String(new Date().getFullYear()));
+  const meseParam = req.nextUrl.searchParams.get('mese');
   const trim = parseInt(req.nextUrl.searchParams.get('trimestre') ?? '1');
-  const { dal, al } = trimestreBounds(anno, trim);
+  const mese = meseParam ? parseInt(meseParam) : null;
+  const { dal, al } = mese ? meseBounds(anno, mese) : trimestreBounds(anno, trim);
 
   const prenRows = await sql`
-    SELECT id, ospite_nome, camera_id, check_in, check_out, tassa_soggiorno
+    SELECT id, ospite_nome, camera_id, check_in, check_out, tassa_soggiorno, tassa_esenti
     FROM prenotazioni
     WHERE struttura_id = ${struttura.id}
       AND stato != 'cancellata'
@@ -50,13 +59,17 @@ export async function GET(req: NextRequest) {
 
   const nomiCamere = struttura.nomi_camere ?? {};
 
-  const header = csvRow(['Check-in', 'Check-out', 'Ospite', 'Camera', 'Notti', 'Notti tassabili (max 4)', 'N. Ospiti', 'Tassa riscossa (€)']);
+  const header = csvRow(['Check-in', 'Check-out', 'Ospite', 'Camera', 'Notti', 'Notti tassabili (max 4)', 'N. Ospiti', 'Adulti', 'Esenti', 'Tassa riscossa (€)']);
+  let totOspiti = 0, totAdulti = 0, totEsenti = 0;
   const righe = prenRows.map(r => {
     const cin  = new Date(r.check_in as string);
     const cout = new Date(r.check_out as string);
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
     const nottiTassabili = Math.min(notti, 4);
     const nOspiti = ospiti[r.id as string] ?? 1;
+    const esenti = (r.tassa_esenti as number | null) ?? 0;
+    const adulti = Math.max(0, nOspiti - esenti);
+    totOspiti += nOspiti; totAdulti += adulti; totEsenti += esenti;
     const nomeCamera = nomiCamere[r.camera_id as number] ?? `Camera ${r.camera_id}`;
     return csvRow([
       r.check_in as string,
@@ -66,6 +79,8 @@ export async function GET(req: NextRequest) {
       notti,
       nottiTassabili,
       nOspiti,
+      adulti,
+      esenti,
       ((r.tassa_soggiorno as number | null) ?? 0).toFixed(2),
     ]);
   });
@@ -77,13 +92,14 @@ export async function GET(req: NextRequest) {
     const cout = new Date(p.check_out as string);
     return r + Math.min(Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000)), 4);
   }, 0);
-  const totOspiti = Object.values(ospiti).reduce((s, n) => s + n, prenRows.length - Object.keys(ospiti).length);
 
   righe.push('');
-  righe.push(csvRow(['TOTALI', '', '', '', '', totNotti, totOspiti, totRiscossa.toFixed(2)]));
+  righe.push(csvRow(['TOTALI', '', '', '', '', totNotti, totOspiti, totAdulti, totEsenti, totRiscossa.toFixed(2)]));
 
   const csv = [header, ...righe].join('\r\n');
-  const filename = `tassa-soggiorno-${anno}-Q${trim}.csv`;
+  const filename = mese
+    ? `tassa-soggiorno-${anno}-${String(mese).padStart(2, '0')}.csv`
+    : `tassa-soggiorno-${anno}-Q${trim}.csv`;
 
   return new NextResponse(csv, {
     headers: {

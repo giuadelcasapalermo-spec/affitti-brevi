@@ -38,6 +38,13 @@ function trimestreBounds(anno: number, trim: number): { dal: string; al: string 
   return { dal, al };
 }
 
+function meseBounds(anno: number, mese: number): { dal: string; al: string } {
+  const dal = `${anno}-${String(mese).padStart(2, '0')}-01`;
+  const ultimoGiorno = new Date(anno, mese, 0).getDate();
+  const al = `${anno}-${String(mese).padStart(2, '0')}-${ultimoGiorno}`;
+  return { dal, al };
+}
+
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
   const strutturaId = cookieStore.get('struttura_id')?.value;
@@ -45,11 +52,13 @@ export async function GET(req: NextRequest) {
   await ensureTable();
 
   const anno = parseInt(req.nextUrl.searchParams.get('anno') ?? String(new Date().getFullYear()));
+  const meseParam = req.nextUrl.searchParams.get('mese');
   const trim = parseInt(req.nextUrl.searchParams.get('trimestre') ?? String(Math.ceil((new Date().getMonth() + 1) / 3)));
-  const { dal, al } = trimestreBounds(anno, trim);
+  const mese = meseParam ? parseInt(meseParam) : null;
+  const { dal, al } = mese ? meseBounds(anno, mese) : trimestreBounds(anno, trim);
 
   const prenRows = await sql`
-    SELECT id, ospite_nome, camera_id, check_in, check_out, tassa_soggiorno
+    SELECT id, ospite_nome, camera_id, check_in, check_out, tassa_soggiorno, tassa_esenti
     FROM prenotazioni
     WHERE struttura_id = ${struttura.id}
       AND stato != 'cancellata'
@@ -76,6 +85,7 @@ export async function GET(req: NextRequest) {
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
     const nottiTassabili = Math.min(notti, 4); // Palermo: max 4 notti consecutive
     const nOspiti = ospiti[r.id as string] ?? 1;
+    const esenti = (r.tassa_esenti as number | null) ?? 0;
     return {
       id: r.id as string,
       ospite_nome: r.ospite_nome as string,
@@ -85,11 +95,14 @@ export async function GET(req: NextRequest) {
       notti,
       notti_tassabili: nottiTassabili,
       n_ospiti: nOspiti,
+      esenti,
+      adulti: Math.max(0, nOspiti - esenti),
       tassa_riscossa: (r.tassa_soggiorno as number | null) ?? 0,
     };
   });
 
-  const dichRows = await sql`
+  // La dichiarazione formale è solo trimestrale (comunicazione al Comune)
+  const dichRows = mese ? [] : await sql`
     SELECT * FROM tassa_soggiorno_dichiarazioni
     WHERE struttura_id = ${struttura.id} AND anno = ${anno} AND trimestre = ${trim}
   `;
@@ -99,6 +112,8 @@ export async function GET(req: NextRequest) {
     totale_riscosso: prenotazioni.reduce((s, p) => s + p.tassa_riscossa, 0),
     notti_totali: prenotazioni.reduce((s, p) => s + p.notti_tassabili, 0),
     ospiti_totali: prenotazioni.reduce((s, p) => s + p.n_ospiti, 0),
+    adulti_totali: prenotazioni.reduce((s, p) => s + p.adulti, 0),
+    esenti_totali: prenotazioni.reduce((s, p) => s + p.esenti, 0),
     dichiarazione: dichRows[0] ?? null,
   });
 }
@@ -132,12 +147,22 @@ export async function PATCH(req: NextRequest) {
   const strutturaId = cookieStore.get('struttura_id')?.value;
   const struttura = await getStrutturaAttiva(strutturaId);
 
-  const { prenotazione_id, tassa_soggiorno } = await req.json();
-  await sql`
-    UPDATE prenotazioni
-    SET tassa_soggiorno = ${tassa_soggiorno ?? 0}
-    WHERE id = ${prenotazione_id} AND struttura_id = ${struttura.id}
-  `;
+  const { prenotazione_id, tassa_soggiorno, tassa_esenti } = await req.json();
+
+  if (tassa_soggiorno !== undefined) {
+    await sql`
+      UPDATE prenotazioni
+      SET tassa_soggiorno = ${tassa_soggiorno ?? 0}
+      WHERE id = ${prenotazione_id} AND struttura_id = ${struttura.id}
+    `;
+  }
+  if (tassa_esenti !== undefined) {
+    await sql`
+      UPDATE prenotazioni
+      SET tassa_esenti = ${tassa_esenti ?? 0}
+      WHERE id = ${prenotazione_id} AND struttura_id = ${struttura.id}
+    `;
+  }
   return NextResponse.json({ ok: true });
 }
 

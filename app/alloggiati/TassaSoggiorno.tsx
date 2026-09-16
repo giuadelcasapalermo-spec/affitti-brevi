@@ -3,10 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Download, CheckCircle2, Clock, Loader2, X, Euro, Users, BedDouble, Receipt, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, CheckCircle2, Clock, Loader2, X, Euro, Users, BedDouble, Receipt, Pencil, FileText } from 'lucide-react';
 import { useCamere } from '@/hooks/useCamere';
+import { useStruttura } from '@/hooks/useStruttura';
 
 const TRIMESTRI = ['Q1 Gen–Mar', 'Q2 Apr–Giu', 'Q3 Lug–Set', 'Q4 Ott–Dic'];
+const MESI = [
+  'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+  'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+];
 
 type Prenotazione = {
   id: string;
@@ -17,6 +22,8 @@ type Prenotazione = {
   notti: number;
   notti_tassabili: number;
   n_ospiti: number;
+  adulti: number;
+  esenti: number;
   tassa_riscossa: number;
 };
 
@@ -26,13 +33,17 @@ type Dichiarazione = {
   note: string;
 };
 
-type DatiTrimestre = {
+type DatiPeriodo = {
   prenotazioni: Prenotazione[];
   totale_riscosso: number;
   notti_totali: number;
   ospiti_totali: number;
+  adulti_totali: number;
+  esenti_totali: number;
   dichiarazione: Dichiarazione | null;
 };
+
+type Periodo = 'trimestre' | 'mese';
 
 function trimestreCorrente(): number {
   return Math.ceil((new Date().getMonth() + 1) / 3);
@@ -40,9 +51,12 @@ function trimestreCorrente(): number {
 
 export default function TassaSoggiorno() {
   const camere = useCamere();
+  const { struttura } = useStruttura();
   const [anno, setAnno] = useState(new Date().getFullYear());
   const [trim, setTrim] = useState(trimestreCorrente());
-  const [dati, setDati] = useState<DatiTrimestre | null>(null);
+  const [mese, setMese] = useState(new Date().getMonth() + 1);
+  const [periodo, setPeriodo] = useState<Periodo>('trimestre');
+  const [dati, setDati] = useState<DatiPeriodo | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formImporto, setFormImporto] = useState('');
@@ -51,15 +65,20 @@ export default function TassaSoggiorno() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingVal, setEditingVal] = useState('');
+  const [editingEsentiId, setEditingEsentiId] = useState<string | null>(null);
+  const [editingEsentiVal, setEditingEsentiVal] = useState('');
 
-  const carica = useCallback(async (a: number, t: number) => {
+  const carica = useCallback(async (a: number, t: number, m: number, tipo: Periodo) => {
     setLoading(true);
-    const res = await fetch(`/api/tassa-soggiorno?anno=${a}&trimestre=${t}`);
+    const url = tipo === 'mese'
+      ? `/api/tassa-soggiorno?anno=${a}&mese=${m}`
+      : `/api/tassa-soggiorno?anno=${a}&trimestre=${t}`;
+    const res = await fetch(url);
     setDati(await res.json());
     setLoading(false);
   }, []);
 
-  useEffect(() => { carica(anno, trim); }, [anno, trim, carica]);
+  useEffect(() => { carica(anno, trim, mese, periodo); }, [anno, trim, mese, periodo, carica]);
 
   function nomeCamera(id: number) {
     return camere.find(c => c.id === id)?.nome ?? `Cam ${id}`;
@@ -83,7 +102,7 @@ export default function TassaSoggiorno() {
     });
     setSaving(false);
     setShowForm(false);
-    carica(anno, trim);
+    carica(anno, trim, mese, periodo);
   }
 
   async function salvaTassaRiga(id: string, valore: number) {
@@ -93,13 +112,23 @@ export default function TassaSoggiorno() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prenotazione_id: id, tassa_soggiorno: valore }),
     });
-    carica(anno, trim);
+    carica(anno, trim, mese, periodo);
+  }
+
+  async function salvaEsentiRiga(id: string, valore: number) {
+    setEditingEsentiId(null);
+    await fetch('/api/tassa-soggiorno', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prenotazione_id: id, tassa_esenti: valore }),
+    });
+    carica(anno, trim, mese, periodo);
   }
 
   async function annullaDichiarazione() {
     if (!confirm('Annullare la dichiarazione per questo trimestre?')) return;
     await fetch(`/api/tassa-soggiorno?anno=${anno}&trimestre=${trim}`, { method: 'DELETE' });
-    carica(anno, trim);
+    carica(anno, trim, mese, periodo);
   }
 
   function apriFormDichiarazione() {
@@ -110,7 +139,75 @@ export default function TassaSoggiorno() {
   }
 
   function esportaCsv() {
-    window.open(`/api/tassa-soggiorno/export?anno=${anno}&trimestre=${trim}`, '_blank');
+    const url = periodo === 'mese'
+      ? `/api/tassa-soggiorno/export?anno=${anno}&mese=${mese}`
+      : `/api/tassa-soggiorno/export?anno=${anno}&trimestre=${trim}`;
+    window.open(url, '_blank');
+  }
+
+  async function generaRicevuta(p: Prenotazione) {
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF();
+
+    const nomeStruttura = struttura?.nome || 'Struttura ricettiva';
+    const indirizzo = struttura?.indirizzo || '';
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(nomeStruttura, 20, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    if (indirizzo) doc.text(indirizzo, 20, 27);
+
+    doc.setDrawColor(200);
+    doc.line(20, 33, 190, 33);
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Ricevuta imposta di soggiorno', 20, 44);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Data emissione: ${format(new Date(), 'd MMMM yyyy', { locale: it })}`, 20, 52);
+
+    const righe: [string, string][] = [
+      ['Ospite', p.ospite_nome],
+      ['Camera', nomeCamera(p.camera_id)],
+      ['Check-in', format(parseISO(p.check_in), 'd MMMM yyyy', { locale: it })],
+      ['Check-out', format(parseISO(p.check_out), 'd MMMM yyyy', { locale: it })],
+      ['Notti di soggiorno', String(p.notti)],
+      ['Notti imponibili (max 4)', String(p.notti_tassabili)],
+      ['Ospiti totali', String(p.n_ospiti)],
+      ['di cui adulti', String(p.adulti)],
+      ['di cui esenti', String(p.esenti)],
+    ];
+
+    let y = 65;
+    doc.setFontSize(11);
+    for (const [label, val] of righe) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${label}:`, 20, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(val, 90, y);
+      y += 8;
+    }
+
+    y += 4;
+    doc.setDrawColor(200);
+    doc.line(20, y, 190, y);
+    y += 12;
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Importo riscosso:', 20, y);
+    doc.text(`€ ${p.tassa_riscossa.toFixed(2)}`, 150, y);
+
+    y += 16;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Imposta di soggiorno riscossa per conto del Comune ai sensi del regolamento comunale vigente.', 20, y);
+
+    doc.save(`ricevuta-tassa-soggiorno_${p.ospite_nome.replace(/\s+/g, '-')}_${p.check_in}.pdf`);
   }
 
   const dichiarata = !!dati?.dichiarazione;
@@ -138,22 +235,54 @@ export default function TassaSoggiorno() {
         </button>
       </div>
 
-      {/* Quarter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-        {TRIMESTRI.map((label, i) => (
-          <button
-            key={i}
-            onClick={() => setTrim(i + 1)}
-            className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
-              trim === i + 1
-                ? 'bg-white shadow-sm text-blue-700'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Periodo: trimestre / mese */}
+      <div className="flex items-center gap-2">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {(['trimestre', 'mese'] as Periodo[]).map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriodo(p)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors capitalize ${
+                periodo === p ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        {periodo === 'mese' && (
+          <span className="text-xs text-gray-400">per le comunicazioni mensili al portale del Comune</span>
+        )}
       </div>
+
+      {/* Selettore trimestre o mese */}
+      {periodo === 'trimestre' ? (
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {TRIMESTRI.map((label, i) => (
+            <button
+              key={i}
+              onClick={() => setTrim(i + 1)}
+              className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-colors ${
+                trim === i + 1
+                  ? 'bg-white shadow-sm text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center gap-2">
+          <button onClick={() => setMese(m => m === 1 ? 12 : m - 1)} className="p-1.5 rounded hover:bg-gray-100">
+            <ChevronLeft size={16} />
+          </button>
+          <span className="font-semibold text-gray-800 text-sm w-32 text-center">{MESI[mese - 1]}</span>
+          <button onClick={() => setMese(m => m === 12 ? 1 : m + 1)} className="p-1.5 rounded hover:bg-gray-100">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-10 text-center text-gray-400">
@@ -165,7 +294,7 @@ export default function TassaSoggiorno() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { icon: BedDouble, label: 'Prenotazioni', value: dati.prenotazioni.length, color: 'text-blue-600' },
-              { icon: Users,     label: 'Ospiti',       value: dati.ospiti_totali,        color: 'text-violet-600' },
+              { icon: Users,     label: 'Adulti / Esenti', value: `${dati.adulti_totali} / ${dati.esenti_totali}`, color: 'text-violet-600' },
               { icon: Clock,     label: 'Notti tassabili', value: dati.notti_totali,      color: 'text-amber-600' },
               { icon: Euro,      label: 'Tassa riscossa', value: `€${dati.totale_riscosso.toFixed(2)}`, color: 'text-green-600' },
             ].map(({ icon: Icon, label, value, color }) => (
@@ -179,49 +308,51 @@ export default function TassaSoggiorno() {
             ))}
           </div>
 
-          {/* Stato dichiarazione */}
-          <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-            {dichiarata ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 size={16} className="text-green-600" />
-                  <span className="text-sm font-medium text-green-700">
-                    Dichiarata il {dati.dichiarazione!.data_dichiarazione
-                      ? format(parseISO(dati.dichiarazione!.data_dichiarazione), 'd MMMM yyyy', { locale: it })
-                      : '—'}
-                  </span>
-                  {dati.dichiarazione!.importo_versato > 0 && (
-                    <span className="text-xs text-gray-500">· versati €{dati.dichiarazione!.importo_versato.toFixed(2)}</span>
-                  )}
-                  {dati.dichiarazione!.note && (
-                    <span className="text-xs text-gray-400 italic">· {dati.dichiarazione!.note}</span>
-                  )}
-                </div>
-                <button
-                  onClick={annullaDichiarazione}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 border border-gray-200 px-2 py-1 rounded"
-                >
-                  <X size={11} /> Annulla
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <Clock size={16} className="text-amber-500" />
-                  <span className="text-sm font-medium text-amber-700">Da dichiarare</span>
-                </div>
-                {dati.prenotazioni.length > 0 && (
+          {/* Stato dichiarazione (solo trimestrale) */}
+          {periodo === 'trimestre' && (
+            <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+              {dichiarata ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-green-600" />
+                    <span className="text-sm font-medium text-green-700">
+                      Dichiarata il {dati.dichiarazione!.data_dichiarazione
+                        ? format(parseISO(dati.dichiarazione!.data_dichiarazione), 'd MMMM yyyy', { locale: it })
+                        : '—'}
+                    </span>
+                    {dati.dichiarazione!.importo_versato > 0 && (
+                      <span className="text-xs text-gray-500">· versati €{dati.dichiarazione!.importo_versato.toFixed(2)}</span>
+                    )}
+                    {dati.dichiarazione!.note && (
+                      <span className="text-xs text-gray-400 italic">· {dati.dichiarazione!.note}</span>
+                    )}
+                  </div>
                   <button
-                    onClick={apriFormDichiarazione}
-                    className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-green-700"
+                    onClick={annullaDichiarazione}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 border border-gray-200 px-2 py-1 rounded"
                   >
-                    <Receipt size={14} />
-                    Segna come dichiarata
+                    <X size={11} /> Annulla
                   </button>
-                )}
-              </>
-            )}
-          </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} className="text-amber-500" />
+                    <span className="text-sm font-medium text-amber-700">Da dichiarare</span>
+                  </div>
+                  {dati.prenotazioni.length > 0 && (
+                    <button
+                      onClick={apriFormDichiarazione}
+                      className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-green-700"
+                    >
+                      <Receipt size={14} />
+                      Segna come dichiarata
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Form dichiarazione */}
           {showForm && (
@@ -277,7 +408,7 @@ export default function TassaSoggiorno() {
           {/* Tabella prenotazioni */}
           {dati.prenotazioni.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm py-10 text-center text-gray-400 text-sm">
-              Nessuna prenotazione in questo trimestre
+              Nessuna prenotazione in questo periodo
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -295,10 +426,14 @@ export default function TassaSoggiorno() {
                       <th className="text-left px-4 py-2 font-medium">Camera</th>
                       <th className="text-right px-4 py-2 font-medium">Notti</th>
                       <th className="text-right px-4 py-2 font-medium">Tax notti</th>
-                      <th className="text-right px-4 py-2 font-medium">Ospiti</th>
+                      <th className="text-right px-4 py-2 font-medium">Adulti</th>
+                      <th className="text-right px-4 py-2 font-medium">
+                        <span className="flex items-center justify-end gap-1">Esenti <Pencil size={10} className="text-gray-300" /></span>
+                      </th>
                       <th className="text-right px-4 py-2 font-medium">
                         <span className="flex items-center justify-end gap-1">Tassa <Pencil size={10} className="text-gray-300" /></span>
                       </th>
+                      <th className="text-right px-4 py-2 font-medium">Ricevuta</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -314,7 +449,34 @@ export default function TassaSoggiorno() {
                             {p.notti_tassabili}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-right text-gray-600">{p.n_ospiti}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">{p.adulti}</td>
+                        <td className="px-4 py-2 text-right">
+                          {editingEsentiId === p.id ? (
+                            <input
+                              autoFocus
+                              type="number"
+                              step="1"
+                              min="0"
+                              value={editingEsentiVal}
+                              onChange={e => setEditingEsentiVal(e.target.value)}
+                              onBlur={() => salvaEsentiRiga(p.id, parseInt(editingEsentiVal) || 0)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                if (e.key === 'Escape') setEditingEsentiId(null);
+                              }}
+                              className="w-14 text-right border border-blue-400 rounded px-1 py-0.5 text-xs focus:outline-none"
+                            />
+                          ) : (
+                            <span
+                              onClick={() => { setEditingEsentiId(p.id); setEditingEsentiVal(String(p.esenti)); }}
+                              className="cursor-pointer group inline-flex items-center justify-end gap-1 text-gray-600"
+                              title="Clicca per modificare"
+                            >
+                              {p.esenti > 0 ? p.esenti : <span className="text-gray-300">0</span>}
+                              <Pencil size={9} className="text-gray-200 group-hover:text-blue-400 transition-colors" />
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-800">
                           {editingId === p.id ? (
                             <input
@@ -342,6 +504,15 @@ export default function TassaSoggiorno() {
                             </span>
                           )}
                         </td>
+                        <td className="px-4 py-2 text-right">
+                          <button
+                            onClick={() => generaRicevuta(p)}
+                            title="Genera ricevuta PDF"
+                            className="inline-flex items-center gap-1 text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded px-1.5 py-0.5"
+                          >
+                            <FileText size={12} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -350,8 +521,10 @@ export default function TassaSoggiorno() {
                       <td colSpan={4} className="px-4 py-2 text-xs uppercase tracking-wide text-gray-400">Totali</td>
                       <td className="px-4 py-2 text-right">{dati.prenotazioni.reduce((s, p) => s + p.notti, 0)}</td>
                       <td className="px-4 py-2 text-right text-amber-600">{dati.notti_totali}</td>
-                      <td className="px-4 py-2 text-right">{dati.ospiti_totali}</td>
+                      <td className="px-4 py-2 text-right">{dati.adulti_totali}</td>
+                      <td className="px-4 py-2 text-right">{dati.esenti_totali}</td>
                       <td className="px-4 py-2 text-right text-green-700">€{dati.totale_riscosso.toFixed(2)}</td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>

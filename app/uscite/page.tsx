@@ -351,9 +351,10 @@ export default function PrimaNotaPage() {
     saldoMap.set(r.rec.id, saldoCorrente);
   }
 
-  function scaricaExcel() {
-    const intestazioni = ['Data', 'Tipo', 'Descrizione', 'Categoria', 'Modalità', 'Entrata (€)', 'Uscita (€)', 'Saldo (€)'];
-    const righeCSV = righe.map((r, i) => {
+  async function scaricaExcel() {
+    const XLSX = await import('xlsx');
+    const intestazioni = ['Data', 'Tipo', 'Descrizione', 'Categoria', 'Modalità', 'Entrata', 'Uscita', 'Saldo'];
+    const corpo: (string | number)[][] = righe.map(r => {
       const isE = r.tipo === 'entrata';
       const s = saldoMap.get(r.rec.id) ?? 0;
       return [
@@ -362,20 +363,38 @@ export default function PrimaNotaPage() {
         r.rec.descrizione,
         isE ? (r.rec as Entrata).categoria : (r.rec as Uscita).categoria,
         r.rec.fonte_pagamento || 'Contanti',
-        isE ? r.rec.importo.toFixed(2) : '',
-        !isE ? r.rec.importo.toFixed(2) : '',
-        s.toFixed(2),
+        isE ? r.rec.importo : '',
+        !isE ? r.rec.importo : '',
+        s,
       ];
     });
-    // Riga totali
-    righeCSV.push(['', '', 'TOTALI', '', '', totEntrate.toFixed(2), totUscite.toFixed(2), saldo.toFixed(2)]);
-    const csv = [intestazioni, ...righeCSV]
-      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'))
-      .join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    corpo.push(['', '', 'TOTALI', '', '', totEntrate, totUscite, saldo]);
+
+    const ws = XLSX.utils.aoa_to_sheet([intestazioni, ...corpo]);
+
+    // Formato valuta sulle colonne Entrata (F), Uscita (G), Saldo (H)
+    const valuta = '€ #,##0.00';
+    for (let r = 1; r <= corpo.length; r++) {
+      for (const c of [5, 6, 7]) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell && typeof cell.v === 'number') { cell.t = 'n'; cell.z = valuta; }
+      }
+    }
+
+    ws['!cols'] = [
+      { wch: 11 }, { wch: 9 }, { wch: 30 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+    ];
+    ['A1','B1','C1','D1','E1','F1','G1','H1'].forEach(addr => {
+      if (ws[addr]) ws[addr].s = { font: { bold: true } };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Prima Nota');
+    const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url;
-    a.download = `prima-nota_${filtroDal}_${filtroAl}.csv`;
+    a.download = `prima-nota_${filtroDal}_${filtroAl}.xlsx`;
     a.click(); URL.revokeObjectURL(url);
   }
 
