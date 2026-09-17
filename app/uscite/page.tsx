@@ -15,6 +15,7 @@ import VoiceInput from '@/components/VoiceInput';
 /* ── colori ───────────────────────────────────────────── */
 const COL_USCITA: Record<CategoriaUscita, string> = {
   Pulizie:      'bg-blue-100 text-blue-700',
+  Lavanderia:   'bg-teal-100 text-teal-700',
   Utenze:       'bg-yellow-100 text-yellow-700',
   Manutenzione: 'bg-orange-100 text-orange-700',
   Forniture:    'bg-green-100 text-green-700',

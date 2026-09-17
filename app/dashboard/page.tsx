@@ -15,6 +15,7 @@ import { ComposedChart, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 
 const COLORI_CAT_USCITA: Record<string, { bar: string; hex: string }> = {
   'Pulizie':      { bar: 'bg-sky-500',     hex: '#0ea5e9' },
+  'Lavanderia':   { bar: 'bg-cyan-500',    hex: '#06b6d4' },
   'Utenze':       { bar: 'bg-yellow-500',  hex: '#eab308' },
   'Manutenzione': { bar: 'bg-orange-500',  hex: '#f97316' },
   'Forniture':    { bar: 'bg-emerald-500', hex: '#10b981' },

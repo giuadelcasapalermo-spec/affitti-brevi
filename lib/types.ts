@@ -77,6 +77,7 @@ export interface Prenotazione {
 
 export const CATEGORIE_USCITA = [
   'Pulizie',
+  'Lavanderia',
   'Utenze',
   'Manutenzione',
   'Forniture',
