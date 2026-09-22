@@ -25,6 +25,7 @@ type Prenotazione = {
   adulti: number;
   esenti: number;
   tassa_riscossa: number;
+  tassa_trovata: number | null;
 };
 
 type Dichiarazione = {
@@ -452,6 +453,7 @@ export default function TassaSoggiorno() {
                       <th className="text-right px-4 py-2 font-medium">
                         <span className="flex items-center justify-end gap-1">Tassa <Pencil size={10} className="text-gray-300" /></span>
                       </th>
+                      <th className="text-right px-4 py-2 font-medium">Trovato (pulizie)</th>
                       <th className="text-right px-4 py-2 font-medium">Ricevuta</th>
                     </tr>
                   </thead>
@@ -524,6 +526,19 @@ export default function TassaSoggiorno() {
                           )}
                         </td>
                         <td className="px-4 py-2 text-right">
+                          {p.tassa_trovata == null ? (
+                            <span className="text-gray-300">—</span>
+                          ) : (
+                            <span className={
+                              Math.abs(p.tassa_trovata - p.tassa_riscossa) < 0.005
+                                ? 'text-gray-600'
+                                : 'font-semibold text-red-600'
+                            }>
+                              €{p.tassa_trovata.toFixed(2)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">
                           <button
                             onClick={() => generaRicevuta(p)}
                             title="Genera ricevuta PDF"
@@ -543,6 +558,14 @@ export default function TassaSoggiorno() {
                       <td className="px-4 py-2 text-right">{dati.adulti_totali}</td>
                       <td className="px-4 py-2 text-right">{dati.esenti_totali}</td>
                       <td className="px-4 py-2 text-right text-green-700">€{dati.totale_riscosso.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-gray-600">
+                        {(() => {
+                          const conValore = dati.prenotazioni.filter(p => p.tassa_trovata != null);
+                          if (conValore.length === 0) return <span className="text-gray-300">—</span>;
+                          const tot = conValore.reduce((s, p) => s + (p.tassa_trovata as number), 0);
+                          return `€${tot.toFixed(2)}`;
+                        })()}
+                      </td>
                       <td></td>
                     </tr>
                   </tfoot>

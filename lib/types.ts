@@ -68,6 +68,7 @@ export interface Prenotazione {
   importo_totale: number;
   tassa_soggiorno?: number;
   tassa_esenti?: number;
+  tassa_trovata?: number | null;
   stato: 'confermata' | 'pending' | 'cancellata';
   note: string;
   created_at: string;

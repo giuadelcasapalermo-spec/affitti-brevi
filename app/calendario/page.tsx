@@ -128,7 +128,7 @@ export default function CalendarioPage() {
       const cam = camere.find((c) => c.id === p.camera_id);
       const rigaPrevisto = p.tassa_soggiorno ?? 0;
       const rigaTrovato = parseFloat((impSoggiornoRighe[p.id] ?? '').replace(',', '.')) || 0;
-      return { nome: cam?.nome ?? `Camera ${p.camera_id}`, previsto: rigaPrevisto, trovato: rigaTrovato, diff: rigaTrovato - rigaPrevisto };
+      return { id: p.id, nome: cam?.nome ?? `Camera ${p.camera_id}`, previsto: rigaPrevisto, trovato: rigaTrovato, diff: rigaTrovato - rigaPrevisto };
     });
     const trovato = daPerStanza
       ? righeTrovate.reduce((s, r) => s + r.trovato, 0)
@@ -146,17 +146,24 @@ export default function CalendarioPage() {
 
     setImpSoggiornoSalvando(true);
     try {
-      await fetch('/api/entrate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: giornoStr,
-          descrizione,
-          categoria: 'Tasse',
-          importo: trovato,
-          fonte_pagamento: 'Contanti',
+      await Promise.all([
+        fetch('/api/entrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: giornoStr,
+            descrizione,
+            categoria: 'Tasse',
+            importo: trovato,
+            fonte_pagamento: 'Contanti',
+          }),
         }),
-      });
+        ...righeTrovate.map((r) => fetch('/api/tassa-soggiorno', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prenotazione_id: r.id, tassa_trovata: r.trovato }),
+        })),
+      ]);
       setImpSoggiornoAperto(false);
       setImpSoggiornoMsg(`Registrato in Prima Nota: €${trovato.toFixed(2)}`);
       setTimeout(() => setImpSoggiornoMsg(null), 6000);
@@ -435,6 +442,13 @@ export default function CalendarioPage() {
             <span className="hidden sm:inline text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">{impSoggiornoMsg}</span>
           )}
         <button
+          onClick={apriImpSoggiorno}
+          className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
+        >
+          <Receipt size={14} />
+          <span className="hidden sm:inline">Imp. Soggiorno</span>
+        </button>
+        <button
           onClick={syncIcal}
           disabled={syncing}
           className={`flex items-center gap-1.5 border px-2.5 py-1.5 rounded text-sm font-medium transition-colors ${
@@ -445,13 +459,6 @@ export default function CalendarioPage() {
         >
           <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
           <span className="hidden sm:inline">Sync iCal</span>
-        </button>
-        <button
-          onClick={apriImpSoggiorno}
-          className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
-        >
-          <Receipt size={14} />
-          <span className="hidden sm:inline">Imp. Soggiorno</span>
         </button>
         </>
       )}

@@ -25,6 +25,7 @@ async function ensureTable() {
     ON tassa_soggiorno_dichiarazioni(struttura_id, anno, trimestre)
   `;
   await sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_esenti INT NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_trovata REAL`;
   _tableReady = true;
 }
 
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
   const { dal, al } = mese ? meseBounds(anno, mese) : trimestreBounds(anno, trim);
 
   const prenRows = await sql`
-    SELECT id, ospite_nome, camera_id, check_in, check_out, tassa_soggiorno, tassa_esenti
+    SELECT id, ospite_nome, camera_id, check_in, check_out, tassa_soggiorno, tassa_esenti, tassa_trovata
     FROM prenotazioni
     WHERE struttura_id = ${struttura.id}
       AND stato != 'cancellata'
@@ -99,6 +100,7 @@ export async function GET(req: NextRequest) {
       esenti,
       adulti: Math.max(0, nOspiti - esenti),
       tassa_riscossa: (r.tassa_soggiorno as number | null) ?? 0,
+      tassa_trovata: (r.tassa_trovata as number | null) ?? null,
     };
   });
 
@@ -147,8 +149,9 @@ export async function PATCH(req: NextRequest) {
   const cookieStore = await cookies();
   const strutturaId = cookieStore.get('struttura_id')?.value;
   const struttura = await getStrutturaAttiva(strutturaId);
+  await ensureTable();
 
-  const { prenotazione_id, tassa_soggiorno, tassa_esenti } = await req.json();
+  const { prenotazione_id, tassa_soggiorno, tassa_esenti, tassa_trovata } = await req.json();
 
   if (tassa_soggiorno !== undefined) {
     await sql`
@@ -161,6 +164,13 @@ export async function PATCH(req: NextRequest) {
     await sql`
       UPDATE prenotazioni
       SET tassa_esenti = ${tassa_esenti ?? 0}
+      WHERE id = ${prenotazione_id} AND struttura_id = ${struttura.id}
+    `;
+  }
+  if (tassa_trovata !== undefined) {
+    await sql`
+      UPDATE prenotazioni
+      SET tassa_trovata = ${tassa_trovata}
       WHERE id = ${prenotazione_id} AND struttura_id = ${struttura.id}
     `;
   }
