@@ -30,6 +30,7 @@ const COL_ENTRATA: Record<CategoriaEntrata, string> = {
   'Booking.com': 'bg-blue-100 text-blue-700',
   'Airbnb':      'bg-red-100 text-red-700',
   'Privato':     'bg-green-100 text-green-700',
+  'Tasse':       'bg-amber-100 text-amber-700',
   'Altro':       'bg-gray-100 text-gray-600',
 };
 

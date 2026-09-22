@@ -22,7 +22,7 @@ import {
   differenceInDays,
 } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, X, RefreshCw, LayoutGrid, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, RefreshCw, LayoutGrid, CalendarDays, Receipt } from 'lucide-react';
 import { getCameraStyle } from '@/lib/camera-colors';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSoloCalendario } from '@/hooks/useSoloCalendario';
@@ -73,6 +73,11 @@ export default function CalendarioPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncOk, setSyncOk]   = useState<boolean | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [impSoggiornoAperto, setImpSoggiornoAperto] = useState(false);
+  const [impSoggiornoValore, setImpSoggiornoValore] = useState('');
+  const [impSoggiornoRighe, setImpSoggiornoRighe] = useState<Record<string, string>>({});
+  const [impSoggiornoSalvando, setImpSoggiornoSalvando] = useState(false);
+  const [impSoggiornoMsg, setImpSoggiornoMsg] = useState<string | null>(null);
   const [vistaCompatta, setVistaCompatta] = usePersistedState<boolean>('cal-compatta', false, { storage: 'local' });
   const vistaEffettiva = soloCalendario ? true : vistaCompatta;
 
@@ -105,6 +110,58 @@ export default function CalendarioPage() {
     } finally {
       setSyncing(false);
       setTimeout(() => { setSyncOk(null); setSyncMsg(null); }, 6000);
+    }
+  }
+
+  function apriImpSoggiorno() {
+    const iniziali: Record<string, string> = {};
+    partenzeGiorno.forEach((p) => { iniziali[p.id] = (p.tassa_soggiorno ?? 0).toFixed(2); });
+    setImpSoggiornoRighe(iniziali);
+    setImpSoggiornoValore(tassaPrevistaGiorno > 0 ? tassaPrevistaGiorno.toFixed(2) : '');
+    setImpSoggiornoAperto(true);
+  }
+
+  async function salvaImpSoggiorno() {
+    const previsto = tassaPrevistaGiorno;
+    const daPerStanza = partenzeGiorno.length > 0;
+    const righeTrovate = partenzeGiorno.map((p) => {
+      const cam = camere.find((c) => c.id === p.camera_id);
+      const rigaPrevisto = p.tassa_soggiorno ?? 0;
+      const rigaTrovato = parseFloat((impSoggiornoRighe[p.id] ?? '').replace(',', '.')) || 0;
+      return { nome: cam?.nome ?? `Camera ${p.camera_id}`, previsto: rigaPrevisto, trovato: rigaTrovato, diff: rigaTrovato - rigaPrevisto };
+    });
+    const trovato = daPerStanza
+      ? righeTrovate.reduce((s, r) => s + r.trovato, 0)
+      : (parseFloat(impSoggiornoValore.replace(',', '.')) || 0);
+    const diff = trovato - previsto;
+    const dataLabel = format(giornoSelezionato, 'd MMMM yyyy', { locale: it });
+    let descrizione = `Tassa di soggiorno del ${dataLabel} — previsto €${previsto.toFixed(2)}, trovato €${trovato.toFixed(2)}`;
+    descrizione += diff === 0 ? ' (quadra)' : ` (diff. ${diff > 0 ? '+' : ''}€${diff.toFixed(2)})`;
+    const differenze = righeTrovate.filter((r) => Math.abs(r.diff) > 0.004);
+    if (differenze.length > 0) {
+      descrizione += '. Differenze: ' + differenze
+        .map((r) => `${r.nome} (prev. €${r.previsto.toFixed(2)}, trov. €${r.trovato.toFixed(2)}, diff. ${r.diff > 0 ? '+' : ''}€${r.diff.toFixed(2)})`)
+        .join('; ');
+    }
+
+    setImpSoggiornoSalvando(true);
+    try {
+      await fetch('/api/entrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: giornoStr,
+          descrizione,
+          categoria: 'Tasse',
+          importo: trovato,
+          fonte_pagamento: 'Contanti',
+        }),
+      });
+      setImpSoggiornoAperto(false);
+      setImpSoggiornoMsg(`Registrato in Prima Nota: €${trovato.toFixed(2)}`);
+      setTimeout(() => setImpSoggiornoMsg(null), 6000);
+    } finally {
+      setImpSoggiornoSalvando(false);
     }
   }
 
@@ -176,6 +233,14 @@ export default function CalendarioPage() {
   const valoreDelGiorno = prenDelGiorno
     .filter((p) => p.importo_totale > 0)
     .reduce((s, p) => s + p.importo_totale, 0);
+
+  // Partenze previste nel giorno selezionato: base per la proposta di imposta di soggiorno
+  const partenzeGiorno = prenotazioni
+    .filter((p) => p.stato !== 'cancellata' && isSameDay(parseISO(p.check_out), giornoSelezionato))
+    .sort((a, b) => a.camera_id - b.camera_id);
+  const tassaPrevistaGiorno = partenzeGiorno.reduce((s, p) => s + (p.tassa_soggiorno ?? 0), 0);
+  const impSoggiornoTotaleTrovato = partenzeGiorno.reduce((s, p) => s + (parseFloat((impSoggiornoRighe[p.id] ?? '').replace(',', '.')) || 0), 0);
+  const impSoggiornoDiff = impSoggiornoTotaleTrovato - tassaPrevistaGiorno;
 
   // Riepilogo pulizie del giorno selezionato: check-out (ospiti che lasciano la stanza)
   // e cambio stanza (soggiorni lunghi, biancheria/pulizia ogni 3 notti trascorse)
@@ -366,6 +431,9 @@ export default function CalendarioPage() {
               syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
             }`}>{syncMsg}</span>
           )}
+          {impSoggiornoMsg && (
+            <span className="hidden sm:inline text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">{impSoggiornoMsg}</span>
+          )}
         <button
           onClick={syncIcal}
           disabled={syncing}
@@ -377,6 +445,13 @@ export default function CalendarioPage() {
         >
           <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
           <span className="hidden sm:inline">Sync iCal</span>
+        </button>
+        <button
+          onClick={apriImpSoggiorno}
+          className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
+        >
+          <Receipt size={14} />
+          <span className="hidden sm:inline">Imp. Soggiorno</span>
         </button>
         </>
       )}
@@ -776,6 +851,100 @@ export default function CalendarioPage() {
           </div>
         );
       })()}
+
+      {/* Modale imposta di soggiorno */}
+      {impSoggiornoAperto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setImpSoggiornoAperto(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div>
+                <h2 className="font-semibold text-gray-800">Imposta di soggiorno</h2>
+                <p className="text-xs text-gray-500 mt-0.5 capitalize">{format(giornoSelezionato, 'EEEE d MMMM yyyy', { locale: it })}</p>
+              </div>
+              <button onClick={() => setImpSoggiornoAperto(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Partenze previste ({partenzeGiorno.length})
+                </p>
+                {partenzeGiorno.length === 0 ? (
+                  <>
+                    <p className="text-sm text-gray-400 mb-3">Nessuna partenza prevista in questo giorno</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Importo trovato (€)</label>
+                    <input
+                      autoFocus
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={impSoggiornoValore}
+                      onChange={(e) => setImpSoggiornoValore(e.target.value)}
+                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    {partenzeGiorno.map((p) => {
+                      const cam = camere.find((c) => c.id === p.camera_id);
+                      const previsto = p.tassa_soggiorno ?? 0;
+                      const valore = impSoggiornoRighe[p.id] ?? '';
+                      const trovato = parseFloat(valore.replace(',', '.')) || 0;
+                      const uguale = Math.abs(trovato - previsto) < 0.005;
+                      return (
+                        <div key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-gray-700 truncate">{p.ospite_nome} <span className="text-gray-400">({cam?.nome})</span></div>
+                            <div className="text-[11px] text-gray-400">previsto €{previsto.toFixed(2)}</div>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={valore}
+                            onChange={(e) => setImpSoggiornoRighe(prev => ({ ...prev, [p.id]: e.target.value }))}
+                            className={`w-24 text-right border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 ${
+                              uguale ? 'border-gray-300 focus:ring-amber-400' : 'border-red-300 bg-red-50 text-red-700 focus:ring-red-400'
+                            }`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm font-semibold text-gray-800 mt-3 pt-2 border-t">
+                  <span>Totale previsto</span>
+                  <span>€{tassaPrevistaGiorno.toFixed(2)}</span>
+                </div>
+                {partenzeGiorno.length > 0 && (
+                  <div className="flex items-center justify-between text-sm font-semibold mt-1">
+                    <span className="text-gray-800">Totale trovato</span>
+                    <span className={impSoggiornoDiff === 0 ? 'text-gray-800' : 'text-red-600'}>
+                      €{impSoggiornoTotaleTrovato.toFixed(2)}
+                      {impSoggiornoDiff !== 0 && (
+                        <span className="ml-1 text-xs font-normal">({impSoggiornoDiff > 0 ? '+' : ''}€{impSoggiornoDiff.toFixed(2)})</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+              <button onClick={() => setImpSoggiornoAperto(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">
+                Annulla
+              </button>
+              <button
+                onClick={salvaImpSoggiorno}
+                disabled={impSoggiornoSalvando}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
+              >
+                Registra in Prima Nota
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

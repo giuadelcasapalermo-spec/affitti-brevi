@@ -107,6 +107,7 @@ export const CATEGORIE_ENTRATA = [
   'Booking.com',
   'Airbnb',
   'Privato',
+  'Tasse',
   'Altro',
 ] as const;
 
