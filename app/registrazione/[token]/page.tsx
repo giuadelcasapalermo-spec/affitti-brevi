@@ -24,38 +24,28 @@ const FORM_VUOTO = {
 
 async function compressImage(file: File): Promise<File> {
   if (file.size < 1.5 * 1024 * 1024) return file;
-  const compress = new Promise<File>((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      try {
-        const MAX = 1400;
-        let { width, height } = img;
-        if (width > MAX || height > MAX) {
-          if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-          else { width = Math.round(width * MAX / height); height = MAX; }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { URL.revokeObjectURL(url); resolve(file); return; }
-        ctx.drawImage(img, 0, 0, width, height);
-        URL.revokeObjectURL(url);
-        canvas.toBlob(
-          blob => resolve(blob ? new File([blob], 'doc.jpg', { type: 'image/jpeg' }) : file),
-          'image/jpeg',
-          0.85
-        );
-      } catch {
-        URL.revokeObjectURL(url);
-        resolve(file);
-      }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
-  });
-  // timeout di 6s: se canvas.toBlob non risponde (bug WebView Android) usa il file originale
+  if (typeof createImageBitmap !== 'function') return file;
+  const MAX = 1400;
+  const compress = (async (): Promise<File> => {
+    try {
+      // createImageBitmap + resizeWidth decodifica già in dimensione ridotta, invece di
+      // <img>+canvas che alloca prima il bitmap a piena risoluzione: su foto da fotocamera
+      // molto grandi (12-48 MP) questo mandava in crash la WebView mobile ("This page couldn't load")
+      const bitmap = await createImageBitmap(file, { resizeWidth: MAX, resizeQuality: 'medium' });
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { bitmap.close(); return file; }
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+      return blob ? new File([blob], 'doc.jpg', { type: 'image/jpeg' }) : file;
+    } catch {
+      return file;
+    }
+  })();
+  // timeout di 6s: se la decodifica non risponde (bug WebView) usa il file originale
   const timeout = new Promise<File>(resolve => setTimeout(() => resolve(file), 6000));
   return Promise.race([compress, timeout]);
 }

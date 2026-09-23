@@ -571,11 +571,6 @@ export default function PrimaNotaPage() {
             <input type="date" value={filtroAl}  onChange={e => setFiltroAl(e.target.value)}  className="border rounded px-1.5 py-1 text-xs w-[112px]" />
           </div>
           <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese successivo"><ChevronRight size={16} /></button>
-          {filtroModificato && (
-            <button onClick={() => { setFiltroDal(DEFAULT_DAL_PN); setFiltroAl(DEFAULT_AL_PN); }} className="text-[11px] text-blue-600 hover:underline shrink-0 ml-auto">
-              Mese corrente
-            </button>
-          )}
         </div>
       </div>
 
