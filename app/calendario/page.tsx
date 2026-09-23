@@ -431,6 +431,16 @@ export default function CalendarioPage() {
   // Pulsanti azione (sync iCal + toggle vista) — riusati in row 1 (mobile) e row 2 (desktop)
   const azioniJSX = (
     <>
+      {impSoggiornoMsg && (
+        <span className="hidden sm:inline text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">{impSoggiornoMsg}</span>
+      )}
+      <button
+        onClick={apriImpSoggiorno}
+        className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
+      >
+        <Receipt size={14} />
+        <span className="hidden sm:inline">Imp. Soggiorno</span>
+      </button>
       {!soloCalendario && (
         <>
           {syncMsg && (
@@ -438,16 +448,6 @@ export default function CalendarioPage() {
               syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
             }`}>{syncMsg}</span>
           )}
-          {impSoggiornoMsg && (
-            <span className="hidden sm:inline text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">{impSoggiornoMsg}</span>
-          )}
-        <button
-          onClick={apriImpSoggiorno}
-          className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
-        >
-          <Receipt size={14} />
-          <span className="hidden sm:inline">Imp. Soggiorno</span>
-        </button>
         <button
           onClick={syncIcal}
           disabled={syncing}
