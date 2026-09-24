@@ -81,3 +81,17 @@ export async function eliminaEntrata(id: string): Promise<boolean> {
   await sql`DELETE FROM entrate WHERE id = ${id}`;
   return true;
 }
+
+// Riga "Tassa di soggiorno" unica per giorno: se l'importo è > 0 sostituisce quella esistente
+// della stessa data, altrimenti lascia invariata l'entrata precedente.
+export async function sostituisciTassaGiorno(e: Entrata): Promise<'inserita' | 'sostituita' | 'mantenuta'> {
+  await ensureCol();
+  if (!(e.importo > 0)) return 'mantenuta';
+  const eliminate = await sql`
+    DELETE FROM entrate
+    WHERE data = ${e.data} AND categoria = 'Tasse' AND descrizione LIKE 'Tassa di soggiorno del %'
+    RETURNING id
+  `;
+  await aggiungiEntrata(e);
+  return eliminate.length > 0 ? 'sostituita' : 'inserita';
+}

@@ -81,7 +81,6 @@ export default function CalendarioPage() {
   // Biancheria per la lavanderia: conteggi per stanza pulita nel giorno (camera_id → capo → valore input)
   const [biancheriaRighe, setBiancheriaRighe] = useState<Record<number, Partial<Record<CapoBiancheria, string>>>>({});
   const [biancheriaCamere, setBiancheriaCamere] = useState<number[]>([]);
-  const [biancheriaSalvando, setBiancheriaSalvando] = useState(false);
   const [vistaCompatta, setVistaCompatta] = usePersistedState<boolean>('cal-compatta', false, { storage: 'local' });
   const vistaEffettiva = soloCalendario ? true : vistaCompatta;
 
@@ -157,18 +156,6 @@ export default function CalendarioPage() {
     });
   }
 
-  async function salvaSoloBiancheria() {
-    setBiancheriaSalvando(true);
-    try {
-      await salvaBiancheria();
-      setImpSoggiornoAperto(false);
-      setImpSoggiornoMsg('Biancheria salvata');
-      setTimeout(() => setImpSoggiornoMsg(null), 6000);
-    } finally {
-      setBiancheriaSalvando(false);
-    }
-  }
-
   async function salvaImpSoggiorno() {
     const previsto = tassaPrevistaGiorno;
     const daPerStanza = partenzeGiorno.length > 0;
@@ -192,29 +179,32 @@ export default function CalendarioPage() {
         .join('; ');
     }
 
+    // Con importo trovato a zero si mantiene la registrazione precedente del giorno (entrata e trovato per stanza)
+    const registraTassa = trovato > 0;
     setImpSoggiornoSalvando(true);
     try {
       await Promise.all([
-        fetch('/api/entrate', {
-          method: 'POST',
+        registraTassa && fetch('/api/entrate/tassa-giorno', {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             data: giornoStr,
             descrizione,
-            categoria: 'Tasse',
             importo: trovato,
             fonte_pagamento: 'Contanti',
           }),
         }),
         salvaBiancheria(),
-        ...righeTrovate.map((r) => fetch('/api/tassa-soggiorno', {
+        ...(registraTassa ? righeTrovate : []).map((r) => fetch('/api/tassa-soggiorno', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prenotazione_id: r.id, tassa_trovata: r.trovato }),
         })),
       ]);
       setImpSoggiornoAperto(false);
-      setImpSoggiornoMsg(`Registrato in Prima Nota: €${trovato.toFixed(2)}`);
+      setImpSoggiornoMsg(registraTassa
+        ? `Registrato in Prima Nota: €${trovato.toFixed(2)}`
+        : 'Biancheria salvata, tassa di soggiorno invariata');
       setTimeout(() => setImpSoggiornoMsg(null), 6000);
     } finally {
       setImpSoggiornoSalvando(false);
@@ -1048,13 +1038,6 @@ export default function CalendarioPage() {
             <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t">
               <button onClick={() => setImpSoggiornoAperto(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">
                 Annulla
-              </button>
-              <button
-                onClick={salvaSoloBiancheria}
-                disabled={biancheriaSalvando || impSoggiornoSalvando}
-                className="px-4 py-2 text-sm border border-amber-300 text-amber-700 rounded hover:bg-amber-50 disabled:opacity-50"
-              >
-                Salva solo biancheria
               </button>
               <button
                 onClick={salvaImpSoggiorno}
