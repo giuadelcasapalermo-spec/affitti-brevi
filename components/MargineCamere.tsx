@@ -171,14 +171,16 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
           <p className="text-xs text-gray-400">Nessun ricavo o costo nel periodo</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] sm:text-xs tabular-nums">
+            <table className="w-full table-fixed text-[10px] sm:text-xs tabular-nums">
               <thead>
                 <tr className="text-gray-400 border-b">
-                  <th className="text-left font-normal pb-1 pr-1">Gg</th>
+                  <th className="w-9 sm:w-14 text-left font-normal pb-1 pr-1">Gg</th>
                   {camere.map((c) => (
-                    <th key={c.id} className={`text-right font-semibold pb-1 px-0.5 truncate ${getCameraStyle(c.id, c.colore).testo}`}>{c.nome}</th>
+                    <th key={c.id} className={`text-right font-semibold pb-1 px-0.5 truncate ${getCameraStyle(c.id, c.colore).testo}`}>
+                      <span className="sm:hidden">{c.nome.slice(0, 3)}</span><span className="hidden sm:inline">{c.nome}</span>
+                    </th>
                   ))}
-                  <th className="text-right font-normal pb-1 pl-1">Tot. €</th>
+                  <th className="w-11 sm:w-16 text-right font-normal pb-1 pl-1">Tot. €</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,7 +189,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                   return (
                     <tr key={g} className="border-b border-gray-50">
                       <td className="py-1 pr-1 text-gray-500">
-                        {parseInt(g.slice(8), 10)}
+                        {parseInt(g.slice(8), 10)}/{parseInt(g.slice(5, 7), 10)}
                       </td>
                       {camere.map((c) => {
                         const x = celle.get(`${g}|${c.id}`);
