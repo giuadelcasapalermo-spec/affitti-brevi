@@ -854,7 +854,7 @@ export default function Dashboard() {
           </div>
 
           {/* Movimenti del periodo */}
-          <div className="bg-white rounded-lg shadow-sm p-5">
+          <div className="bg-white rounded-lg shadow-sm p-3 sm:p-5">
             <h3 className="font-semibold text-gray-700 mb-4 text-sm flex items-center gap-2">
               <BookOpen size={15} className="text-gray-600" />
               Movimenti del periodo
@@ -866,11 +866,11 @@ export default function Dashboard() {
               <table className="w-full text-xs table-fixed">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 pr-2 font-medium text-gray-400 uppercase tracking-wide text-[10px] w-20">Data</th>
+                    <th className="text-left py-2 pr-2 font-medium text-gray-400 uppercase tracking-wide text-[10px] w-11 sm:w-24">Data</th>
                     <th className="text-left py-2 pr-2 font-medium text-gray-400 uppercase tracking-wide text-[10px] hidden sm:table-cell w-20">Tipo</th>
                     <th className="text-left py-2 pr-2 font-medium text-gray-400 uppercase tracking-wide text-[10px] w-auto">Descrizione</th>
                     <th className="text-left py-2 pr-2 font-medium text-gray-400 uppercase tracking-wide text-[10px] hidden sm:table-cell w-28">Categoria</th>
-                    <th className="text-right py-2 pr-1 font-medium text-gray-400 uppercase tracking-wide text-[10px] w-24">Importo</th>
+                    <th className="text-right py-2 pr-1 font-medium text-gray-400 uppercase tracking-wide text-[10px] w-[84px] sm:w-24">Importo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -880,7 +880,10 @@ export default function Dashboard() {
                       : (COLORI_CAT_USCITA[m.categoria] ?? COLORI_CAT_USCITA['Altro']);
                     return (
                       <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="py-2 pr-2 text-gray-500 whitespace-nowrap">{fData(m.data)}</td>
+                        <td className="py-2 pr-2 text-gray-500 whitespace-nowrap">
+                          <span className="sm:hidden">{fData(m.data).slice(0, 5)}</span>
+                          <span className="hidden sm:inline">{fData(m.data)}</span>
+                        </td>
                         <td className="py-2 pr-2 hidden sm:table-cell">
                           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             m.tipo === 'entrata' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
@@ -906,7 +909,9 @@ export default function Dashboard() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-200 bg-gray-50">
-                    <td colSpan={4} className="py-2 pr-2 text-xs font-semibold text-gray-600">Saldo periodo</td>
+                    {/* colSpan diverso: su mobile Tipo e Categoria sono nascoste */}
+                    <td colSpan={2} className="sm:hidden py-2 pr-2 text-xs font-semibold text-gray-600">Saldo periodo</td>
+                    <td colSpan={4} className="hidden sm:table-cell py-2 pr-2 text-xs font-semibold text-gray-600">Saldo periodo</td>
                     <td className={`py-2 pl-2 text-right font-bold text-sm tabular-nums whitespace-nowrap ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                       {saldo >= 0 ? '+' : '−'}€{Math.abs(saldo).toFixed(2)}
                     </td>
