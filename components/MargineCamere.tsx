@@ -5,10 +5,10 @@ import { addDays, differenceInDays, format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ChevronDown } from 'lucide-react';
 import { BiancheriaStanza, CAPI_BIANCHERIA, Camera, CapoBiancheria, Prenotazione } from '@/lib/types';
-import { COSTO_PULIZIA_STANZA, camerePuliteGiorno, ricavoNotte } from '@/lib/pulizie';
+import { COSTO_CAMBIO_STANZA, COSTO_PULIZIA_CHECKOUT, TipoPulizia, costoPulizia, puliziaGiorno, ricavoNotte } from '@/lib/pulizie';
 import { getCameraStyle } from '@/lib/camera-colors';
 
-type Cella = { ricavo: number; lavanderia: number; pulizia: number; margine: number };
+type Cella = { ricavo: number; lavanderia: number; pulizia: number; tipo?: TipoPulizia; margine: number };
 
 const euro = (v: number) => `${v < 0 ? '-' : ''}€${Math.abs(v).toFixed(2)}`;
 
@@ -57,33 +57,39 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
     }
     const celle = new Map<string, Cella>();
     for (const g of giorni) {
-      const pulite = camerePuliteGiorno(prenotazioni, g);
+      const pulizie = puliziaGiorno(prenotazioni, g);
       for (const c of camere) {
         const k = `${g}|${c.id}`;
         const ricavo = ricavoNotte(prenotazioni, c.id, g);
         const lavanderia = lavPer.get(k) ?? 0;
-        const pulizia = pulite.has(c.id) || lavPer.has(k) ? COSTO_PULIZIA_STANZA : 0;
-        celle.set(k, { ricavo, lavanderia, pulizia, margine: ricavo - lavanderia - pulizia });
+        const tipo = pulizie.get(c.id);
+        const pulizia = costoPulizia(tipo);
+        celle.set(k, { ricavo, lavanderia, pulizia, tipo, margine: ricavo - lavanderia - pulizia });
       }
     }
     return { giorni, celle, lavNonAttribuita };
   }, [dal, al, prenotazioni, camere, biancheria, prezzi]);
 
   const totaliCamera = camere.map((c) => {
-    const t = { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, pulizie: 0, notti: 0 };
+    const t = { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, checkout: 0, cambi: 0 };
     for (const g of giorni) {
       const x = celle.get(`${g}|${c.id}`);
       if (!x) continue;
       t.ricavo += x.ricavo; t.lavanderia += x.lavanderia; t.pulizia += x.pulizia; t.margine += x.margine;
-      if (x.pulizia > 0) t.pulizie++;
-      if (x.ricavo > 0) t.notti++;
+      if (x.tipo === 'checkout') t.checkout++;
+      if (x.tipo === 'cambio') t.cambi++;
     }
     return { camera: c, ...t };
   });
   const tot = totaliCamera.reduce(
-    (s, t) => ({ ricavo: s.ricavo + t.ricavo, lavanderia: s.lavanderia + t.lavanderia, pulizia: s.pulizia + t.pulizia, margine: s.margine + t.margine, pulizie: s.pulizie + t.pulizie }),
-    { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, pulizie: 0 },
+    (s, t) => ({
+      ricavo: s.ricavo + t.ricavo, lavanderia: s.lavanderia + t.lavanderia, pulizia: s.pulizia + t.pulizia,
+      margine: s.margine + t.margine, checkout: s.checkout + t.checkout, cambi: s.cambi + t.cambi,
+    }),
+    { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, checkout: 0, cambi: 0 },
   );
+  const titoloPulizie = (checkout: number, cambi: number) =>
+    `${checkout} check-out × €${COSTO_PULIZIA_CHECKOUT} + ${cambi} cambi × €${COSTO_CAMBIO_STANZA}`;
   const pct = (m: number, r: number) => (r > 0 ? `${Math.round((m / r) * 100)}%` : '—');
   const giorniConValori = giorni.filter((g) => camere.some((c) => {
     const x = celle.get(`${g}|${c.id}`);
@@ -95,7 +101,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
       <div>
         <h2 className="font-semibold text-gray-700 text-sm sm:text-base">Margine lordo per stanza</h2>
         <p className="text-[11px] text-gray-400 mt-0.5">
-          Ricavo notte (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizia €{COSTO_PULIZIA_STANZA}/stanza.
+          Ricavo notte (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{COSTO_PULIZIA_CHECKOUT} per check-out, €{COSTO_CAMBIO_STANZA} per cambio).
           Costi indiretti non ancora ribaltati.
         </p>
       </div>
@@ -120,8 +126,11 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                   <td className={`py-1.5 font-semibold ${col.testo}`}>{t.camera.nome}</td>
                   <td className="py-1.5 text-right text-gray-700">{euro(t.ricavo)}</td>
                   <td className="py-1.5 text-right text-gray-500">{t.lavanderia > 0 ? `-${euro(t.lavanderia)}` : '—'}</td>
-                  <td className="py-1.5 text-right text-gray-500" title={`${t.pulizie} pulizie × €${COSTO_PULIZIA_STANZA}`}>
+                  <td className="py-1.5 text-right text-gray-500" title={titoloPulizie(t.checkout, t.cambi)}>
                     {t.pulizia > 0 ? `-${euro(t.pulizia)}` : '—'}
+                    {t.pulizia > 0 && (
+                      <div className="text-[10px] text-gray-400 leading-tight">{t.checkout} CO · {t.cambi} cambi</div>
+                    )}
                   </td>
                   <td className={`py-1.5 text-right font-semibold ${t.margine >= 0 ? 'text-green-700' : 'text-red-600'}`}>{euro(t.margine)}</td>
                   <td className="py-1.5 text-right text-gray-400">{pct(t.margine, t.ricavo)}</td>
@@ -134,7 +143,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
               <td className="pt-2">Totale</td>
               <td className="pt-2 text-right">{euro(tot.ricavo)}</td>
               <td className="pt-2 text-right">{tot.lavanderia > 0 ? `-${euro(tot.lavanderia)}` : '—'}</td>
-              <td className="pt-2 text-right" title={`${tot.pulizie} pulizie`}>{tot.pulizia > 0 ? `-${euro(tot.pulizia)}` : '—'}</td>
+              <td className="pt-2 text-right" title={titoloPulizie(tot.checkout, tot.cambi)}>{tot.pulizia > 0 ? `-${euro(tot.pulizia)}` : '—'}</td>
               <td className={`pt-2 text-right ${tot.margine >= 0 ? 'text-green-700' : 'text-red-600'}`}>{euro(tot.margine)}</td>
               <td className="pt-2 text-right text-gray-400">{pct(tot.margine, tot.ricavo)}</td>
             </tr>
@@ -188,7 +197,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                           <td
                             key={c.id}
                             className={`py-1 px-1 text-right ${x.margine >= 0 ? 'text-gray-700' : 'text-red-600'}`}
-                            title={`Ricavo ${euro(x.ricavo)} − lavanderia ${euro(x.lavanderia)} − pulizia ${euro(x.pulizia)}`}
+                            title={`Ricavo ${euro(x.ricavo)} − lavanderia ${euro(x.lavanderia)} − ${x.tipo === 'cambio' ? 'cambio' : 'pulizia check-out'} ${euro(x.pulizia)}`}
                           >
                             {euro(x.margine)}
                           </td>

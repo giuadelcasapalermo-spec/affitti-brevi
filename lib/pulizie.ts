@@ -1,8 +1,11 @@
 import { differenceInDays, parseISO } from 'date-fns';
 import type { Prenotazione } from './types';
 
-// Costo diretto della collaboratrice per ogni stanza pulita
-export const COSTO_PULIZIA_STANZA = 7;
+// Costo diretto della collaboratrice: pulizia completa al check-out, cambio per soggiorni lunghi
+export const COSTO_PULIZIA_CHECKOUT = 7;
+export const COSTO_CAMBIO_STANZA = 4;
+
+export type TipoPulizia = 'checkout' | 'cambio';
 
 // Cambio lenzuola/asciugamani ogni 3 notti trascorse (k), evitando che l'ultimo intervallo
 // prima del check-out resti di 1 sola notte: se il soggiorno (N notti) è N%3===1, l'ultimo
@@ -17,19 +20,24 @@ export function isGiornoCambio(k: number, nottiTotali: number): boolean {
   return k % 3 === 0;
 }
 
-// Stanze da pulire nel giorno (yyyy-MM-dd): check-out del giorno + cambio per soggiorni lunghi
-export function camerePuliteGiorno(prenotazioni: Prenotazione[], giorno: string): Set<number> {
-  const camere = new Set<number>();
+// Pulizie del giorno (yyyy-MM-dd) per stanza: check-out effettivo (pulizia completa) oppure
+// cambio per soggiorni lunghi; se nello stesso giorno ci sono entrambi vale il check-out
+export function puliziaGiorno(prenotazioni: Prenotazione[], giorno: string): Map<number, TipoPulizia> {
+  const pulizie = new Map<number, TipoPulizia>();
   for (const p of prenotazioni) {
     if (p.stato === 'cancellata') continue;
-    if (p.check_out === giorno) { camere.add(p.camera_id); continue; }
-    if (p.check_in <= giorno && p.check_out > giorno) {
+    if (p.check_out === giorno) { pulizie.set(p.camera_id, 'checkout'); continue; }
+    if (p.check_in <= giorno && p.check_out > giorno && !pulizie.has(p.camera_id)) {
       const k = differenceInDays(parseISO(giorno), parseISO(p.check_in));
       const n = differenceInDays(parseISO(p.check_out), parseISO(p.check_in));
-      if (isGiornoCambio(k, n)) camere.add(p.camera_id);
+      if (isGiornoCambio(k, n)) pulizie.set(p.camera_id, 'cambio');
     }
   }
-  return camere;
+  return pulizie;
+}
+
+export function costoPulizia(tipo: TipoPulizia | undefined): number {
+  return tipo === 'checkout' ? COSTO_PULIZIA_CHECKOUT : tipo === 'cambio' ? COSTO_CAMBIO_STANZA : 0;
 }
 
 // Quota di ricavo della notte (come nel calendario): importo del soggiorno diviso le notti
