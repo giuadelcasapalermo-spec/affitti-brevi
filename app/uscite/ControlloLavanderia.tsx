@@ -3,22 +3,29 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, Shirt } from 'lucide-react';
 import { CAPI_BIANCHERIA, CapoBiancheria, BiancheriaStanza, Uscita } from '@/lib/types';
+import { fData } from '@/lib/utils';
 
-// Confronta le uscite "Lavanderia" del periodo con il costo atteso calcolato dalla biancheria
-// inserita dalla collaboratrice (quantità × listino prezzi).
+// Confronta le uscite "Lavanderia" del periodo di Prima Nota con il costo atteso calcolato dalla biancheria
+// inserita dalla collaboratrice (quantità × listino prezzi). La biancheria parte da una data propria
+// (inizialmente l'inizio del filtro di Prima Nota) per compensare lo sfasamento ritiro → consegna.
 export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; al: string; uscite: Uscita[] }) {
   const [righe, setRighe] = useState<BiancheriaStanza[]>([]);
   const [prezzi, setPrezzi] = useState<Record<string, string>>({});
   const [prezziSalvati, setPrezziSalvati] = useState<Record<string, string>>({});
   const [aperto, setAperto] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [biancheriaDal, setBiancheriaDal] = useState(dal);
+
+  // Quando cambia il filtro di Prima Nota la data di inizio confronto torna a coincidere
+  useEffect(() => { setBiancheriaDal(dal); }, [dal]);
 
   useEffect(() => {
-    fetch(`/api/biancheria?dal=${dal}&al=${al}`)
+    if (!biancheriaDal || biancheriaDal > al) { setRighe([]); return; }
+    fetch(`/api/biancheria?dal=${biancheriaDal}&al=${al}`)
       .then((r) => r.json())
       .then((d) => setRighe(Array.isArray(d) ? d : []))
       .catch(() => setRighe([]));
-  }, [dal, al]);
+  }, [biancheriaDal, al]);
 
   useEffect(() => {
     fetch('/api/biancheria/prezzi')
@@ -66,7 +73,10 @@ export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; 
           <div className="text-sm font-medium text-gray-700">Controllo lavanderia</div>
           <div className="text-xs text-gray-500 flex flex-wrap gap-x-3">
             <span>Registrato <strong className="text-gray-700">€{registrato.toFixed(2)}</strong></span>
-            <span>Atteso <strong className="text-gray-700">€{atteso.toFixed(2)}</strong></span>
+            <span>
+              Atteso <strong className="text-gray-700">€{atteso.toFixed(2)}</strong>
+              {biancheriaDal !== dal && <span className="text-gray-400"> (biancheria dal {fData(biancheriaDal)})</span>}
+            </span>
             <span className={quadra ? 'text-green-600' : 'text-red-600'}>
               {quadra ? 'quadra' : `diff. ${diff > 0 ? '+' : ''}€${diff.toFixed(2)}`}
             </span>
@@ -77,9 +87,26 @@ export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; 
 
       {aperto && (
         <div className="px-4 pb-4 border-t pt-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label htmlFor="biancheria-dal" className="text-gray-600">Biancheria collaboratrice dal</label>
+            <input
+              id="biancheria-dal"
+              type="date"
+              value={biancheriaDal}
+              max={al}
+              onChange={(e) => setBiancheriaDal(e.target.value)}
+              className="border rounded px-1.5 py-1 text-xs"
+            />
+            <span className="text-xs text-gray-400">al {fData(al)}</span>
+            {biancheriaDal !== dal && (
+              <button onClick={() => setBiancheriaDal(dal)} className="text-xs text-blue-600 hover:underline">
+                Come Prima Nota
+              </button>
+            )}
+          </div>
           <p className="text-xs text-gray-500">
             Biancheria inserita dalla collaboratrice in {giorni} {giorni === 1 ? 'giorno' : 'giorni'} ({righe.length} pulizie stanza)
-            {' · '}{speseLav.length} {speseLav.length === 1 ? 'uscita' : 'uscite'} Lavanderia in Prima Nota
+            {' · '}{speseLav.length} {speseLav.length === 1 ? 'uscita' : 'uscite'} Lavanderia in Prima Nota ({fData(dal)} – {fData(al)})
           </p>
           <table className="w-full text-sm">
             <thead>
@@ -128,6 +155,12 @@ export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; 
               </tr>
             </tfoot>
           </table>
+          {!quadra && (
+            <p className="text-xs text-gray-500">
+              Le ricevute portano la data di consegna: una differenza negativa pari agli ultimi ritiri non ancora
+              fatturati è normale. Sposta la data della biancheria per allinearla alle consegne.
+            </p>
+          )}
           {prezziMancanti && (
             <p className="text-xs text-amber-700">Alcuni capi hanno quantità ma nessun prezzo: completa il listino.</p>
           )}
