@@ -14,8 +14,8 @@ const ALL_LINKS: { href: string; label: string; icon: React.ElementType; sheets:
   { href: '/prenotazioni', label: 'Prenotazioni', icon: BookOpen,       sheets: false },
   { href: '/uscite',       label: 'Prima Nota',   icon: BookMarked,    sheets: false },
   { href: '/sheets',       label: 'Sheets',       icon: Table2,        sheets: true, webOnly: true },
-  { href: '/dashboard',    label: 'Dashboard',    icon: Home,          sheets: false },
   { href: '/alloggiati',   label: 'Alloggiati',   icon: UserCheck,     sheets: false },
+  { href: '/dashboard',    label: 'Dashboard',    icon: Home,          sheets: false },
   { href: '/impostazioni', label: 'Altro',         icon: Settings,      sheets: false },
 ];
 
