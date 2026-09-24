@@ -915,7 +915,7 @@ export default function Dashboard() {
 
       {/* ═══════════════════════ SEZIONE: CONTROLLO LAVANDERIA ═══════════════════════ */}
       {sezione === 'lavanderia' && (
-        <ControlloLavanderia dal={filtroDal} al={filtroAl} uscite={uscite} apertoIniziale />
+        <ControlloLavanderia dal={filtroDal} al={filtroAl} uscite={uscite} />
       )}
 
     </div>

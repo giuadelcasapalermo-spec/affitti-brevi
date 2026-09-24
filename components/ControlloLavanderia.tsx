@@ -1,36 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronDown, Shirt } from 'lucide-react';
+import { Scale, Shirt, TrendingDown } from 'lucide-react';
 import { CAPI_BIANCHERIA, CapoBiancheria, BiancheriaStanza, Uscita } from '@/lib/types';
 import { fData } from '@/lib/utils';
 
-// Confronta le uscite "Lavanderia" del periodo di Prima Nota con il costo atteso calcolato dalla biancheria
-// inserita dalla collaboratrice (quantità × listino prezzi). La biancheria parte da una data propria
-// (inizialmente l'inizio del filtro di Prima Nota) per compensare lo sfasamento ritiro → consegna.
-export default function ControlloLavanderia({ dal, al, uscite, apertoIniziale = false }: {
-  dal: string;
-  al: string;
-  uscite: Uscita[];
-  apertoIniziale?: boolean;
-}) {
+// Confronta le uscite "Lavanderia" del periodo filtrato con il costo atteso calcolato dalla biancheria
+// inserita dalla collaboratrice nello stesso periodo (quantità × listino prezzi).
+export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; al: string; uscite: Uscita[] }) {
   const [righe, setRighe] = useState<BiancheriaStanza[]>([]);
   const [prezzi, setPrezzi] = useState<Record<string, string>>({});
   const [prezziSalvati, setPrezziSalvati] = useState<Record<string, string>>({});
-  const [aperto, setAperto] = useState(apertoIniziale);
   const [salvando, setSalvando] = useState(false);
-  const [biancheriaDal, setBiancheriaDal] = useState(dal);
-
-  // Quando cambia il filtro di Prima Nota la data di inizio confronto torna a coincidere
-  useEffect(() => { setBiancheriaDal(dal); }, [dal]);
 
   useEffect(() => {
-    if (!biancheriaDal || biancheriaDal > al) { setRighe([]); return; }
-    fetch(`/api/biancheria?dal=${biancheriaDal}&al=${al}`)
+    if (!dal || !al || dal > al) return; // periodo non valido
+    fetch(`/api/biancheria?dal=${dal}&al=${al}`)
       .then((r) => r.json())
       .then((d) => setRighe(Array.isArray(d) ? d : []))
       .catch(() => setRighe([]));
-  }, [biancheriaDal, al]);
+  }, [dal, al]);
 
   useEffect(() => {
     fetch('/api/biancheria/prezzi')
@@ -58,14 +47,7 @@ export default function ControlloLavanderia({ dal, al, uscite, apertoIniziale = 
   const giorni = new Set(righe.map((r) => r.data)).size;
   const prezziModificati = CAPI_BIANCHERIA.some((c) => (prezzi[c.key] ?? '') !== (prezziSalvati[c.key] ?? ''));
   const prezziMancanti = dettaglio.some((d) => d.qta > 0 && prezzo(d.key) === 0);
-
-  if (righe.length === 0 && speseLav.length === 0) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm p-6 text-center text-sm text-gray-400">
-        Nessuna biancheria registrata e nessuna uscita Lavanderia nel periodo
-      </div>
-    );
-  }
+  const diffLabel = quadra ? 'quadra' : `${diff > 0 ? '+' : ''}€${diff.toFixed(2)}`;
 
   async function salvaPrezzi() {
     setSalvando(true);
@@ -79,117 +61,99 @@ export default function ControlloLavanderia({ dal, al, uscite, apertoIniziale = 
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm no-print">
-      <button onClick={() => setAperto((a) => !a)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
-        <div className="bg-sky-100 rounded-full p-2 shrink-0"><Shirt size={18} className="text-sky-600" /></div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-700">Controllo lavanderia</div>
-          <div className="text-xs text-gray-500 flex flex-wrap gap-x-3">
-            <span>Registrato <strong className="text-gray-700">€{registrato.toFixed(2)}</strong></span>
-            <span>
-              Atteso <strong className="text-gray-700">€{atteso.toFixed(2)}</strong>
-              {biancheriaDal !== dal && <span className="text-gray-400"> (biancheria dal {fData(biancheriaDal)})</span>}
-            </span>
-            <span className={quadra ? 'text-green-600' : 'text-red-600'}>
-              {quadra ? 'quadra' : `diff. ${diff > 0 ? '+' : ''}€${diff.toFixed(2)}`}
-            </span>
+    <div className="space-y-4">
+      {/* Totali: stessa grafica dei KPI di dashboard e Prima Nota */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="bg-white rounded-lg shadow-sm p-2.5 sm:p-4 flex items-center gap-3">
+          <div className="hidden sm:block bg-red-100 rounded-full p-2 shrink-0"><TrendingDown size={20} className="text-red-600" /></div>
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-sm text-gray-500">Registrato</div>
+            <div className="text-base sm:text-lg font-bold text-red-600 truncate">€{registrato.toFixed(2)}</div>
           </div>
         </div>
-        <ChevronDown size={18} className={`text-gray-400 transition-transform ${aperto ? 'rotate-180' : ''}`} />
-      </button>
+        <div className="bg-white rounded-lg shadow-sm p-2.5 sm:p-4 flex items-center gap-3">
+          <div className="hidden sm:block bg-sky-100 rounded-full p-2 shrink-0"><Shirt size={20} className="text-sky-600" /></div>
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-sm text-gray-500">Atteso</div>
+            <div className="text-base sm:text-lg font-bold text-gray-800 truncate">€{atteso.toFixed(2)}</div>
+          </div>
+        </div>
+        <div className={`rounded-lg shadow-sm p-2.5 sm:p-4 flex items-center gap-3 ${quadra ? 'bg-white' : 'bg-red-50'}`}>
+          <div className={`hidden sm:block rounded-full p-2 shrink-0 ${quadra ? 'bg-green-100' : 'bg-red-100'}`}>
+            <Scale size={20} className={quadra ? 'text-green-600' : 'text-red-600'} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-sm text-gray-500">Differenza</div>
+            <div className={`text-base sm:text-lg font-bold truncate ${quadra ? 'text-green-700' : 'text-red-600'}`}>{diffLabel}</div>
+          </div>
+        </div>
+      </div>
 
-      {aperto && (
-        <div className="px-4 pb-4 border-t pt-3 space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <label htmlFor="biancheria-dal" className="text-gray-600">Biancheria collaboratrice dal</label>
-            <input
-              id="biancheria-dal"
-              type="date"
-              value={biancheriaDal}
-              max={al}
-              onChange={(e) => setBiancheriaDal(e.target.value)}
-              className="border rounded px-1.5 py-1 text-xs"
-            />
-            <span className="text-xs text-gray-400">al {fData(al)}</span>
-            {biancheriaDal !== dal && (
-              <button onClick={() => setBiancheriaDal(dal)} className="text-xs text-blue-600 hover:underline">
-                Come Prima Nota
-              </button>
-            )}
-          </div>
+      <div className="bg-white rounded-lg shadow-sm p-4 space-y-3 no-print">
+        <p className="text-xs text-gray-500">
+          {fData(dal)} – {fData(al)} · biancheria inserita dalla collaboratrice in {giorni} {giorni === 1 ? 'giorno' : 'giorni'} ({righe.length} righe)
+          {' · '}{speseLav.length} {speseLav.length === 1 ? 'uscita' : 'uscite'} Lavanderia in Prima Nota
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-gray-400 border-b">
+              <th className="text-left font-normal pb-1">Capo</th>
+              <th className="text-right font-normal pb-1">Q.tà</th>
+              <th className="text-right font-normal pb-1">Prezzo €</th>
+              <th className="text-right font-normal pb-1">Totale</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dettaglio.map((d) => (
+              <tr key={d.key} className="border-b border-gray-50">
+                <td className="py-1 text-gray-700">{d.label}</td>
+                <td className="py-1 text-right text-gray-700">{d.qta}</td>
+                <td className="py-1 text-right">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={prezzi[d.key] ?? ''}
+                    onChange={(e) => setPrezzi((p) => ({ ...p, [d.key]: e.target.value }))}
+                    className={`w-20 text-right border rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-sky-400 ${
+                      d.qta > 0 && prezzo(d.key) === 0 ? 'border-amber-300 bg-amber-50' : 'border-gray-300'
+                    }`}
+                  />
+                </td>
+                <td className="py-1 text-right text-gray-700">€{d.totale.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="font-semibold text-gray-800">
+              <td className="pt-2" colSpan={3}>Costo atteso</td>
+              <td className="pt-2 text-right">€{atteso.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        {!quadra && (
           <p className="text-xs text-gray-500">
-            Biancheria inserita dalla collaboratrice in {giorni} {giorni === 1 ? 'giorno' : 'giorni'} ({righe.length} pulizie stanza)
-            {' · '}{speseLav.length} {speseLav.length === 1 ? 'uscita' : 'uscite'} Lavanderia in Prima Nota ({fData(dal)} – {fData(al)})
+            Le ricevute portano la data di consegna: una differenza negativa pari agli ultimi ritiri non ancora
+            fatturati è normale.
           </p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-400 border-b">
-                <th className="text-left font-normal pb-1">Capo</th>
-                <th className="text-right font-normal pb-1">Q.tà</th>
-                <th className="text-right font-normal pb-1">Prezzo €</th>
-                <th className="text-right font-normal pb-1">Totale</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dettaglio.map((d) => (
-                <tr key={d.key} className="border-b border-gray-50">
-                  <td className="py-1 text-gray-700">{d.label}</td>
-                  <td className="py-1 text-right text-gray-700">{d.qta}</td>
-                  <td className="py-1 text-right">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={prezzi[d.key] ?? ''}
-                      onChange={(e) => setPrezzi((p) => ({ ...p, [d.key]: e.target.value }))}
-                      className={`w-20 text-right border rounded px-1.5 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-sky-400 ${
-                        d.qta > 0 && prezzo(d.key) === 0 ? 'border-amber-300 bg-amber-50' : 'border-gray-300'
-                      }`}
-                    />
-                  </td>
-                  <td className="py-1 text-right text-gray-700">€{d.totale.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="font-semibold text-gray-800">
-                <td className="pt-2" colSpan={3}>Costo atteso</td>
-                <td className="pt-2 text-right">€{atteso.toFixed(2)}</td>
-              </tr>
-              <tr className="font-semibold text-gray-800">
-                <td colSpan={3}>Registrato in Prima Nota</td>
-                <td className="text-right">€{registrato.toFixed(2)}</td>
-              </tr>
-              <tr className={`font-semibold ${quadra ? 'text-green-600' : 'text-red-600'}`}>
-                <td colSpan={3}>Differenza</td>
-                <td className="text-right">{quadra ? 'quadra' : `${diff > 0 ? '+' : ''}€${diff.toFixed(2)}`}</td>
-              </tr>
-            </tfoot>
-          </table>
-          {!quadra && (
-            <p className="text-xs text-gray-500">
-              Le ricevute portano la data di consegna: una differenza negativa pari agli ultimi ritiri non ancora
-              fatturati è normale. Sposta la data della biancheria per allinearla alle consegne.
-            </p>
-          )}
-          {prezziMancanti && (
-            <p className="text-xs text-amber-700">Alcuni capi hanno quantità ma nessun prezzo: completa il listino.</p>
-          )}
-          {prezziModificati && (
-            <div className="flex justify-end">
-              <button
-                onClick={salvaPrezzi}
-                disabled={salvando}
-                className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded hover:bg-sky-700 disabled:opacity-50"
-              >
-                Salva listino
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+        {prezziMancanti && (
+          <p className="text-xs text-amber-700">Alcuni capi hanno quantità ma nessun prezzo: completa il listino.</p>
+        )}
+        {prezziModificati && (
+          <div className="flex justify-end">
+            <button
+              onClick={salvaPrezzi}
+              disabled={salvando}
+              className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded hover:bg-sky-700 disabled:opacity-50"
+            >
+              Salva listino
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
