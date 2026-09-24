@@ -992,7 +992,7 @@ export default function CalendarioPage() {
                       <div key={id} className="rounded-lg border border-gray-200 p-2">
                         <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
                           <div className={`w-2 h-2 rounded-full ${st.dot}`} />
-                          {cam?.nome ?? `Camera ${id}`}
+                          {id === 0 ? 'Da buono lavanderia' : (cam?.nome ?? `Camera ${id}`)}
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                           {CAPI_BIANCHERIA.map((c) => (
