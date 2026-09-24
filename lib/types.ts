@@ -190,3 +190,20 @@ export interface Alloggiato {
   luogo_rilascio: string;
   created_at: string;
 }
+
+// Biancheria consegnata alla lavanderia per stanza pulita in un giorno (inserita dalla collaboratrice).
+// Le voci ricalcano il buono di consegna della lavanderia.
+export const CAPI_BIANCHERIA = [
+  { key: 'lenz_sing',   label: 'Lenz. sing.' },
+  { key: 'lenz_matr',   label: 'Lenz. matr.' },
+  { key: 'federe',      label: 'Federe' },
+  { key: 'telo_doccia', label: 'T. doccia' },
+  { key: 'telo_viso',   label: 'T. viso' },
+  { key: 'telo_ospite', label: 'T. ospite (bidè)' },
+  { key: 'tappetini',   label: 'Tappetini' },
+  { key: 'copriletto',  label: 'Copriletto' },
+  { key: 'piumone',     label: 'Piumone' },
+] as const;
+export type CapoBiancheria = typeof CAPI_BIANCHERIA[number]['key'];
+
+export type BiancheriaStanza = { data: string; camera_id: number; updated_at?: string } & Record<CapoBiancheria, number>;

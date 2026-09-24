@@ -11,6 +11,7 @@ import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
+import ControlloLavanderia from './ControlloLavanderia';
 
 /* ── colori ───────────────────────────────────────────── */
 const COL_USCITA: Record<CategoriaUscita, string> = {
@@ -573,6 +574,8 @@ export default function PrimaNotaPage() {
           <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0" title="Mese successivo"><ChevronRight size={16} /></button>
         </div>
       </div>
+
+      <ControlloLavanderia dal={filtroDal} al={filtroAl} uscite={uscite} />
 
       {/* Contenuto movimenti */}
       <>

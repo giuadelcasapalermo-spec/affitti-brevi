@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Fragment, useMemo } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
-import { Prenotazione } from '@/lib/types';
+import { Prenotazione, CAPI_BIANCHERIA, CapoBiancheria, BiancheriaStanza } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { fData } from '@/lib/utils';
 import {
@@ -22,7 +22,7 @@ import {
   differenceInDays,
 } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, X, RefreshCw, LayoutGrid, CalendarDays, Receipt } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, RefreshCw, LayoutGrid, CalendarDays, Receipt, Plus } from 'lucide-react';
 import { getCameraStyle } from '@/lib/camera-colors';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSoloCalendario } from '@/hooks/useSoloCalendario';
@@ -78,6 +78,10 @@ export default function CalendarioPage() {
   const [impSoggiornoRighe, setImpSoggiornoRighe] = useState<Record<string, string>>({});
   const [impSoggiornoSalvando, setImpSoggiornoSalvando] = useState(false);
   const [impSoggiornoMsg, setImpSoggiornoMsg] = useState<string | null>(null);
+  // Biancheria per la lavanderia: conteggi per stanza pulita nel giorno (camera_id → capo → valore input)
+  const [biancheriaRighe, setBiancheriaRighe] = useState<Record<number, Partial<Record<CapoBiancheria, string>>>>({});
+  const [biancheriaCamere, setBiancheriaCamere] = useState<number[]>([]);
+  const [biancheriaSalvando, setBiancheriaSalvando] = useState(false);
   const [vistaCompatta, setVistaCompatta] = usePersistedState<boolean>('cal-compatta', false, { storage: 'local' });
   const vistaEffettiva = soloCalendario ? true : vistaCompatta;
 
@@ -119,6 +123,50 @@ export default function CalendarioPage() {
     setImpSoggiornoRighe(iniziali);
     setImpSoggiornoValore(tassaPrevistaGiorno > 0 ? tassaPrevistaGiorno.toFixed(2) : '');
     setImpSoggiornoAperto(true);
+    caricaBiancheria();
+  }
+
+  // Stanze pulite nel giorno (check-out + cambio) più quelle già salvate per quella data
+  async function caricaBiancheria() {
+    const daPulire = [...new Set([...pulizieCheckout, ...pulizieCambio].map((p) => p.camera_id))];
+    setBiancheriaCamere(daPulire.sort((a, b) => a - b));
+    setBiancheriaRighe({});
+    const res = await fetch(`/api/biancheria?data=${giornoStr}`);
+    if (!res.ok) return;
+    const salvate: BiancheriaStanza[] = await res.json();
+    if (!Array.isArray(salvate)) return;
+    const righe: Record<number, Partial<Record<CapoBiancheria, string>>> = {};
+    salvate.forEach((r) => {
+      righe[r.camera_id] = {};
+      CAPI_BIANCHERIA.forEach((c) => { if (r[c.key] > 0) righe[r.camera_id][c.key] = String(r[c.key]); });
+    });
+    setBiancheriaRighe(righe);
+    setBiancheriaCamere([...new Set([...daPulire, ...salvate.map((r) => r.camera_id)])].sort((a, b) => a - b));
+  }
+
+  async function salvaBiancheria() {
+    const righe = biancheriaCamere.map((id) => {
+      const riga: Record<string, number> = { camera_id: id };
+      CAPI_BIANCHERIA.forEach((c) => { riga[c.key] = parseInt(biancheriaRighe[id]?.[c.key] ?? '', 10) || 0; });
+      return riga;
+    });
+    await fetch('/api/biancheria', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: giornoStr, righe }),
+    });
+  }
+
+  async function salvaSoloBiancheria() {
+    setBiancheriaSalvando(true);
+    try {
+      await salvaBiancheria();
+      setImpSoggiornoAperto(false);
+      setImpSoggiornoMsg('Biancheria salvata');
+      setTimeout(() => setImpSoggiornoMsg(null), 6000);
+    } finally {
+      setBiancheriaSalvando(false);
+    }
   }
 
   async function salvaImpSoggiorno() {
@@ -158,6 +206,7 @@ export default function CalendarioPage() {
             fonte_pagamento: 'Contanti',
           }),
         }),
+        salvaBiancheria(),
         ...righeTrovate.map((r) => fetch('/api/tassa-soggiorno', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -936,10 +985,76 @@ export default function CalendarioPage() {
                   </div>
                 )}
               </div>
+
+              {/* Biancheria consegnata alla lavanderia, per stanza pulita */}
+              <div className="pt-3 border-t">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Biancheria lavanderia ({biancheriaCamere.length} {biancheriaCamere.length === 1 ? 'stanza' : 'stanze'})
+                </p>
+                {biancheriaCamere.length === 0 && (
+                  <p className="text-sm text-gray-400 mb-2">Nessuna stanza da pulire in questo giorno</p>
+                )}
+                <div className="space-y-3">
+                  {biancheriaCamere.map((id) => {
+                    const cam = camere.find((c) => c.id === id);
+                    const st = getCameraStyle(id, cam?.colore);
+                    return (
+                      <div key={id} className="rounded-lg border border-gray-200 p-2">
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                          <div className={`w-2 h-2 rounded-full ${st.dot}`} />
+                          {cam?.nome ?? `Camera ${id}`}
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {CAPI_BIANCHERIA.map((c) => (
+                            <label key={c.key} className="block">
+                              <span className="block text-[10px] leading-tight text-gray-500 truncate">{c.label}</span>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min="0"
+                                step="1"
+                                placeholder="0"
+                                value={biancheriaRighe[id]?.[c.key] ?? ''}
+                                onChange={(e) => setBiancheriaRighe((prev) => ({ ...prev, [id]: { ...prev[id], [c.key]: e.target.value } }))}
+                                className="w-full text-right border border-gray-300 rounded px-1.5 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {camere.filter((c) => !biancheriaCamere.includes(c.id)).length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-2 text-sm text-gray-500">
+                    <Plus size={14} />
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        if (id) setBiancheriaCamere((prev) => [...prev, id].sort((a, b) => a - b));
+                      }}
+                      className="border rounded px-2 py-1 text-sm bg-white"
+                    >
+                      <option value="">Aggiungi stanza…</option>
+                      {camere.filter((c) => !biancheriaCamere.includes(c.id)).map((c) => (
+                        <option key={c.id} value={c.id}>{c.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex justify-end gap-2 px-6 py-4 border-t">
+            <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t">
               <button onClick={() => setImpSoggiornoAperto(false)} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">
                 Annulla
+              </button>
+              <button
+                onClick={salvaSoloBiancheria}
+                disabled={biancheriaSalvando || impSoggiornoSalvando}
+                className="px-4 py-2 text-sm border border-amber-300 text-amber-700 rounded hover:bg-amber-50 disabled:opacity-50"
+              >
+                Salva solo biancheria
               </button>
               <button
                 onClick={salvaImpSoggiorno}
