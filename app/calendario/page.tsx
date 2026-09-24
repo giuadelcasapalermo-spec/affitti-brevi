@@ -24,6 +24,7 @@ import {
 import { it } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, X, RefreshCw, LayoutGrid, CalendarDays, Receipt, Plus } from 'lucide-react';
 import { getCameraStyle } from '@/lib/camera-colors';
+import { isGiornoCambio } from '@/lib/pulizie';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSoloCalendario } from '@/hooks/useSoloCalendario';
 
@@ -229,19 +230,6 @@ export default function CalendarioPage() {
     const ci = parseISO(p.check_in);
     const co = parseISO(p.check_out);
     return !isBefore(day, ci) && isBefore(day, co);
-  }
-
-  // Cambio lenzuola/asciugamani ogni 3 notti trascorse (k), evitando che l'ultimo intervallo
-  // prima del check-out resti di 1 sola notte: se il soggiorno (N notti) è N%3===1, l'ultimo
-  // cambio "naturale" (a k = N-1) viene anticipato a k = N-2, così l'ultimo intervallo è di 2 notti.
-  // Es. 4 notti → cambio a k=2 (invece di k=3); 7 notti → cambio a k=3 e k=5 (invece di k=3 e k=6).
-  function isGiornoCambio(k: number, nottiTotali: number): boolean {
-    if (k <= 0) return false;
-    if (nottiTotali % 3 === 1) {
-      if (k === nottiTotali - 1) return false; // rimpiazzato da k = nottiTotali - 2
-      if (k === nottiTotali - 2) return true;
-    }
-    return k % 3 === 0;
   }
 
   function getDayInfo(day: Date, cameraId: number) {

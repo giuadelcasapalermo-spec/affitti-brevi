@@ -8,11 +8,16 @@ import { fData } from '@/lib/utils';
 // Confronta le uscite "Lavanderia" del periodo di Prima Nota con il costo atteso calcolato dalla biancheria
 // inserita dalla collaboratrice (quantità × listino prezzi). La biancheria parte da una data propria
 // (inizialmente l'inizio del filtro di Prima Nota) per compensare lo sfasamento ritiro → consegna.
-export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; al: string; uscite: Uscita[] }) {
+export default function ControlloLavanderia({ dal, al, uscite, apertoIniziale = false }: {
+  dal: string;
+  al: string;
+  uscite: Uscita[];
+  apertoIniziale?: boolean;
+}) {
   const [righe, setRighe] = useState<BiancheriaStanza[]>([]);
   const [prezzi, setPrezzi] = useState<Record<string, string>>({});
   const [prezziSalvati, setPrezziSalvati] = useState<Record<string, string>>({});
-  const [aperto, setAperto] = useState(false);
+  const [aperto, setAperto] = useState(apertoIniziale);
   const [salvando, setSalvando] = useState(false);
   const [biancheriaDal, setBiancheriaDal] = useState(dal);
 
@@ -54,7 +59,13 @@ export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; 
   const prezziModificati = CAPI_BIANCHERIA.some((c) => (prezzi[c.key] ?? '') !== (prezziSalvati[c.key] ?? ''));
   const prezziMancanti = dettaglio.some((d) => d.qta > 0 && prezzo(d.key) === 0);
 
-  if (righe.length === 0 && speseLav.length === 0) return null;
+  if (righe.length === 0 && speseLav.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 text-center text-sm text-gray-400">
+        Nessuna biancheria registrata e nessuna uscita Lavanderia nel periodo
+      </div>
+    );
+  }
 
   async function salvaPrezzi() {
     setSalvando(true);

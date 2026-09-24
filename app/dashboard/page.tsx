@@ -6,10 +6,12 @@ import { Prenotazione, Uscita, Entrata, CATEGORIE_USCITA, CATEGORIE_ENTRATA } fr
 import { useCamere } from '@/hooks/useCamere';
 import { isWithinInterval, parseISO, differenceInDays, format, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from 'date-fns';
 import { fData } from '@/lib/utils';
-import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet } from 'lucide-react';
+import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet, Shirt } from 'lucide-react';
 import { useStruttura } from '@/hooks/useStruttura';
 import { ContoCorrente } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
+import ControlloLavanderia from '@/components/ControlloLavanderia';
+import MargineCamere from '@/components/MargineCamere';
 import { ComposedChart, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 
@@ -72,7 +74,7 @@ export default function Dashboard() {
   const [filtroDal, setFiltroDal] = usePersistedState('dash-dal', DEFAULT_DAL);
   const [filtroAl, setFiltroAl]   = usePersistedState('dash-al',  DEFAULT_AL);
   const [filtroCamera, setFiltroCamera] = usePersistedState<number | 'tutte'>('dash-camera', 'tutte');
-  const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota'>('dash-sezione', 'camere');
+  const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota' | 'lavanderia'>('dash-sezione', 'camere');
 
   const carica = useCallback(() => {
     fetch('/api/prenotazioni')
@@ -293,14 +295,14 @@ export default function Dashboard() {
               syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
             }`}>{syncMsg}</span>
           )}
-          <button
+          {sezione !== 'lavanderia' && <button
             onClick={() => sezione === 'camere' ? scaricaExcelCamere() : scaricaExcelPrimaNota()}
             title="Esporta Excel"
             className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
           >
             <FileSpreadsheet size={14} className="text-green-600" />
             <span className="hidden sm:inline">Excel</span>
-          </button>
+          </button>}
           <button onClick={() => window.print()} title="Stampa / Salva PDF"
             className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
           >
@@ -341,6 +343,15 @@ export default function Dashboard() {
         >
           <BookOpen size={14} />
           Analisi Prima Nota
+        </button>
+        <button
+          onClick={() => setSezione('lavanderia')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            sezione === 'lavanderia' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Shirt size={14} />
+          Controllo Lavanderia
         </button>
       </div>
 
@@ -544,6 +555,13 @@ export default function Dashboard() {
               </div>
             );
           })()}
+
+          <MargineCamere
+            prenotazioni={prenotazioni}
+            camere={camere.filter((c) => filtroCamera === 'tutte' || c.id === filtroCamera).sort((a, b) => a.id - b.id)}
+            dal={filtroDal}
+            al={filtroAl}
+          />
 
           {/* Andamento prenotazioni per stanza — desktop */}
           {(() => {
@@ -893,6 +911,11 @@ export default function Dashboard() {
           </div>
 
         </div>
+      )}
+
+      {/* ═══════════════════════ SEZIONE: CONTROLLO LAVANDERIA ═══════════════════════ */}
+      {sezione === 'lavanderia' && (
+        <ControlloLavanderia dal={filtroDal} al={filtroAl} uscite={uscite} apertoIniziale />
       )}
 
     </div>
