@@ -149,10 +149,6 @@ export default function Dashboard() {
     (p) => p.check_in >= filtroDal && p.check_in <= filtroAl
   ).length;
 
-  const camereImpegnate = camere.filter((c) =>
-    prenNelPeriodo.some((p) => p.camera_id === c.id)
-  );
-
   function nottiInPeriodo(p: Prenotazione): number {
     const fineEsclusiva = format(addDays(parseISO(filtroAl), 1), 'yyyy-MM-dd');
     const ci = p.check_in  >= filtroDal     ? p.check_in  : filtroDal;
@@ -167,6 +163,12 @@ export default function Dashboard() {
     return { camera, notti, ricavo };
   });
   const maxNotti = Math.max(1, ...statsCamera.map((s) => s.notti));
+
+  // Occupazione: notti vendute nel periodo su notti disponibili (stanze × giorni del periodo)
+  const giorniPeriodo = Math.max(0, differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1);
+  const nottiDisponibili = (filtroCamera === 'tutte' ? camere.length : 1) * giorniPeriodo;
+  const nottiOccupate = statsCamera.reduce((s, x) => s + x.notti, 0);
+  const occupazionePct = nottiDisponibili > 0 ? Math.round((nottiOccupate / nottiDisponibili) * 100) : 0;
 
   // ── Prima Nota ──────────────────────────────────────────────
   const uscitePeriodoAll = uscite.filter(u => u.data >= filtroDal && u.data <= filtroAl);
@@ -358,8 +360,9 @@ export default function Dashboard() {
       {/* KPI mobile compatto */}
       <div className="sm:hidden print-hidden bg-white rounded-lg shadow-sm px-4 py-3 grid grid-cols-3 gap-y-3 divide-x divide-gray-100">
         <div className="text-center">
-          <div className="text-[11px] text-gray-400">Camere</div>
-          <div className="text-base font-bold text-gray-800">{camereImpegnate.length}/{filtroCamera === 'tutte' ? camere.length : 1}</div>
+          <div className="text-[11px] text-gray-400">Notti occ.</div>
+          <div className="text-base font-bold text-gray-800">{nottiOccupate}/{nottiDisponibili}</div>
+          <div className="text-[10px] text-gray-400 leading-tight">{occupazionePct}%</div>
         </div>
         <div className="text-center">
           <div className="text-[11px] text-gray-400">Previsionali</div>
@@ -388,8 +391,11 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-blue-100 rounded-full p-2"><BedDouble size={20} className="text-blue-600" /></div>
           <div>
-            <div className="text-sm text-gray-500">Camere nel periodo</div>
-            <div className="text-lg font-bold text-gray-800">{camereImpegnate.length} / {filtroCamera === 'tutte' ? camere.length : 1}</div>
+            <div className="text-sm text-gray-500">Notti occupate</div>
+            <div className="text-lg font-bold text-gray-800">
+              {nottiOccupate} / {nottiDisponibili}
+              <span className="ml-1.5 text-sm font-medium text-gray-400">{occupazionePct}%</span>
+            </div>
           </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
