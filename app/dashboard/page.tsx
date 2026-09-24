@@ -325,33 +325,33 @@ export default function Dashboard() {
       </div>
 
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-full sm:w-fit">
         <button
           onClick={() => setSezione('camere')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'camere' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <BarChart2 size={14} />
-          Performance Camere
+          <span className="sm:hidden">Camere</span><span className="hidden sm:inline">Performance Camere</span>
         </button>
         <button
           onClick={() => setSezione('prima_nota')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'prima_nota' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <BookOpen size={14} />
-          Analisi Prima Nota
+          <span className="sm:hidden">Prima Nota</span><span className="hidden sm:inline">Analisi Prima Nota</span>
         </button>
         <button
           onClick={() => setSezione('lavanderia')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'lavanderia' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Shirt size={14} />
-          Controllo Lavanderia
+          <span className="sm:hidden">Lavanderia</span><span className="hidden sm:inline">Controllo Lavanderia</span>
         </button>
       </div>
 
