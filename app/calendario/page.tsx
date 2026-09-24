@@ -981,6 +981,11 @@ export default function CalendarioPage() {
                         <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
                           <div className={`w-2 h-2 rounded-full ${st.dot}`} />
                           {id === 0 ? 'Da buono lavanderia' : (cam?.nome ?? `Camera ${id}`)}
+                          {pulizieCheckout.some((p) => p.camera_id === id) ? (
+                            <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">Check-out</span>
+                          ) : pulizieCambio.some((p) => p.camera_id === id) ? (
+                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Cambio</span>
+                          ) : null}
                         </div>
                         <div className="grid grid-cols-3 gap-1.5">
                           {CAPI_BIANCHERIA.map((c) => (
