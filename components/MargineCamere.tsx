@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, parseISO } from 'date-fns';
-import { it } from 'date-fns/locale';
 import { ChevronDown } from 'lucide-react';
 import { BiancheriaStanza, CAPI_BIANCHERIA, Camera, CapoBiancheria, Prenotazione } from '@/lib/types';
 import { COSTO_CAMBIO_STANZA, COSTO_PULIZIA_CHECKOUT, TipoPulizia, costoPulizia, puliziaGiorno, ricavoNotte } from '@/lib/pulizie';
@@ -11,6 +10,8 @@ import { getCameraStyle } from '@/lib/camera-colors';
 type Cella = { ricavo: number; lavanderia: number; pulizia: number; tipo?: TipoPulizia; margine: number };
 
 const euro = (v: number) => `${v < 0 ? '-' : ''}€${Math.abs(v).toFixed(2)}`;
+// Dettaglio giornaliero compatto: euro interi senza simbolo (indicato nell'intestazione)
+const euro0 = (v: number) => String(Math.round(v));
 
 // Margine lordo giornaliero per stanza: ricavo della notte (come nel calendario, tassa di soggiorno
 // esclusa perché partita di giro) − lavanderia (biancheria segnata dalla collaboratrice × listino)
@@ -173,11 +174,11 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
             <table className="w-full text-[11px] sm:text-xs tabular-nums">
               <thead>
                 <tr className="text-gray-400 border-b">
-                  <th className="text-left font-normal pb-1 pr-2">Giorno</th>
+                  <th className="text-left font-normal pb-1 pr-1">Gg</th>
                   {camere.map((c) => (
-                    <th key={c.id} className={`text-right font-semibold pb-1 px-1 ${getCameraStyle(c.id, c.colore).testo}`}>{c.nome}</th>
+                    <th key={c.id} className={`text-right font-semibold pb-1 px-0.5 truncate ${getCameraStyle(c.id, c.colore).testo}`}>{c.nome}</th>
                   ))}
-                  <th className="text-right font-normal pb-1 pl-2">Totale</th>
+                  <th className="text-right font-normal pb-1 pl-1">Tot. €</th>
                 </tr>
               </thead>
               <tbody>
@@ -185,29 +186,40 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                   const totGiorno = camere.reduce((s, c) => s + (celle.get(`${g}|${c.id}`)?.margine ?? 0), 0);
                   return (
                     <tr key={g} className="border-b border-gray-50">
-                      <td className="py-1 pr-2 text-gray-500 whitespace-nowrap capitalize">
-                        {format(parseISO(g), 'EEE d/MM', { locale: it })}
+                      <td className="py-1 pr-1 text-gray-500">
+                        {parseInt(g.slice(8), 10)}
                       </td>
                       {camere.map((c) => {
                         const x = celle.get(`${g}|${c.id}`);
                         if (!x || (!x.ricavo && !x.lavanderia && !x.pulizia)) {
-                          return <td key={c.id} className="py-1 px-1 text-right text-gray-300">—</td>;
+                          return <td key={c.id} className="py-1 px-0.5 text-right text-gray-300">—</td>;
                         }
                         return (
                           <td
                             key={c.id}
-                            className={`py-1 px-1 text-right ${x.margine >= 0 ? 'text-gray-700' : 'text-red-600'}`}
+                            className={`py-1 px-0.5 text-right ${x.margine >= 0 ? 'text-gray-700' : 'text-red-600'}`}
                             title={`Ricavo ${euro(x.ricavo)} − lavanderia ${euro(x.lavanderia)} − ${x.tipo === 'cambio' ? 'cambio' : 'pulizia check-out'} ${euro(x.pulizia)}`}
                           >
-                            {euro(x.margine)}
+                            {euro0(x.margine)}
                           </td>
                         );
                       })}
-                      <td className={`py-1 pl-2 text-right font-semibold ${totGiorno >= 0 ? 'text-green-700' : 'text-red-600'}`}>{euro(totGiorno)}</td>
+                      <td className={`py-1 pl-1 text-right font-semibold ${totGiorno >= 0 ? 'text-green-700' : 'text-red-600'}`}>{euro0(totGiorno)}</td>
                     </tr>
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="font-semibold border-t">
+                  <td className="pt-1.5 pr-1 text-gray-500">Tot</td>
+                  {totaliCamera.map((t) => (
+                    <td key={t.camera.id} className={`pt-1.5 px-0.5 text-right ${t.margine >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                      {euro0(t.margine)}
+                    </td>
+                  ))}
+                  <td className={`pt-1.5 pl-1 text-right ${tot.margine >= 0 ? 'text-green-700' : 'text-red-600'}`}>{euro0(tot.margine)}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )
