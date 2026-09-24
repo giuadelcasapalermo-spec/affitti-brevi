@@ -39,7 +39,9 @@ export default function ControlloLavanderia({ dal, al, uscite }: { dal: string; 
   }, []);
 
   const prezzo = (k: CapoBiancheria) => parseFloat((prezzi[k] ?? '').replace(',', '.')) || 0;
-  const dettaglio = CAPI_BIANCHERIA.map((c) => {
+  // Lenzuola singole in fondo (dopo piumone): voce usata raramente
+  const capiOrdinati = [...CAPI_BIANCHERIA.filter((c) => c.key !== 'lenz_sing'), ...CAPI_BIANCHERIA.filter((c) => c.key === 'lenz_sing')];
+  const dettaglio = capiOrdinati.map((c) => {
     const qta = righe.reduce((s, r) => s + (Number(r[c.key]) || 0), 0);
     return { ...c, qta, totale: qta * prezzo(c.key) };
   });
