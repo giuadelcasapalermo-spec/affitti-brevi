@@ -192,17 +192,44 @@ export interface SyncResult {
   riattivate?: Prenotazione[];
 }
 
-// ── UID iCal da ignorare permanentemente (blocchi/prenotazioni fantasma eliminate manualmente) ──
-export async function leggiUidIgnorati(): Promise<Set<string>> {
-  const rows = await sql`SELECT chiave FROM impostazioni WHERE tipo = 'ical_ignora'`;
-  return new Set(rows.map((r) => r.chiave as string));
+// ── UID iCal da ignorare (blocchi/prenotazioni fantasma eliminate manualmente) ──
+// Booking.com riusa lo stesso UID per la stessa finestra camera+periodo: quando un soggiorno
+// adiacente viene prenotato il blocco si allarga MANTENENDO l'UID (verificato: Blue
+// 25/09→05/10/2026, UID eliminato a mano quando il blocco era un doppione, poi allargato per
+// includere una prenotazione nuova che restava invisibile). Ignorare l'UID per sempre fa quindi
+// perdere prenotazioni reali: lo ignoriamo solo finché il feed lo ripresenta con le STESSE date.
+// valore = "camera" (date non ancora note) oppure "camera|check_in|check_out".
+export interface UidIgnorato {
+  check_in?: string;
+  check_out?: string;
 }
 
+export async function leggiUidIgnorati(): Promise<Map<string, UidIgnorato>> {
+  const rows = await sql`SELECT chiave, valore FROM impostazioni WHERE tipo = 'ical_ignora'`;
+  return new Map(rows.map((r) => {
+    const [, check_in, check_out] = String(r.valore ?? '').split('|');
+    return [r.chiave as string, { check_in: check_in || undefined, check_out: check_out || undefined }];
+  }));
+}
+
+// All'eliminazione si salva solo la camera: le date vengono fissate al sync successivo con
+// quelle del FEED (quelle in DB possono essere state ristrette dalla riconciliazione).
 export async function ignoraUidIcal(uid: string, cameraId: number): Promise<void> {
   await sql`
     INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('ical_ignora', ${uid}, ${String(cameraId)})
     ON CONFLICT (tipo, chiave) DO NOTHING
   `;
+}
+
+async function fissaDateUidIgnorato(uid: string, cameraId: number, checkIn: string, checkOut: string): Promise<void> {
+  await sql`
+    UPDATE impostazioni SET valore = ${`${cameraId}|${checkIn}|${checkOut}`}
+    WHERE tipo = 'ical_ignora' AND chiave = ${uid}
+  `;
+}
+
+async function rimuoviUidIgnorato(uid: string): Promise<void> {
+  await sql`DELETE FROM impostazioni WHERE tipo = 'ical_ignora' AND chiave = ${uid}`;
 }
 
 export async function sincronizzaCalendario(
@@ -254,8 +281,25 @@ export async function sincronizzaCalendario(
   const daAggiornare = new Map<string, Prenotazione>();
 
   for (const ev of eventiRemoti) {
-    if (uidIgnorati.has(ev.uid)) continue;
     if (isBloccoGenerico(ev.summary, ev.start, ev.end)) continue; // blocco di disponibilità, non una prenotazione reale
+
+    const ignorato = uidIgnorati.get(ev.uid);
+    if (ignorato) {
+      const inizio = format(ev.start, 'yyyy-MM-dd');
+      const fine = format(ev.end, 'yyyy-MM-dd');
+      if (!ignorato.check_in || !ignorato.check_out) {
+        await fissaDateUidIgnorato(ev.uid, cameraId, inizio, fine);
+        continue;
+      }
+      // Il feed taglia i giorni passati: un blocco in corso "inizia" sempre oggi, quindi il
+      // solo avanzamento dell'inizio fino a oggi non è un cambiamento.
+      const inizioUguale = ignorato.check_in === inizio || (inizio === oggi && ignorato.check_in <= oggi);
+      if (inizioUguale && ignorato.check_out === fine) continue;
+      // Stesso UID ma date cambiate: Booking ha allargato/spostato il blocco, che quindi
+      // contiene qualcosa di nuovo. Lo reimportiamo (la riconciliazione lo riduce alle notti scoperte).
+      await rimuoviUidIgnorato(ev.uid);
+      uidIgnorati.delete(ev.uid);
+    }
 
     const summaryLower = ev.summary.toLowerCase();
     const ospiteNome =
@@ -440,15 +484,15 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
       modificate++;
     } else if (scoperti.length === 1) {
       const [s, e] = scoperti[0];
-      const isPrefisso = s === ghost.check_in;
-      const isSuffisso = e === ghost.check_out;
-      if ((isPrefisso || isSuffisso) && (s !== ghost.check_in || e !== ghost.check_out)) {
+      // Anche un "buco" in mezzo (coperto prima e dopo) va ristretto: Booking dichiara
+      // occupato l'intero blocco e le altre notti sono già coperte, quindi il buco è per forza
+      // un soggiorno non ancora registrato altrove (es. Blue 29/09→02/10/2026 dentro il blocco
+      // 25/09→05/10). Lasciarlo intero lo sovrapponeva alle prenotazioni reali.
+      if (s !== ghost.check_in || e !== ghost.check_out) {
         ghost.check_in = s;
         ghost.check_out = e;
         modificate++;
       }
-      // se la parte scoperta è un "buco" in mezzo (coperta prima e dopo), non tocchiamo
-      // il ghost: non sappiamo se il buco è reale o solo un limite del merge di Booking.
     }
     // più di una parte scoperta: caso ambiguo, non tocchiamo il ghost.
   }
