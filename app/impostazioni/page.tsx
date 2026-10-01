@@ -894,13 +894,6 @@ export default function ImpostazioniPage() {
                       </div>
                       <div className="space-y-3">
                         <label className="flex items-start gap-2 cursor-pointer">
-                          <input type="checkbox" checked={editAutomazioni.link_whatsapp} onChange={e => cambiaAutomazione('link_whatsapp', e.target.checked)} className="mt-0.5" />
-                          <span className="text-sm text-gray-700">
-                            Link di registrazione documenti via WhatsApp all&apos;ospite
-                            <span className="block text-xs text-gray-400">Ogni giorno alle 10:00, per gli arrivi dei prossimi 4 giorni che non hanno ancora ricevuto il link. Serve il telefono dell&apos;ospite nella prenotazione.</span>
-                          </span>
-                        </label>
-                        <label className="flex items-start gap-2 cursor-pointer">
                           <input type="checkbox" checked={editAutomazioni.portale} onChange={e => cambiaAutomazione('portale', e.target.checked)} className="mt-0.5" />
                           <span className="text-sm text-gray-700">
                             Invio delle schedine ad Alloggiati Web il giorno del check-in
@@ -908,7 +901,8 @@ export default function ImpostazioniPage() {
                           </span>
                         </label>
                       </div>
-                      {(editAutomazioni.link_whatsapp || editAutomazioni.portale) && !strutturaAttiva.telefono && (
+                      <p className="text-xs text-gray-400 mt-3">Link di registrazione e istruzioni agli ospiti: da Prenotazioni → WhatsApp.</p>
+                      {editAutomazioni.portale && !strutturaAttiva.telefono && (
                         <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
                       )}
                       {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey && (

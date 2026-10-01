@@ -4,20 +4,19 @@
  * Vercel Cron la chiama due volte per ogni orario (vercel.json, in UTC, ora solare e legale), con una voce
  * giornaliera per ciascuna (il piano Hobby ammette solo cron giornalieri; il parametro ?utc= li distingue):
  * agisce solo quando l'ora italiana è quella prevista, così gli orari restano giusti tutto l'anno.
- *   10:00 → link di registrazione via WhatsApp (arrivi entro 4 giorni)
  *   14:00 → schedine Alloggiati Web, primo tentativo (nessun avviso)
  *   21:00 → schedine Alloggiati Web, tentativo finale (avvisi alla struttura)
  *
- * Prova manuale: ?azione=link | portale | portale_finale (stessa autorizzazione).
+ * Prova manuale: ?azione=portale | portale_finale (stessa autorizzazione).
  * Protetto da CRON_SECRET (Authorization: Bearer <secret>).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { inviaLinkAutomatici, inviaPortaleAutomatico, oraItalia, type Esito } from '@/lib/automazioni';
+import { inviaPortaleAutomatico, oraItalia, type Esito } from '@/lib/automazioni';
 
 export const preferredRegion = 'fra1'; // Il portale PS blocca IP USA — usa Francoforte (EU)
 export const maxDuration = 300;
 
-const ORARI: Record<number, 'link' | 'portale' | 'portale_finale'> = { 10: 'link', 14: 'portale', 21: 'portale_finale' };
+const ORARI: Record<number, 'portale' | 'portale_finale'> = { 14: 'portale', 21: 'portale_finale' };
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -30,8 +29,7 @@ export async function GET(req: NextRequest) {
   if (!azione) return NextResponse.json({ ok: true, ora, azione: null, messaggio: 'Nessuna automazione a quest\'ora' });
 
   let esiti: Esito[];
-  if (azione === 'link') esiti = await inviaLinkAutomatici();
-  else if (azione === 'portale' || azione === 'portale_finale') esiti = await inviaPortaleAutomatico(azione === 'portale_finale');
+  if (azione === 'portale' || azione === 'portale_finale') esiti = await inviaPortaleAutomatico(azione === 'portale_finale');
   else return NextResponse.json({ ok: false, errore: `Azione sconosciuta: ${azione}` }, { status: 400 });
 
   const errori = esiti.filter(e => e.esito === 'errore');

@@ -1,19 +1,14 @@
 // Invii automatici per struttura (attivati in Impostazioni → Camere → Check-in), lanciati da /api/cron/automazioni:
-//  · link di registrazione documenti via WhatsApp all'ospite, per gli arrivi entro 4 giorni
-//  · schedine ad AlloggiatiWeb il giorno del check-in (tentativo delle 14:00 e finale delle 21:00)
+// schedine ad AlloggiatiWeb il giorno del check-in (tentativo delle 14:00 e finale delle 21:00).
 // Gli errori arrivano su WhatsApp al numero della struttura, con i dati dell'ospite.
-import { differenceInDays, parseISO } from 'date-fns';
+// I messaggi agli ospiti (link e istruzioni) si mandano da Prenotazioni → WhatsApp (components/InvioMassivoWhatsApp).
 import sql from './postgres';
 import type { Prenotazione, Struttura, Alloggiato } from './types';
 import { leggiStrutture } from './strutture';
 import { leggiPrenotazioni } from './db';
-import { creaLink, leggiLinksPerPrenotazioni, testoLinkRegistrazione } from './link-alloggiati';
 import { leggiAlloggiati, marcaInviatiPortale } from './alloggiati-db';
 import { inviaSchedinePortale } from './portale-alloggiati';
 import { inviaWhatsAppModello } from './twilio-send';
-
-/** Giorni prima dell'arrivo da cui parte il link di registrazione */
-export const GIORNI_ANTICIPO_LINK = 4;
 
 const FUSO = 'Europe/Rome';
 
@@ -44,10 +39,7 @@ export interface Esito {
   avviso?: 'inviato' | 'non_inviato' | 'gia_inviato';
 }
 
-/**
- * WhatsApp di errore al numero della struttura. Con `chiave` l'avviso parte una sola volta
- * (i link si ritentano ogni giorno finché l'ospite non ha un telefono).
- */
+/** WhatsApp di errore al numero della struttura. Con `chiave` l'avviso parte una sola volta. */
 async function avvisaStruttura(
   s: Struttura, operazione: string, p: Prenotazione | null, errore: string, chiave?: string,
 ): Promise<Esito['avviso']> {
@@ -77,51 +69,6 @@ async function avvisaStruttura(
     `;
   }
   return 'inviato';
-}
-
-// ─── Link di registrazione ──────────────────────────────────────────────────
-
-/** Per gli arrivi da domani a +4 giorni senza link: crea il link e lo invia su WhatsApp all'ospite */
-export async function inviaLinkAutomatici(): Promise<Esito[]> {
-  const esiti: Esito[] = [];
-  const dal = dataItalia(1);
-  const al = dataItalia(GIORNI_ANTICIPO_LINK);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://affittibrevi.vercel.app';
-
-  for (const s of await leggiStrutture()) {
-    if (!s.automazioni.link_whatsapp) continue;
-    const arrivi = (await leggiPrenotazioni(s.id)).filter(p => attiva(p) && p.check_in >= dal && p.check_in <= al);
-    const links = await leggiLinksPerPrenotazioni(arrivi.map(p => p.id));
-
-    for (const p of arrivi) {
-      if (links[p.id]) continue; // link già creato (anche a mano): non si reinvia
-      const base = { struttura: s.nome, prenotazione: p.id, ospite: p.ospite_nome };
-      if (!p.ospite_telefono.trim()) {
-        const avviso = await avvisaStruttura(s, 'Invio link di registrazione', p,
-          'telefono dell\'ospite mancante: inseriscilo nella prenotazione, il link partirà al prossimo invio automatico', `link_tel:${p.id}`);
-        esiti.push({ ...base, esito: 'saltato', dettaglio: 'telefono ospite mancante', avviso });
-        continue;
-      }
-      const permanenza = Math.max(1, differenceInDays(parseISO(p.check_out), parseISO(p.check_in)));
-      const token = await creaLink({
-        prenotazioneId: p.id, strutturaId: s.id, emailOspite: p.ospite_email,
-        nomeOspite: p.ospite_nome, dataArrivo: p.check_in, permanenza,
-      });
-      const url = `${baseUrl}/registrazione/${token}`;
-      try {
-        await inviaWhatsAppModello(p.ospite_telefono, process.env.TWILIO_CONTENT_SID_LINK,
-          [p.ospite_nome, s.nome, dataIT(p.check_in), url], testoLinkRegistrazione(p.ospite_nome, s.nome, p.check_in, url));
-        esiti.push({ ...base, esito: 'inviato' });
-      } catch (e) {
-        // Il link non è arrivato: lo si elimina, così il prossimo giro ritenta
-        await sql`DELETE FROM link_alloggiati WHERE token = ${token}`;
-        const errore = e instanceof Error ? e.message : String(e);
-        const avviso = await avvisaStruttura(s, 'Invio link di registrazione', p, errore, `link_err:${p.id}`);
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso });
-      }
-    }
-  }
-  return esiti;
 }
 
 // ─── Schedine ad AlloggiatiWeb ──────────────────────────────────────────────

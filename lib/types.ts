@@ -102,13 +102,11 @@ export interface Struttura {
 
 /** Invii automatici (cron /api/cron/automazioni), spenti finché il titolare non li attiva */
 export interface AutomazioniStruttura {
-  /** Link di registrazione documenti via WhatsApp, a partire da 4 giorni prima dell'arrivo */
-  link_whatsapp: boolean;
   /** Invio delle schedine ad Alloggiati Web il giorno del check-in (14:00 e 21:00) */
   portale: boolean;
 }
 
-export const AUTOMAZIONI_DEFAULT: AutomazioniStruttura = { link_whatsapp: false, portale: false };
+export const AUTOMAZIONI_DEFAULT: AutomazioniStruttura = { portale: false };
 
 export interface Prenotazione {
   id: string;
