@@ -5,10 +5,12 @@
       "path": "/api/cron/sync",
       "schedule": "0 6 * * *"
     },
-    {
-      "path": "/api/cron/automazioni",
-      "schedule": "0 8,9,12,13,19,20 * * *"
-    }
+    { "path": "/api/cron/automazioni?utc=8",  "schedule": "0 8 * * *" },
+    { "path": "/api/cron/automazioni?utc=9",  "schedule": "0 9 * * *" },
+    { "path": "/api/cron/automazioni?utc=12", "schedule": "0 12 * * *" },
+    { "path": "/api/cron/automazioni?utc=13", "schedule": "0 13 * * *" },
+    { "path": "/api/cron/automazioni?utc=19", "schedule": "0 19 * * *" },
+    { "path": "/api/cron/automazioni?utc=20", "schedule": "0 20 * * *" }
   ],
   "headers": [
     {

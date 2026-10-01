@@ -1,7 +1,8 @@
 /**
  * GET /api/cron/automazioni — invii automatici del check-in (vedi lib/automazioni.ts).
  *
- * Vercel Cron la chiama due volte per ogni orario (vercel.json, in UTC, ora solare e legale):
+ * Vercel Cron la chiama due volte per ogni orario (vercel.json, in UTC, ora solare e legale), con una voce
+ * giornaliera per ciascuna (il piano Hobby ammette solo cron giornalieri; il parametro ?utc= li distingue):
  * agisce solo quando l'ora italiana è quella prevista, così gli orari restano giusti tutto l'anno.
  *   10:00 → link di registrazione via WhatsApp (arrivi entro 4 giorni)
  *   14:00 → schedine Alloggiati Web, primo tentativo (nessun avviso)
