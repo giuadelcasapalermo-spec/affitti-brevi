@@ -4,18 +4,7 @@ import type { PrezzoPerPeriodo } from './types';
 import { migraStruttura } from './strutture';
 
 async function ensureTable(): Promise<void> {
-  await migraStruttura();
-  await sql`
-    CREATE TABLE IF NOT EXISTS prezzi_periodi (
-      id TEXT PRIMARY KEY,
-      camera_id INT NOT NULL,
-      nome_periodo TEXT NOT NULL DEFAULT '',
-      data_inizio TEXT NOT NULL,
-      data_fine TEXT NOT NULL,
-      prezzo_notte REAL NOT NULL,
-      created_at TEXT NOT NULL
-    )
-  `;
+  await migraStruttura(); // crea anche la tabella prezzi_periodi
   await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`;
   await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS prezzo_booking REAL`;
   await sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS prezzo_airbnb REAL`;

@@ -198,6 +198,18 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
 export async function migraStruttura(): Promise<string> {
   if (_migrated) return '';
   const s = await getOrCreateDefaultStruttura();
+  // Su un'istanza nuova prezzi_periodi non esiste ancora: va creata prima di ALTER/UPDATE
+  await sql`
+    CREATE TABLE IF NOT EXISTS prezzi_periodi (
+      id TEXT PRIMARY KEY,
+      camera_id INT NOT NULL,
+      nome_periodo TEXT NOT NULL DEFAULT '',
+      data_inizio TEXT NOT NULL,
+      data_fine TEXT NOT NULL,
+      prezzo_notte REAL NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `;
   await Promise.all([
     sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
     sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_esenti INT NOT NULL DEFAULT 0`,
