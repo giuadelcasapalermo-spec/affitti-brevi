@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
 import sql from '@/lib/postgres';
+import { contaOspitiPerPrenotazione, esentiPrenotazione } from '@/lib/tassa-ospiti';
 
 function trimestreBounds(anno: number, trim: number): { dal: string; al: string } {
   const mesi: Record<number, [number, number]> = {
@@ -47,16 +48,7 @@ export async function GET(req: NextRequest) {
     ORDER BY check_in, camera_id
   `;
 
-  const allogRows = await sql`
-    SELECT prenotazione_id, COUNT(*)::int AS n
-    FROM alloggiati
-    WHERE struttura_id = ${struttura.id}
-      AND data_arrivo >= ${dal}
-      AND data_arrivo <= ${al}
-    GROUP BY prenotazione_id
-  `;
-  const ospiti: Record<string, number> = {};
-  for (const r of allogRows) ospiti[r.prenotazione_id as string] = r.n as number;
+  const ospiti = await contaOspitiPerPrenotazione(struttura.id, dal, al);
 
   const nomiCamere = struttura.nomi_camere ?? {};
   const maxNotti = struttura.regole.tassa_max_notti;
@@ -69,8 +61,10 @@ export async function GET(req: NextRequest) {
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
     const nottiTassabili = Math.min(notti, maxNotti);
     // Nessun documento caricato: celle Ospiti/Adulti vuote (non si presume 1)
-    const nOspiti: number | null = ospiti[r.id as string] ?? null;
-    const esenti = (r.tassa_esenti as number | null) ?? 0;
+    const o = ospiti[r.id as string];
+    const nOspiti: number | null = o?.n ?? null;
+    // Esenti: minori di 10 anni dai documenti, o il numero inserito a mano se maggiore
+    const esenti = esentiPrenotazione((r.tassa_esenti as number | null) ?? 0, o);
     const adulti = nOspiti === null ? null : Math.max(0, nOspiti - esenti);
     totOspiti += nOspiti ?? 0; totAdulti += adulti ?? 0; totEsenti += esenti;
     const nomeCamera = nomiCamere[r.camera_id as number] ?? `Camera ${r.camera_id}`;
