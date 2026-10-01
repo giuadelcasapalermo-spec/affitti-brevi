@@ -68,10 +68,11 @@ export async function GET(req: NextRequest) {
     const cout = new Date(r.check_out as string);
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
     const nottiTassabili = Math.min(notti, maxNotti);
-    const nOspiti = ospiti[r.id as string] ?? 1;
+    // Nessun documento caricato: celle Ospiti/Adulti vuote (non si presume 1)
+    const nOspiti: number | null = ospiti[r.id as string] ?? null;
     const esenti = (r.tassa_esenti as number | null) ?? 0;
-    const adulti = Math.max(0, nOspiti - esenti);
-    totOspiti += nOspiti; totAdulti += adulti; totEsenti += esenti;
+    const adulti = nOspiti === null ? null : Math.max(0, nOspiti - esenti);
+    totOspiti += nOspiti ?? 0; totAdulti += adulti ?? 0; totEsenti += esenti;
     const nomeCamera = nomiCamere[r.camera_id as number] ?? `Camera ${r.camera_id}`;
     return csvRow([
       r.check_in as string,
@@ -80,8 +81,8 @@ export async function GET(req: NextRequest) {
       nomeCamera,
       notti,
       nottiTassabili,
-      nOspiti,
-      adulti,
+      nOspiti ?? '',
+      adulti ?? '',
       esenti,
       ((r.tassa_soggiorno as number | null) ?? 0).toFixed(2),
     ]);

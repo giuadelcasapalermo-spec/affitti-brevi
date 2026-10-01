@@ -21,8 +21,9 @@ type Prenotazione = {
   check_out: string;
   notti: number;
   notti_tassabili: number;
-  n_ospiti: number;
-  adulti: number;
+  /** null: nessun documento caricato, numero di ospiti non noto */
+  n_ospiti: number | null;
+  adulti: number | null;
   esenti: number;
   tassa_riscossa: number;
   tassa_trovata: number | null;
@@ -188,8 +189,8 @@ export default function TassaSoggiorno() {
       ['Check-out', format(parseISO(p.check_out), 'd MMMM yyyy', { locale: it })],
       ['Notti di soggiorno', String(p.notti)],
       [`Notti imponibili (max ${dati?.max_notti ?? 4})`, String(p.notti_tassabili)],
-      ['Ospiti totali', String(p.n_ospiti)],
-      ['di cui adulti', String(p.adulti)],
+      ['Ospiti totali', p.n_ospiti === null ? 'documenti non caricati' : String(p.n_ospiti)],
+      ['di cui adulti', p.adulti === null ? '-' : String(p.adulti)],
       ['di cui esenti', String(p.esenti)],
     ];
 
@@ -471,7 +472,11 @@ export default function TassaSoggiorno() {
                             {p.notti_tassabili}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-right text-gray-600">{p.adulti}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">
+                          {p.adulti === null
+                            ? <span className="text-gray-300" title="Documenti non caricati: numero di ospiti non noto">—</span>
+                            : p.adulti}
+                        </td>
                         <td className="px-4 py-2 text-right">
                           {editingEsentiId === p.id ? (
                             <input

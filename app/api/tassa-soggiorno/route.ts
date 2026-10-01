@@ -87,7 +87,8 @@ export async function GET(req: NextRequest) {
     const cout = new Date(r.check_out as string);
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
     const nottiTassabili = Math.min(notti, maxNotti);
-    const nOspiti = ospiti[r.id as string] ?? 1;
+    // Nessun documento caricato: il numero di ospiti non è noto (non si presume 1)
+    const nOspiti: number | null = ospiti[r.id as string] ?? null;
     const esenti = (r.tassa_esenti as number | null) ?? 0;
     return {
       id: r.id as string,
@@ -99,7 +100,7 @@ export async function GET(req: NextRequest) {
       notti_tassabili: nottiTassabili,
       n_ospiti: nOspiti,
       esenti,
-      adulti: Math.max(0, nOspiti - esenti),
+      adulti: nOspiti === null ? null : Math.max(0, nOspiti - esenti),
       tassa_riscossa: (r.tassa_soggiorno as number | null) ?? 0,
       tassa_trovata: (r.tassa_trovata as number | null) ?? null,
     };
@@ -115,8 +116,9 @@ export async function GET(req: NextRequest) {
     prenotazioni,
     totale_riscosso: prenotazioni.reduce((s, p) => s + p.tassa_riscossa, 0),
     notti_totali: prenotazioni.reduce((s, p) => s + p.notti_tassabili, 0),
-    ospiti_totali: prenotazioni.reduce((s, p) => s + p.n_ospiti, 0),
-    adulti_totali: prenotazioni.reduce((s, p) => s + p.adulti, 0),
+    ospiti_totali: prenotazioni.reduce((s, p) => s + (p.n_ospiti ?? 0), 0),
+    adulti_totali: prenotazioni.reduce((s, p) => s + (p.adulti ?? 0), 0),
+    senza_documenti: prenotazioni.filter(p => p.n_ospiti === null).length,
     esenti_totali: prenotazioni.reduce((s, p) => s + p.esenti, 0),
     dichiarazione: dichRows[0] ?? null,
     max_notti: maxNotti,
