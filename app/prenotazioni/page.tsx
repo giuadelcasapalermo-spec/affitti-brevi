@@ -8,6 +8,7 @@ import { it } from 'date-fns/locale';
 import { fData } from '@/lib/utils';
 import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Mail, MessageCircle, Loader2 } from 'lucide-react';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
+import InvioMassivoWhatsApp from '@/components/InvioMassivoWhatsApp';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -76,6 +77,7 @@ function PrenotazioniInner() {
   const [editingCard, setEditingCard] = useState<Prenotazione | null>(null);
   const [invioWA, setInvioWA] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({});
   const [invioIstr, setInvioIstr] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({});
+  const [invioMassivo, setInvioMassivo] = useState(false);
 
   const carica = useCallback(() => {
     fetch('/api/prenotazioni').then(r => r.json()).then(data => {
@@ -349,6 +351,14 @@ function PrenotazioniInner() {
             <span className="hidden sm:inline">Sync iCal</span>
           </button>
           <button
+            onClick={() => setInvioMassivo(true)}
+            title="Invio WhatsApp agli ospiti filtrati"
+            className="flex items-center gap-1.5 border border-green-300 bg-green-50 text-green-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-green-100 sm:px-4 sm:py-2"
+          >
+            <MessageCircle size={15} />
+            <span className="hidden sm:inline">WhatsApp</span>
+          </button>
+          <button
             onClick={() => setMostraForm(true)}
             className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-sm font-medium hover:bg-blue-700 sm:px-4 sm:py-2"
           >
@@ -357,6 +367,22 @@ function PrenotazioniInner() {
           </button>
         </div>
       </div>
+
+      {invioMassivo && (
+        <InvioMassivoWhatsApp
+          prenotazioni={filtrate}
+          dal={filtroDal}
+          al={filtroAl}
+          checkinStatus={checkinStatus}
+          nomeCamera={id => camere.find(c => c.id === id)?.nome ?? `Camera ${id}`}
+          onClose={() => {
+            setInvioMassivo(false);
+            // Aggiorna i badge "link inviato" dopo l'invio
+            const ids = prenotazioni.map(p => p.id).join(',');
+            if (ids) fetch(`/api/alloggiati/checkin-status?ids=${ids}`).then(r => r.json()).then(setCheckinStatus).catch(() => {});
+          }}
+        />
+      )}
 
       {/* KPI mobile compatto */}
       <div className="sm:hidden bg-white rounded-lg shadow-sm px-4 py-3 grid grid-cols-3 gap-y-3 divide-x divide-gray-100">
