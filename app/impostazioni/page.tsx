@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
@@ -11,6 +11,7 @@ import {
   Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
+import { SEGNAPOSTO_ISTRUZIONI, MODELLO_ISTRUZIONI_BASE, componiIstruzioni } from '@/lib/istruzioni';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
 
 interface UtenteInfo { id: string; username: string; solo_calendario: boolean; }
@@ -26,7 +27,7 @@ interface ICalSyncResult {
 }
 
 type MainTab = 'strutture' | 'camere' | 'account' | 'app' | 'sistema';
-type SubTab = 'camere' | 'ical' | 'prezzi';
+type SubTab = 'camere' | 'ical' | 'prezzi' | 'checkin';
 type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
 
 const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_fine: '', prezzo_notte: '', prezzo_booking: '', prezzo_airbnb: '' };
@@ -50,6 +51,10 @@ export default function ImpostazioniPage() {
   const [editIcalUrls, setEditIcalUrls] = useState<Record<number, string>>({});
   const [salvatoEditCamere, setSalvatoEditCamere] = useState(false);
   const [salvatoEditIcal, setSalvatoEditIcal] = useState(false);
+  const [editIstruzioni, setEditIstruzioni] = useState('');
+  const [salvatoIstruzioni, setSalvatoIstruzioni] = useState(false);
+  const [modelloNonSalvato, setModelloNonSalvato] = useState(false);
+  const istruzioniRef = useRef<HTMLTextAreaElement>(null);
 
   // Inline editing dati struttura (nel tab Strutture)
   const [editingDatiId, setEditingDatiId] = useState<string | null>(null);
@@ -134,6 +139,9 @@ export default function ImpostazioniPage() {
     setEditColoriCamere(strutturaAttiva.colori_camere ?? {});
     setEditNumCamere(strutturaAttiva.num_camere ?? 5);
     setEditIcalUrls(strutturaAttiva.ical_urls ?? {});
+    // Messaggio vuoto: si parte dal modello, come nella configurazione guidata
+    setEditIstruzioni(strutturaAttiva.istruzioni_checkin || MODELLO_ISTRUZIONI_BASE);
+    setModelloNonSalvato(!strutturaAttiva.istruzioni_checkin);
     setNuovoPeriodo(p => ({ ...p, camera_id: 1 }));
   }, [strutturaAttiva?.id]);
 
@@ -269,6 +277,27 @@ export default function ImpostazioniPage() {
     });
     setSalvatoEditIcal(true);
     setTimeout(() => setSalvatoEditIcal(false), 2000);
+  }
+
+  async function salvaIstruzioni() {
+    if (!strutturaAttiva || !editIstruzioni.trim()) return;
+    await fetch(`/api/strutture/${strutturaAttiva.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ istruzioni_checkin: editIstruzioni }),
+    });
+    setModelloNonSalvato(false);
+    setSalvatoIstruzioni(true);
+    setTimeout(() => setSalvatoIstruzioni(false), 2000);
+  }
+
+  // Inserisce il segnaposto nel punto del cursore
+  function inserisciSegnaposto(s: string) {
+    const ta = istruzioniRef.current;
+    const inizio = ta?.selectionStart ?? editIstruzioni.length;
+    const fine = ta?.selectionEnd ?? editIstruzioni.length;
+    setEditIstruzioni(t => t.slice(0, inizio) + s + t.slice(fine));
+    requestAnimationFrame(() => { ta?.focus(); ta?.setSelectionRange(inizio + s.length, inizio + s.length); });
   }
 
   async function aggiungiPeriodo() {
@@ -455,6 +484,7 @@ export default function ImpostazioniPage() {
     { id: 'camere', label: 'Camere' },
     { id: 'prezzi', label: 'Prezzi' },
     { id: 'ical',   label: 'iCal'   },
+    { id: 'checkin', label: 'Check-in' },
   ];
 
   return (
@@ -838,6 +868,55 @@ export default function ImpostazioniPage() {
                   </div>
                 )}
 
+                {/* Sub-tab: CHECK-IN */}
+                {subTab === 'checkin' && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Mail size={16} className="text-blue-600" />
+                      <h3 className="font-semibold text-gray-700 text-sm">Messaggio di check-in</h3>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3">
+                      Inviato all&apos;ospite dalla pagina Alloggiati. Tocca un segnaposto per inserirlo: viene sostituito con i dati della prenotazione.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {Object.entries(SEGNAPOSTO_ISTRUZIONI).map(([s, descr]) => (
+                        <button key={s} type="button" onClick={() => inserisciSegnaposto(s)} title={descr}
+                          className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea ref={istruzioniRef} value={editIstruzioni} onChange={e => setEditIstruzioni(e.target.value)}
+                      rows={14}
+                      className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                    {modelloNonSalvato && (
+                      <p className="text-xs text-amber-600 mt-1">Modello di partenza, non ancora salvato: completa le parti tra [ ].</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-3">
+                      <button onClick={salvaIstruzioni} disabled={!editIstruzioni.trim()}
+                        className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <Save size={14} />
+                        {salvatoIstruzioni ? 'Salvato!' : 'Salva messaggio'}
+                      </button>
+                    </div>
+
+                    <div className="border-t pt-4 mt-5">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Anteprima (dati di esempio)</h4>
+                      <div className="bg-gray-50 rounded p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+                        {componiIstruzioni(editIstruzioni, {
+                          ospite: 'Mario Rossi',
+                          camera: 1,
+                          tassa: '€ 6,00',
+                          indirizzo: strutturaAttiva.indirizzo || 'indirizzo della struttura',
+                          struttura: strutturaAttiva.nome,
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -845,7 +924,7 @@ export default function ImpostazioniPage() {
         </>
       )}
 
-      {/* ── STRUTTURE ─────────────────────────────────────────────────── */}
+      {/* ── STRUTTURE─────────────────────────────────────────────────── */}
       {sezione === 'strutture' && (() => {
         const selezionata = strutture.find(s => s.id === editingDatiId) ?? null;
         function seleziona(s: typeof strutture[0]) {
