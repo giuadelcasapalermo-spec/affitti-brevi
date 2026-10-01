@@ -102,7 +102,7 @@ export interface Struttura {
 
 /** Invii automatici (cron /api/cron/automazioni), spenti finché il titolare non li attiva */
 export interface AutomazioniStruttura {
-  /** Invio delle schedine ad Alloggiati Web il giorno del check-in (14:00 e 21:00) */
+  /** Invio delle schedine ad Alloggiati Web il giorno del check-in (15:00 e 21:00) */
   portale: boolean;
 }
 

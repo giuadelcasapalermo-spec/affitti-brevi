@@ -897,7 +897,7 @@ export default function ImpostazioniPage() {
                           <input type="checkbox" checked={editAutomazioni.portale} onChange={e => cambiaAutomazione('portale', e.target.checked)} className="mt-0.5" />
                           <span className="text-sm text-gray-700">
                             Invio delle schedine ad Alloggiati Web il giorno del check-in
-                            <span className="block text-xs text-gray-400">Alle 14:00 e alle 21:00; le schedine già inviate non vengono ripetute.</span>
+                            <span className="block text-xs text-gray-400">Alle 15:00 e alle 21:00; le schedine già inviate non vengono ripetute.</span>
                           </span>
                         </label>
                       </div>

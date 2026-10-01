@@ -1,5 +1,5 @@
 // Invii automatici per struttura (attivati in Impostazioni → Camere → Check-in), lanciati da /api/cron/automazioni:
-// schedine ad AlloggiatiWeb il giorno del check-in (tentativo delle 14:00 e finale delle 21:00).
+// schedine ad AlloggiatiWeb il giorno del check-in (tentativo delle 15:00 e finale delle 21:00).
 // Gli errori arrivano su WhatsApp al numero della struttura, con i dati dell'ospite.
 // I messaggi agli ospiti (link e istruzioni) si mandano da Prenotazioni → WhatsApp (components/InvioMassivoWhatsApp).
 import sql from './postgres';
@@ -39,22 +39,38 @@ export interface Esito {
   avviso?: 'inviato' | 'non_inviato' | 'gia_inviato';
 }
 
-/** WhatsApp di errore al numero della struttura. Con `chiave` l'avviso parte una sola volta. */
+/** Avviso mostrato nel banner dell'app (components/AvvisiAutomazioni) finché il titolare non lo chiude */
+export interface AvvisoApp {
+  id: string;
+  struttura: string;
+  operazione: string;
+  ospite: string;
+  errore: string;
+  creato: string;
+}
+
+const whatsappConfigurato = () =>
+  !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_WHATSAPP_FROM);
+
+/**
+ * Avviso di errore: sempre salvato per il banner dell'app (tabella impostazioni, tipo 'avviso_app');
+ * in più WhatsApp al numero della struttura, se Twilio è configurato. L'esito riguarda il WhatsApp.
+ */
 async function avvisaStruttura(
-  s: Struttura, operazione: string, p: Prenotazione | null, errore: string, chiave?: string,
+  s: Struttura, operazione: string, p: Prenotazione | null, errore: string,
 ): Promise<Esito['avviso']> {
-  if (chiave) {
-    const gia = await sql`SELECT 1 FROM impostazioni WHERE tipo = 'avviso_auto' AND chiave = ${chiave}`;
-    if (gia.length > 0) return 'gia_inviato';
-  }
-  if (!s.telefono.trim()) {
-    console.error(`[automazioni] ${s.nome}: telefono della struttura mancante, avviso non inviato — ${operazione}: ${errore}`);
-    return 'non_inviato';
-  }
   const ospite = p
     ? `${p.ospite_nome || 'senza nome'} · check-in ${dataIT(p.check_in)} → ${dataIT(p.check_out)} · ${nomeCamera(s, p.camera_id)}`
       + ` · tel ${p.ospite_telefono || '-'} · email ${p.ospite_email || '-'}`
     : '-';
+  const id = `${dataItalia(0)}:${p?.id ?? s.id}`;
+  const avviso: AvvisoApp = { id, struttura: s.nome, operazione, ospite, errore, creato: new Date().toISOString() };
+  await sql`
+    INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('avviso_app', ${id}, ${JSON.stringify(avviso)})
+    ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+  `;
+
+  if (!whatsappConfigurato() || !s.telefono.trim()) return 'non_inviato';
   const testo = `⚠️ ${s.nome}: ${operazione} non riuscito\nOspite: ${ospite}\nErrore: ${errore}\n\nApri l'app per correggere.`;
   try {
     await inviaWhatsAppModello(s.telefono, process.env.TWILIO_CONTENT_SID_AVVISO, [s.nome, operazione, ospite, errore], testo);
@@ -62,20 +78,23 @@ async function avvisaStruttura(
     console.error(`[automazioni] ${s.nome}: avviso WhatsApp non inviato —`, e instanceof Error ? e.message : e);
     return 'non_inviato';
   }
-  if (chiave) {
-    await sql`
-      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('avviso_auto', ${chiave}, ${new Date().toISOString()})
-      ON CONFLICT (tipo, chiave) DO NOTHING
-    `;
-  }
   return 'inviato';
+}
+
+export async function leggiAvvisiApp(): Promise<AvvisoApp[]> {
+  const rows = await sql`SELECT valore FROM impostazioni WHERE tipo = 'avviso_app' ORDER BY chiave DESC LIMIT 50`;
+  return rows.map(r => JSON.parse(r.valore as string) as AvvisoApp);
+}
+
+export async function chiudiAvvisoApp(id: string): Promise<void> {
+  await sql`DELETE FROM impostazioni WHERE tipo = 'avviso_app' AND chiave = ${id}`;
 }
 
 // ─── Schedine ad AlloggiatiWeb ──────────────────────────────────────────────
 
 /**
  * Invia le schedine degli arrivi di oggi non ancora inviate, una prenotazione per volta.
- * Al tentativo non finale (14:00) chi non si è ancora registrato si aspetta e gli errori non si notificano;
+ * Al tentativo non finale (15:00) chi non si è ancora registrato si aspetta e gli errori non si notificano;
  * al tentativo finale (21:00) ogni problema rimasto diventa un avviso alla struttura.
  */
 export async function inviaPortaleAutomatico(finale: boolean): Promise<Esito[]> {

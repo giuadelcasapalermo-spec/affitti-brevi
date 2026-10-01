@@ -5,8 +5,8 @@
       "path": "/api/cron/sync",
       "schedule": "0 6 * * *"
     },
-    { "path": "/api/cron/automazioni?utc=12", "schedule": "0 12 * * *" },
     { "path": "/api/cron/automazioni?utc=13", "schedule": "0 13 * * *" },
+    { "path": "/api/cron/automazioni?utc=14", "schedule": "0 14 * * *" },
     { "path": "/api/cron/automazioni?utc=19", "schedule": "0 19 * * *" },
     { "path": "/api/cron/automazioni?utc=20", "schedule": "0 20 * * *" }
   ],
