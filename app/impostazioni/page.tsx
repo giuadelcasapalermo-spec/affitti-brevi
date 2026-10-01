@@ -8,7 +8,7 @@ import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
-  Plug, ArrowDownToLine, Wifi, WifiOff,
+  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
@@ -875,6 +875,16 @@ export default function ImpostazioniPage() {
         }
         return (
           <div className="space-y-4">
+
+            {/* Configurazione guidata: dati fiscali, CIN/CIR, regole, istruzioni check-in */}
+            <a href="/configurazione"
+              className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 hover:bg-blue-100 transition-colors">
+              <div>
+                <span className="text-sm font-semibold text-blue-800 block">Configurazione guidata della struttura attiva</span>
+                <span className="text-xs text-blue-600">Dati societari, CIN/CIR, camere, Alloggiati Web, tassa di soggiorno, istruzioni di check-in</span>
+              </div>
+              <ChevronRight size={16} className="text-blue-500 shrink-0" />
+            </a>
 
             {/* Lista strutture */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">

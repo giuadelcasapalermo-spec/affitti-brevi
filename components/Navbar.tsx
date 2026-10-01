@@ -36,6 +36,15 @@ export default function Navbar() {
       .catch(() => {});
   }, []);
 
+  // Istanza nuova: porta il titolare alla configurazione guidata finché non la completa
+  useEffect(() => {
+    if (soloCalendario || pathname === '/login' || pathname.startsWith('/registrazione') || pathname === '/configurazione') return;
+    fetch('/api/configurazione')
+      .then(r => r.ok ? r.json() : { da_fare: false })
+      .then((d: { da_fare?: boolean }) => { if (d.da_fare) router.replace('/configurazione'); })
+      .catch(() => {});
+  }, [pathname, soloCalendario, router]);
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {

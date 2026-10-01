@@ -59,14 +59,15 @@ export async function GET(req: NextRequest) {
   for (const r of allogRows) ospiti[r.prenotazione_id as string] = r.n as number;
 
   const nomiCamere = struttura.nomi_camere ?? {};
+  const maxNotti = struttura.regole.tassa_max_notti;
 
-  const header = csvRow(['Check-in', 'Check-out', 'Ospite', 'Camera', 'Notti', 'Notti tassabili (max 4)', 'N. Ospiti', 'Adulti', 'Esenti', 'Tassa riscossa (€)']);
+  const header = csvRow(['Check-in', 'Check-out', 'Ospite', 'Camera', 'Notti', `Notti tassabili (max ${maxNotti})`, 'N. Ospiti', 'Adulti', 'Esenti', 'Tassa riscossa (€)']);
   let totOspiti = 0, totAdulti = 0, totEsenti = 0;
   const righe = prenRows.map(r => {
     const cin  = new Date(r.check_in as string);
     const cout = new Date(r.check_out as string);
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
-    const nottiTassabili = Math.min(notti, 4);
+    const nottiTassabili = Math.min(notti, maxNotti);
     const nOspiti = ospiti[r.id as string] ?? 1;
     const esenti = (r.tassa_esenti as number | null) ?? 0;
     const adulti = Math.max(0, nOspiti - esenti);
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
   const totNotti = prenRows.reduce((r, p) => {
     const cin  = new Date(p.check_in as string);
     const cout = new Date(p.check_out as string);
-    return r + Math.min(Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000)), 4);
+    return r + Math.min(Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000)), maxNotti);
   }, 0);
 
   righe.push('');

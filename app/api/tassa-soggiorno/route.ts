@@ -81,11 +81,12 @@ export async function GET(req: NextRequest) {
   const ospiti: Record<string, number> = {};
   for (const r of allogRows) ospiti[r.prenotazione_id as string] = r.n as number;
 
+  const maxNotti = struttura.regole.tassa_max_notti;
   const prenotazioni = prenRows.map(r => {
     const cin  = new Date(r.check_in as string);
     const cout = new Date(r.check_out as string);
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
-    const nottiTassabili = Math.min(notti, 4); // Palermo: max 4 notti consecutive
+    const nottiTassabili = Math.min(notti, maxNotti);
     const nOspiti = ospiti[r.id as string] ?? 1;
     const esenti = (r.tassa_esenti as number | null) ?? 0;
     return {
@@ -118,6 +119,7 @@ export async function GET(req: NextRequest) {
     adulti_totali: prenotazioni.reduce((s, p) => s + p.adulti, 0),
     esenti_totali: prenotazioni.reduce((s, p) => s + p.esenti, 0),
     dichiarazione: dichRows[0] ?? null,
+    max_notti: maxNotti,
   });
 }
 

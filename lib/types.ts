@@ -41,6 +41,43 @@ export interface BookingChannelManagerConfig {
   room_id_map: Record<number, string>;
 }
 
+export interface DatiFiscali {
+  ragione_sociale: string;
+  partita_iva: string;
+  codice_fiscale: string;
+  sede_legale: string;
+  pec: string;
+  /** Codice Identificativo Nazionale (BDSR, Ministero del Turismo) */
+  cin: string;
+  /** Codice identificativo regionale (CIR/CIS/CITR a seconda della regione) */
+  cir: string;
+  tipologia: string;
+}
+
+export interface RegoleStruttura {
+  comune: string;
+  /** Notti massime soggette a tassa di soggiorno per singolo soggiorno */
+  tassa_max_notti: number;
+  /** Tariffa per persona per notte (€), solo informativa */
+  tassa_tariffa: number;
+  costo_pulizia_checkout: number;
+  costo_cambio_stanza: number;
+}
+
+// Valori in uso prima della configurazione per struttura (Palermo)
+export const REGOLE_DEFAULT: RegoleStruttura = {
+  comune: '',
+  tassa_max_notti: 4,
+  tassa_tariffa: 0,
+  costo_pulizia_checkout: 7,
+  costo_cambio_stanza: 4,
+};
+
+export const DATI_FISCALI_VUOTI: DatiFiscali = {
+  ragione_sociale: '', partita_iva: '', codice_fiscale: '', sede_legale: '',
+  pec: '', cin: '', cir: '', tipologia: '',
+};
+
 export interface Struttura {
   id: string;
   nome: string;
@@ -53,6 +90,10 @@ export interface Struttura {
   alloggiati_credentials?: AlloggiatiCredentials;
   conti_correnti: ContoCorrente[];
   channel_manager_config?: BookingChannelManagerConfig;
+  dati_fiscali: DatiFiscali;
+  regole: RegoleStruttura;
+  /** Modello del messaggio di check-in; segnaposto: {ospite} {camera} {tassa} {indirizzo} {struttura} */
+  istruzioni_checkin: string;
   created_at: string;
 }
 

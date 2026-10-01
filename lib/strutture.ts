@@ -1,6 +1,9 @@
 import sql from './postgres';
 import { randomUUID } from 'crypto';
-import { Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig } from './types';
+import {
+  Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig,
+  DatiFiscali, RegoleStruttura, DATI_FISCALI_VUOTI, REGOLE_DEFAULT,
+} from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
 const DEFAULT_CONTI: ContoCorrente[] = [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }];
@@ -27,6 +30,9 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_credentials JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS conti_correnti JSONB DEFAULT '[]'`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS channel_manager_config JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS dati_fiscali JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS regole JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS istruzioni_checkin TEXT NOT NULL DEFAULT ''`,
   ]);
   _tableReady = true;
 }
@@ -58,6 +64,9 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     alloggiati_credentials: row.alloggiati_credentials as AlloggiatiCredentials | undefined,
     conti_correnti: conti,
     channel_manager_config: row.channel_manager_config as BookingChannelManagerConfig | undefined,
+    dati_fiscali: { ...DATI_FISCALI_VUOTI, ...(row.dati_fiscali as Partial<DatiFiscali> | null) },
+    regole: { ...REGOLE_DEFAULT, ...(row.regole as Partial<RegoleStruttura> | null) },
+    istruzioni_checkin: (row.istruzioni_checkin as string | null) ?? '',
     created_at: row.created_at as string,
   };
 }
@@ -87,6 +96,9 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     colori_camere: {},
     ical_urls: {},
     conti_correnti: conti,
+    dati_fiscali: { ...DATI_FISCALI_VUOTI },
+    regole: { ...REGOLE_DEFAULT },
+    istruzioni_checkin: '',
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -120,6 +132,12 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET conti_correnti = ${JSON.stringify(fields.conti_correnti)} WHERE id = ${id}`;
   if (fields.channel_manager_config !== undefined)
     await sql`UPDATE strutture SET channel_manager_config = ${JSON.stringify(fields.channel_manager_config)} WHERE id = ${id}`;
+  if (fields.dati_fiscali !== undefined)
+    await sql`UPDATE strutture SET dati_fiscali = ${JSON.stringify(fields.dati_fiscali)} WHERE id = ${id}`;
+  if (fields.regole !== undefined)
+    await sql`UPDATE strutture SET regole = ${JSON.stringify(fields.regole)} WHERE id = ${id}`;
+  if (fields.istruzioni_checkin !== undefined)
+    await sql`UPDATE strutture SET istruzioni_checkin = ${fields.istruzioni_checkin} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {
@@ -162,6 +180,9 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     colori_camere: colori,
     ical_urls: ical,
     conti_correnti: conti,
+    dati_fiscali: { ...DATI_FISCALI_VUOTI },
+    regole: { ...REGOLE_DEFAULT },
+    istruzioni_checkin: '',
     created_at: new Date().toISOString(),
   };
   await sql`

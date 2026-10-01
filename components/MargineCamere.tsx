@@ -5,7 +5,8 @@ import { addDays, differenceInDays, format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ChevronDown } from 'lucide-react';
 import { BiancheriaStanza, CAPI_BIANCHERIA, Camera, CapoBiancheria, Prenotazione } from '@/lib/types';
-import { COSTO_CAMBIO_STANZA, COSTO_PULIZIA_CHECKOUT, TipoPulizia, costoPulizia, puliziaGiorno, ricavoNotte } from '@/lib/pulizie';
+import { COSTI_PULIZIA_DEFAULT, CostiPulizia, TipoPulizia, costoPulizia, puliziaGiorno, ricavoNotte } from '@/lib/pulizie';
+import { useStruttura } from '@/hooks/useStruttura';
 import { getCameraStyle } from '@/lib/camera-colors';
 
 type Cella = { ricavo: number; lavanderia: number; pulizia: number; tipo?: TipoPulizia; margine: number };
@@ -26,6 +27,13 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
   dal: string;
   al: string;
 }) {
+  const { struttura } = useStruttura();
+  const costoCheckout = struttura?.regole.costo_pulizia_checkout ?? COSTI_PULIZIA_DEFAULT.checkout;
+  const costoCambio = struttura?.regole.costo_cambio_stanza ?? COSTI_PULIZIA_DEFAULT.cambio;
+  const costi: CostiPulizia = useMemo(
+    () => ({ checkout: costoCheckout, cambio: costoCambio }),
+    [costoCheckout, costoCambio],
+  );
   const [biancheria, setBiancheria] = useState<BiancheriaStanza[]>([]);
   const [prezzi, setPrezzi] = useState<Record<CapoBiancheria, number> | null>(null);
   const [dettaglio, setDettaglio] = useState(false);
@@ -68,12 +76,12 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
         const ricavo = ricavoNotte(prenotazioni, c.id, g);
         const lavanderia = lavPer.get(k) ?? 0;
         const tipo = pulizie.get(c.id);
-        const pulizia = costoPulizia(tipo);
+        const pulizia = costoPulizia(tipo, costi);
         celle.set(k, { ricavo, lavanderia, pulizia, tipo, margine: ricavo - lavanderia - pulizia });
       }
     }
     return { giorni, celle, lavNonAttribuita };
-  }, [dal, al, prenotazioni, camere, biancheria, prezzi]);
+  }, [dal, al, prenotazioni, camere, biancheria, prezzi, costi]);
 
   const totaliCamera = camere.map((c) => {
     const t = { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, checkout: 0, cambi: 0 };
@@ -94,7 +102,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
     { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, checkout: 0, cambi: 0 },
   );
   const titoloPulizie = (checkout: number, cambi: number) =>
-    `${checkout} check-out × €${COSTO_PULIZIA_CHECKOUT} + ${cambi} cambi × €${COSTO_CAMBIO_STANZA}`;
+    `${checkout} check-out × €${costi.checkout} + ${cambi} cambi × €${costi.cambio}`;
   const pct = (m: number, r: number) => (r > 0 ? `${Math.round((m / r) * 100)}%` : '—');
   const giorniConValori = giorni.filter((g) => camere.some((c) => {
     const x = celle.get(`${g}|${c.id}`);
@@ -106,7 +114,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
       <div>
         <h2 className="font-semibold text-gray-700 text-sm sm:text-base">Margine lordo per stanza</h2>
         <p className="text-[11px] text-gray-400 mt-0.5">
-          Ricavo notte (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{COSTO_PULIZIA_CHECKOUT} per check-out, €{COSTO_CAMBIO_STANZA} per cambio).
+          Ricavo notte (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{costi.checkout} per check-out, €{costi.cambio} per cambio).
           Costi indiretti non ancora ribaltati.
         </p>
       </div>

@@ -44,3 +44,6 @@ next-env.d.ts
 token_debug.xml
 
 .vercel
+
+# dati locali legacy (mai versionare: contengono dati dei clienti)
+/data/
