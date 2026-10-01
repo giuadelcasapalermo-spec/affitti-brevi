@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
 import sql from '@/lib/postgres';
 import { randomUUID } from 'crypto';
+import { contaOspitiPerPrenotazione, esentiPrenotazione } from '@/lib/tassa-ospiti';
 
 let _tableReady = false;
 
@@ -69,17 +70,8 @@ export async function GET(req: NextRequest) {
     ORDER BY check_in, camera_id
   `;
 
-  // Ospiti registrati per prenotazione (da alloggiati)
-  const allogRows = await sql`
-    SELECT prenotazione_id, COUNT(*)::int AS n
-    FROM alloggiati
-    WHERE struttura_id = ${struttura.id}
-      AND data_arrivo >= ${dal}
-      AND data_arrivo <= ${al}
-    GROUP BY prenotazione_id
-  `;
-  const ospiti: Record<string, number> = {};
-  for (const r of allogRows) ospiti[r.prenotazione_id as string] = r.n as number;
+  // Ospiti registrati per prenotazione (da alloggiati), con i minori esenti
+  const ospiti = await contaOspitiPerPrenotazione(struttura.id, dal, al);
 
   const prenotazioni = prenRows.map(r => {
     const cin  = new Date(r.check_in as string);
@@ -87,8 +79,9 @@ export async function GET(req: NextRequest) {
     const notti = Math.max(1, Math.round((cout.getTime() - cin.getTime()) / 86400000));
     const nottiTassabili = Math.min(notti, 4); // Palermo: max 4 notti consecutive
     // Nessun documento caricato: il numero di ospiti non è noto (non si presume 1)
-    const nOspiti: number | null = ospiti[r.id as string] ?? null;
-    const esenti = (r.tassa_esenti as number | null) ?? 0;
+    const o = ospiti[r.id as string];
+    const nOspiti: number | null = o?.n ?? null;
+    const esenti = esentiPrenotazione((r.tassa_esenti as number | null) ?? 0, o);
     return {
       id: r.id as string,
       ospite_nome: r.ospite_nome as string,
@@ -99,6 +92,7 @@ export async function GET(req: NextRequest) {
       notti_tassabili: nottiTassabili,
       n_ospiti: nOspiti,
       esenti,
+      minori: o?.minori ?? 0,
       adulti: nOspiti === null ? null : Math.max(0, nOspiti - esenti),
       tassa_riscossa: (r.tassa_soggiorno as number | null) ?? 0,
       tassa_trovata: (r.tassa_trovata as number | null) ?? null,

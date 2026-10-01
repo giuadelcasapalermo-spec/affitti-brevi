@@ -25,6 +25,8 @@ type Prenotazione = {
   n_ospiti: number | null;
   adulti: number | null;
   esenti: number;
+  /** Minori di 10 anni dai documenti: esenti in automatico */
+  minori: number;
   tassa_riscossa: number;
   tassa_trovata: number | null;
 };
@@ -190,7 +192,7 @@ export default function TassaSoggiorno() {
       ['Notti imponibili (max 4)', String(p.notti_tassabili)],
       ['Ospiti totali', p.n_ospiti === null ? 'documenti non caricati' : String(p.n_ospiti)],
       ['di cui adulti', p.adulti === null ? '-' : String(p.adulti)],
-      ['di cui esenti', String(p.esenti)],
+      ['di cui esenti', p.minori > 0 ? `${p.esenti} (${p.minori} minori di 10 anni)` : String(p.esenti)],
     ];
 
     let y = 65;
@@ -496,9 +498,12 @@ export default function TassaSoggiorno() {
                             <span
                               onClick={() => { setEditingEsentiId(p.id); setEditingEsentiVal(String(p.esenti)); }}
                               className="cursor-pointer group inline-flex items-center justify-end gap-1 text-gray-600"
-                              title="Clicca per modificare"
+                              title={p.minori > 0
+                                ? `${p.minori} minor${p.minori === 1 ? 'e' : 'i'} di 10 anni dai documenti (esenti in automatico). Clicca per indicare altri esenti`
+                                : 'Clicca per modificare'}
                             >
                               {p.esenti > 0 ? p.esenti : <span className="text-gray-300">0</span>}
+                              {p.minori > 0 && <span className="text-[10px] text-blue-500">({p.minori}&lt;10)</span>}
                               <Pencil size={9} className="text-gray-200 group-hover:text-blue-400 transition-colors" />
                             </span>
                           )}
