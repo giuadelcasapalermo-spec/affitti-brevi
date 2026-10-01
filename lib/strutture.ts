@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import {
   Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig,
   DatiFiscali, RegoleStruttura, DATI_FISCALI_VUOTI, REGOLE_DEFAULT,
+  AutomazioniStruttura, AUTOMAZIONI_DEFAULT,
 } from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
@@ -33,6 +34,8 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS dati_fiscali JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS regole JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS istruzioni_checkin TEXT NOT NULL DEFAULT ''`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS telefono TEXT NOT NULL DEFAULT ''`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS automazioni JSONB DEFAULT NULL`,
   ]);
   _tableReady = true;
 }
@@ -67,6 +70,8 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     dati_fiscali: { ...DATI_FISCALI_VUOTI, ...(row.dati_fiscali as Partial<DatiFiscali> | null) },
     regole: { ...REGOLE_DEFAULT, ...(row.regole as Partial<RegoleStruttura> | null) },
     istruzioni_checkin: (row.istruzioni_checkin as string | null) ?? '',
+    telefono: (row.telefono as string | null) ?? '',
+    automazioni: { ...AUTOMAZIONI_DEFAULT, ...(row.automazioni as Partial<AutomazioniStruttura> | null) },
     created_at: row.created_at as string,
   };
 }
@@ -99,6 +104,8 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     dati_fiscali: { ...DATI_FISCALI_VUOTI },
     regole: { ...REGOLE_DEFAULT },
     istruzioni_checkin: '',
+    telefono: '',
+    automazioni: { ...AUTOMAZIONI_DEFAULT },
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -138,6 +145,10 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET regole = ${JSON.stringify(fields.regole)} WHERE id = ${id}`;
   if (fields.istruzioni_checkin !== undefined)
     await sql`UPDATE strutture SET istruzioni_checkin = ${fields.istruzioni_checkin} WHERE id = ${id}`;
+  if (fields.telefono !== undefined)
+    await sql`UPDATE strutture SET telefono = ${fields.telefono} WHERE id = ${id}`;
+  if (fields.automazioni !== undefined)
+    await sql`UPDATE strutture SET automazioni = ${JSON.stringify(fields.automazioni)} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {
@@ -183,6 +194,8 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     dati_fiscali: { ...DATI_FISCALI_VUOTI },
     regole: { ...REGOLE_DEFAULT },
     istruzioni_checkin: '',
+    telefono: '',
+    automazioni: { ...AUTOMAZIONI_DEFAULT },
     created_at: new Date().toISOString(),
   };
   await sql`

@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/sync",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/automazioni",
+      "schedule": "0 8,9,12,13,19,20 * * *"
     }
   ],
   "headers": [

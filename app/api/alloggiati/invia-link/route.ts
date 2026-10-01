@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
 import { leggiPrenotazioni } from '@/lib/db';
-import { creaLink } from '@/lib/link-alloggiati';
+import { creaLink, testoLinkRegistrazione } from '@/lib/link-alloggiati';
 import { inviaEmail } from '@/lib/gmail-send';
 
 import { differenceInDays, parseISO } from 'date-fns';
@@ -52,8 +52,7 @@ export async function POST(req: NextRequest) {
 
     // canale === 'whatsapp_link': crea solo il token, il frontend apre wa.me
     if (canale === 'whatsapp_link') {
-      const dataIT = pren.check_in.split('-').reverse().join('/');
-      const testo = `Buongiorno ${pren.ospite_nome},\nLe scriviamo da ${struttura.nome}.\nPer velocizzare il check-in del ${dataIT} La invitiamo a registrare in anticipo i suoi dati d'identità cliccando qui:\n${url}\n\nPuò importare i dati inquadrando direttamente il documento con la fotocamera, senza bisogno di trascriverli.\nUna volta ricevuti i documenti, Le invieremo le istruzioni per il check-in.\n\n---\n\nGood morning ${pren.ospite_nome},\nWe are writing from ${struttura.nome}.\nTo speed up your check-in on ${dataIT}, please register your identity details in advance here:\n${url}\n\nYou can import your data by scanning your document with the camera — no need to type anything manually.\nOnce we receive your documents, we will send you the check-in instructions.`;
+      const testo = testoLinkRegistrazione(pren.ospite_nome, struttura.nome, pren.check_in, url);
       return NextResponse.json({ ok: true, token, url, testo });
     }
 

@@ -46,7 +46,8 @@ async function tokenValido(token: string): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) {
+  // Vercel Cron chiama senza cookie di sessione: le rotte /api/cron/ verificano da sé CRON_SECRET
+  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p)) || pathname.startsWith('/api/cron/')) {
     return NextResponse.next();
   }
 

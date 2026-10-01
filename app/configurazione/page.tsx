@@ -41,6 +41,7 @@ export default function ConfigurazionePage() {
 
   const [nome, setNome] = useState('');
   const [indirizzo, setIndirizzo] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [fiscali, setFiscali] = useState<DatiFiscali>(DATI_FISCALI_VUOTI);
   const [regole, setRegole] = useState<RegoleStruttura>(REGOLE_DEFAULT);
   const [numCamere, setNumCamere] = useState(1);
@@ -57,6 +58,7 @@ export default function ConfigurazionePage() {
     if (!struttura) return;
     setNome(struttura.nome === 'Struttura principale' ? '' : struttura.nome);
     setIndirizzo(struttura.indirizzo ?? '');
+    setTelefono(struttura.telefono ?? '');
     setFiscali(struttura.dati_fiscali);
     setRegole(struttura.regole);
     setNumCamere(struttura.num_camere || 1);
@@ -94,7 +96,7 @@ export default function ConfigurazionePage() {
   function datiPasso(): Partial<Struttura> {
     switch (passo) {
       case 0: return { dati_fiscali: fiscali };
-      case 1: return { nome: nome.trim(), indirizzo: indirizzo.trim(), dati_fiscali: fiscali, regole };
+      case 1: return { nome: nome.trim(), indirizzo: indirizzo.trim(), telefono: telefono.trim(), dati_fiscali: fiscali, regole };
       case 2: return {
         num_camere: numCamere,
         nomi_camere: Object.fromEntries(camere.map(id => [id, nomiCamere[id]?.trim() || `Camera ${id}`])),
@@ -204,6 +206,9 @@ export default function ConfigurazionePage() {
           </Campo>
           <Campo label="Indirizzo *">
             <input className={inputCls} value={indirizzo} onChange={e => setIndirizzo(e.target.value)} />
+          </Campo>
+          <Campo label="Telefono WhatsApp della struttura" hint="Riceve gli avvisi quando un invio automatico (link all'ospite, Alloggiati Web) non riesce">
+            <input type="tel" className={inputCls} value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="+39 333 1234567" />
           </Campo>
           <div className="grid sm:grid-cols-2 gap-4">
             <Campo label="Comune">

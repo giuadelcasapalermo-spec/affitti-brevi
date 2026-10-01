@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente } from '@/lib/types';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import {
@@ -54,12 +54,14 @@ export default function ImpostazioniPage() {
   const [editIstruzioni, setEditIstruzioni] = useState('');
   const [salvatoIstruzioni, setSalvatoIstruzioni] = useState(false);
   const [modelloNonSalvato, setModelloNonSalvato] = useState(false);
+  const [editAutomazioni, setEditAutomazioni] = useState<AutomazioniStruttura>({ ...AUTOMAZIONI_DEFAULT });
   const istruzioniRef = useRef<HTMLTextAreaElement>(null);
 
   // Inline editing dati struttura (nel tab Strutture)
   const [editingDatiId, setEditingDatiId] = useState<string | null>(null);
   const [editDatiNome, setEditDatiNome] = useState('');
   const [editDatiIndirizzo, setEditDatiIndirizzo] = useState('');
+  const [editDatiTelefono, setEditDatiTelefono] = useState('');
   const [salvatoEditDati, setSalvatoEditDati] = useState(false);
 
   // Prezzi periodi
@@ -142,6 +144,7 @@ export default function ImpostazioniPage() {
     // Messaggio vuoto: si parte dal modello, come nella configurazione guidata
     setEditIstruzioni(strutturaAttiva.istruzioni_checkin || MODELLO_ISTRUZIONI_BASE);
     setModelloNonSalvato(!strutturaAttiva.istruzioni_checkin);
+    setEditAutomazioni({ ...AUTOMAZIONI_DEFAULT, ...strutturaAttiva.automazioni });
     setNuovoPeriodo(p => ({ ...p, camera_id: 1 }));
   }, [strutturaAttiva?.id]);
 
@@ -250,7 +253,7 @@ export default function ImpostazioniPage() {
     await fetch(`/api/strutture/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: editDatiNome.trim(), indirizzo: editDatiIndirizzo.trim() }),
+      body: JSON.stringify({ nome: editDatiNome.trim(), indirizzo: editDatiIndirizzo.trim(), telefono: editDatiTelefono.trim() }),
     });
     setSalvatoEditDati(true);
     setTimeout(() => { setSalvatoEditDati(false); setEditingDatiId(null); }, 1500);
@@ -289,6 +292,18 @@ export default function ImpostazioniPage() {
     setModelloNonSalvato(false);
     setSalvatoIstruzioni(true);
     setTimeout(() => setSalvatoIstruzioni(false), 2000);
+  }
+
+  // Interruttori delle automazioni: salvati subito
+  async function cambiaAutomazione(chiave: keyof AutomazioniStruttura, valore: boolean) {
+    if (!strutturaAttiva) return;
+    const nuove = { ...editAutomazioni, [chiave]: valore };
+    setEditAutomazioni(nuove);
+    await fetch(`/api/strutture/${strutturaAttiva.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ automazioni: nuove }),
+    });
   }
 
   // Inserisce il segnaposto nel punto del cursore
@@ -871,6 +886,36 @@ export default function ImpostazioniPage() {
                 {/* Sub-tab: CHECK-IN */}
                 {subTab === 'checkin' && (
                   <div>
+                    {/* Invii automatici */}
+                    <div className="mb-6 pb-5 border-b">
+                      <div className="flex items-center gap-2 mb-3">
+                        <RefreshCw size={16} className="text-blue-600" />
+                        <h3 className="font-semibold text-gray-700 text-sm">Invii automatici</h3>
+                      </div>
+                      <div className="space-y-3">
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editAutomazioni.link_whatsapp} onChange={e => cambiaAutomazione('link_whatsapp', e.target.checked)} className="mt-0.5" />
+                          <span className="text-sm text-gray-700">
+                            Link di registrazione documenti via WhatsApp all&apos;ospite
+                            <span className="block text-xs text-gray-400">Ogni giorno alle 10:00, per gli arrivi dei prossimi 4 giorni che non hanno ancora ricevuto il link. Serve il telefono dell&apos;ospite nella prenotazione.</span>
+                          </span>
+                        </label>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editAutomazioni.portale} onChange={e => cambiaAutomazione('portale', e.target.checked)} className="mt-0.5" />
+                          <span className="text-sm text-gray-700">
+                            Invio delle schedine ad Alloggiati Web il giorno del check-in
+                            <span className="block text-xs text-gray-400">Alle 14:00 e alle 21:00; le schedine già inviate non vengono ripetute.</span>
+                          </span>
+                        </label>
+                      </div>
+                      {(editAutomazioni.link_whatsapp || editAutomazioni.portale) && !strutturaAttiva.telefono && (
+                        <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
+                      )}
+                      {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey && (
+                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura (scheda Strutture).</p>
+                      )}
+                    </div>
+
                     <div className="flex items-center gap-2 mb-3">
                       <Mail size={16} className="text-blue-600" />
                       <h3 className="font-semibold text-gray-700 text-sm">Messaggio di check-in</h3>
@@ -931,6 +976,7 @@ export default function ImpostazioniPage() {
           setEditingDatiId(s.id);
           setEditDatiNome(s.nome);
           setEditDatiIndirizzo(s.indirizzo ?? '');
+          setEditDatiTelefono(s.telefono ?? '');
           setSalvatoEditDati(false);
           setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
           setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
@@ -1047,12 +1093,19 @@ export default function ImpostazioniPage() {
                         className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
                       />
                     </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Telefono WhatsApp della struttura</label>
+                      <input type="tel" value={editDatiTelefono} onChange={e => setEditDatiTelefono(e.target.value)} placeholder="+39 333 1234567"
+                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                      <p className="text-[11px] text-gray-400 mt-0.5">Riceve gli avvisi quando un invio automatico (link ospite, Alloggiati Web) non riesce.</p>
+                    </div>
                   </div>
                   <button onClick={() => salvaEditDati(selezionata.id)} disabled={!editDatiNome.trim()}
                     className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
                   >
                     <Save size={13} />
-                    {salvatoEditDati ? 'Salvato!' : 'Salva nome/indirizzo'}
+                    {salvatoEditDati ? 'Salvato!' : 'Salva dati struttura'}
                   </button>
 
                   {/* Conti correnti */}

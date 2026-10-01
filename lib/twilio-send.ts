@@ -23,6 +23,29 @@ export async function inviaWhatsApp(telefono: string, testo: string): Promise<vo
   await client().messages.create({ from: 'whatsapp:' + from.replace(/^whatsapp:/, ''), to, body: testo });
 }
 
+/**
+ * WhatsApp aperto da noi (fuori dalla finestra di 24 ore): Meta accetta solo modelli approvati.
+ * Con contentSid (modello Twilio Content approvato) invia il modello con le variabili {{1}}, {{2}}, …;
+ * senza, ripiega sul testo libero (va bene con la sandbox Twilio o se l'ospite ha scritto nelle ultime 24 ore).
+ * Le variabili dei modelli non ammettono a capo: vengono appiattite.
+ */
+export async function inviaWhatsAppModello(
+  telefono: string, contentSid: string | undefined, variabili: string[], testoLibero: string,
+): Promise<void> {
+  if (!contentSid) return inviaWhatsApp(telefono, testoLibero);
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  if (!from) throw new Error('TWILIO_WHATSAPP_FROM non configurato');
+  const contentVariables = JSON.stringify(Object.fromEntries(
+    variabili.map((v, i) => [String(i + 1), v.replace(/\s*\n\s*/g, ' · ').replace(/\s{4,}/g, ' ').slice(0, 1000) || '-']),
+  ));
+  await client().messages.create({
+    from: 'whatsapp:' + from.replace(/^whatsapp:/, ''),
+    to: 'whatsapp:' + normalizzaTelefono(telefono),
+    contentSid,
+    contentVariables,
+  });
+}
+
 export async function inviaSMS(telefono: string, testo: string): Promise<void> {
   const from = process.env.TWILIO_SMS_FROM ?? process.env.TWILIO_WHATSAPP_FROM;
   if (!from) throw new Error('TWILIO_SMS_FROM non configurato');

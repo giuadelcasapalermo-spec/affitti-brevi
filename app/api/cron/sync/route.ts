@@ -105,12 +105,10 @@ async function syncStruttura(strutturaId: string, cfg: BookingChannelManagerConf
 }
 
 export async function GET(req: NextRequest) {
+  // /api/cron/ è fuori dal controllo di sessione del proxy: senza segreto configurato si rifiuta tutto
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get('authorization');
-    if (auth !== `Bearer ${secret}`) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
+  if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
+    return new NextResponse('Unauthorized', { status: 401 });
   }
 
   // Carica tutte le strutture con channel_manager_config configurato
