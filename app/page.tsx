@@ -7,6 +7,7 @@ import { isWithinInterval, parseISO, differenceInDays, format, startOfMonth, end
 import { fData } from '@/lib/utils';
 import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
+import { useEtichette } from '@/hooks/useEtichette';
 
 const COLORI_CAMERA: Record<number, { bg: string; border: string; testo: string; bar: string }> = {
   1: { bg: 'bg-red-100',   border: 'border-red-300',   testo: 'text-red-800',   bar: 'bg-red-500' },   // Rossa
@@ -49,6 +50,7 @@ const DEFAULT_AL = format(endOfMonth(oggi), 'yyyy-MM-dd');
 
 export default function Dashboard() {
   const camere = useCamere();
+  const et = useEtichette();
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
   const [uscite, setUscite] = useState<Uscita[]>([]);
   const [entrate, setEntrate] = useState<Entrata[]>([]);
@@ -206,7 +208,7 @@ export default function Dashboard() {
           />
         </div>
         <div className="w-px h-5 bg-gray-200" />
-        <span className="text-sm font-medium text-gray-600">Camera:</span>
+        <span className="text-sm font-medium text-gray-600">{et.Camera}:</span>
         <select
           value={filtroCamera}
           onChange={(e) => setFiltroCamera(e.target.value === 'tutte' ? 'tutte' : Number(e.target.value))}
@@ -231,7 +233,7 @@ export default function Dashboard() {
       {(() => { const saldo = entrateEffettive - usciteDelPeriodo; return (
       <div className="sm:hidden bg-white rounded-lg shadow-sm px-4 py-3 grid grid-cols-3 gap-y-3 divide-x divide-gray-100">
         <div className="text-center">
-          <div className="text-[11px] text-gray-400">Camere</div>
+          <div className="text-[11px] text-gray-400">{et.Camere}</div>
           <div className="text-base font-bold text-gray-800">{camereImpegnate.length}/{filtroCamera === 'tutte' ? camere.length : 1}</div>
         </div>
         <div className="text-center">
@@ -262,7 +264,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-blue-100 rounded-full p-2"><BedDouble size={20} className="text-blue-600" /></div>
           <div>
-            <div className="text-sm text-gray-500">Camere nel periodo</div>
+            <div className="text-sm text-gray-500">{et.Camere} nel periodo</div>
             <div className="text-lg font-bold text-gray-800">{camereImpegnate.length} / {filtroCamera === 'tutte' ? camere.length : 1}</div>
           </div>
         </div>
@@ -319,7 +321,7 @@ export default function Dashboard() {
         const camFiltrate = camere.filter((c) => filtroCamera === 'tutte' || c.id === filtroCamera);
         return (
           <div className="bg-white rounded-lg shadow-sm p-3 sm:p-5">
-            <h2 className="font-semibold text-gray-700 mb-3 sm:mb-4 text-sm sm:text-base">Camere nel periodo</h2>
+            <h2 className="font-semibold text-gray-700 mb-3 sm:mb-4 text-sm sm:text-base">{et.Camere} nel periodo</h2>
             <div className={`grid gap-1.5 sm:gap-3 ${camFiltrate.length === 1 ? 'grid-cols-1' : 'grid-cols-5'}`}>
               {camFiltrate.map((camera) => {
                 const prenotazioniCamera = prenNelPeriodo.filter((p) => p.camera_id === camera.id);

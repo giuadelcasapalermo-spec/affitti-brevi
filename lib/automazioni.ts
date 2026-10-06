@@ -9,6 +9,7 @@ import { leggiPrenotazioni } from './db';
 import { leggiAlloggiati, marcaInviatiPortale } from './alloggiati-db';
 import { inviaSchedinePortale } from './portale-alloggiati';
 import { inviaWhatsAppModello } from './twilio-send';
+import { etichetteUnita } from './unita';
 
 const FUSO = 'Europe/Rome';
 
@@ -25,7 +26,7 @@ export function oraItalia(): number {
 }
 
 const dataIT = (iso: string) => iso.split('-').reverse().join('/');
-const nomeCamera = (s: Struttura, id: number) => s.nomi_camere[id] || `Camera ${id}`;
+const nomeCamera = (s: Struttura, id: number) => s.nomi_camere[id] || `${etichetteUnita(s.unita_casa).Camera} ${id}`;
 const attiva = (p: Prenotazione) => p.stato !== 'cancellata';
 
 // ─── Avvisi alla struttura ──────────────────────────────────────────────────

@@ -27,6 +27,7 @@ import { getCameraStyle } from '@/lib/camera-colors';
 import { isGiornoCambio } from '@/lib/pulizie';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSoloCalendario } from '@/hooks/useSoloCalendario';
+import { useEtichette } from '@/hooks/useEtichette';
 
 
 const GIORNI_SETTIMANA = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
@@ -53,6 +54,7 @@ function buildWeeks(date: Date): (Date | null)[][] {
 
 export default function CalendarioPage() {
   const camere = useCamere();
+  const et = useEtichette();
   const soloCalendario = useSoloCalendario();
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
   const [meseStr, setMeseStr] = usePersistedState('cal-mese', format(new Date(), 'yyyy-MM-dd'));
@@ -519,7 +521,7 @@ export default function CalendarioPage() {
               return (
                 <div
                   key={p.id}
-                  title={`${cam?.nome ?? 'Camera'} — ${p.ospite_nome}`}
+                  title={`${cam?.nome ?? et.Camera} — ${p.ospite_nome}`}
                   className={`w-2.5 h-2.5 rounded-full ring-1 ring-white ${st.dot}`}
                 />
               );
@@ -538,7 +540,7 @@ export default function CalendarioPage() {
               return (
                 <div
                   key={p.id}
-                  title={`${cam?.nome ?? 'Camera'} — ${p.ospite_nome} (${nottiTrascorse}n)`}
+                  title={`${cam?.nome ?? et.Camera} — ${p.ospite_nome} (${nottiTrascorse}n)`}
                   className={`w-2.5 h-2.5 rounded-full ring-1 ring-white ${st.dot}`}
                 />
               );
@@ -980,7 +982,7 @@ export default function CalendarioPage() {
                       <div key={id} className="rounded-lg border border-gray-200 p-2">
                         <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
                           <div className={`w-2 h-2 rounded-full ${st.dot}`} />
-                          {id === 0 ? 'Da buono lavanderia' : (cam?.nome ?? `Camera ${id}`)}
+                          {id === 0 ? 'Da buono lavanderia' : (cam?.nome ?? `${et.Camera} ${id}`)}
                           {pulizieCheckout.some((p) => p.camera_id === id) ? (
                             <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium">Check-out</span>
                           ) : pulizieCambio.some((p) => p.camera_id === id) ? (

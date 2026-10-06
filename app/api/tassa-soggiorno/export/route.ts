@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { etichetteUnita } from '@/lib/unita';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
 import sql from '@/lib/postgres';
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
   const nomiCamere = struttura.nomi_camere ?? {};
   const maxNotti = struttura.regole.tassa_max_notti;
 
-  const header = csvRow(['Check-in', 'Check-out', 'Ospite', 'Camera', 'Notti', `Notti tassabili (max ${maxNotti})`, 'N. Ospiti', 'Adulti', 'Esenti', 'Tassa riscossa (€)']);
+  const header = csvRow(['Check-in', 'Check-out', 'Ospite', etichetteUnita(struttura.unita_casa).Camera, 'Notti', `Notti tassabili (max ${maxNotti})`, 'N. Ospiti', 'Adulti', 'Esenti', 'Tassa riscossa (€)']);
   let totOspiti = 0, totAdulti = 0, totEsenti = 0;
   const righe = prenRows.map(r => {
     const cin  = new Date(r.check_in as string);
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
     const esenti = esentiPrenotazione((r.tassa_esenti as number | null) ?? 0, o);
     const adulti = nOspiti === null ? null : Math.max(0, nOspiti - esenti);
     totOspiti += nOspiti ?? 0; totAdulti += adulti ?? 0; totEsenti += esenti;
-    const nomeCamera = nomiCamere[r.camera_id as number] ?? `Camera ${r.camera_id}`;
+    const nomeCamera = nomiCamere[r.camera_id as number] ?? `${etichetteUnita(struttura.unita_casa).Camera} ${r.camera_id}`;
     return csvRow([
       r.check_in as string,
       r.check_out as string,

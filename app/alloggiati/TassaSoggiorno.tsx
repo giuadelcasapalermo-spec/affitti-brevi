@@ -6,6 +6,7 @@ import { it } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Download, CheckCircle2, Clock, Loader2, X, Receipt, Pencil, FileText } from 'lucide-react';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
+import { useEtichette } from '@/hooks/useEtichette';
 
 const TRIMESTRI = ['Q1 Gen–Mar', 'Q2 Apr–Giu', 'Q3 Lug–Set', 'Q4 Ott–Dic'];
 const MESI = [
@@ -56,6 +57,7 @@ function trimestreCorrente(): number {
 
 export default function TassaSoggiorno() {
   const camere = useCamere();
+  const et = useEtichette();
   const { struttura } = useStruttura();
   const [anno, setAnno] = useState(new Date().getFullYear());
   const [trim, setTrim] = useState(trimestreCorrente());
@@ -95,7 +97,7 @@ export default function TassaSoggiorno() {
   useEffect(() => { carica(anno, trim, mese, periodo); }, [anno, trim, mese, periodo, carica]);
 
   function nomeCamera(id: number) {
-    return camere.find(c => c.id === id)?.nome ?? `Cam ${id}`;
+    return camere.find(c => c.id === id)?.nome ?? `${et.Cam} ${id}`;
   }
 
   function formatData(d: string) {
@@ -447,7 +449,7 @@ export default function TassaSoggiorno() {
                       <th className="text-left px-4 py-2 font-medium">Arrivo</th>
                       <th className="text-left px-4 py-2 font-medium">Partenza</th>
                       <th className="text-left px-4 py-2 font-medium">Ospite</th>
-                      <th className="text-left px-4 py-2 font-medium">Camera</th>
+                      <th className="text-left px-4 py-2 font-medium">{et.Camera}</th>
                       <th className="text-right px-4 py-2 font-medium">Notti</th>
                       <th className="text-right px-4 py-2 font-medium">Tax notti</th>
                       <th className="text-right px-4 py-2 font-medium">Adulti</th>

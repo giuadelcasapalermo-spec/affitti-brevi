@@ -126,6 +126,8 @@ export interface Struttura {
   istruzioni_checkin: string;
   /** Messaggio di check-in proprio di una camera; vuoto/assente = quello della struttura */
   istruzioni_camere: Record<number, string>;
+  /** Le unità sono appartamenti: in tutta l'app "Casa/Case" al posto di "Camera/Camere" */
+  unita_casa: boolean;
   /** Numero WhatsApp della struttura: riceve gli avvisi di errore delle automazioni */
   telefono: string;
   automazioni: AutomazioniStruttura;

@@ -12,6 +12,7 @@ import InvioMassivoWhatsApp from '@/components/InvioMassivoWhatsApp';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { useEtichette } from '@/hooks/useEtichette';
 
 type CheckinStatus = {
   linkInviato: boolean;
@@ -62,6 +63,7 @@ const INPUT_SELECT = (w: string) => INPUT.replace('w-full', w).replace('text-sm'
 function PrenotazioniInner() {
   const searchParams = useSearchParams();
   const camere = useCamere();
+  const et = useEtichette();
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
   const [loading, setLoading] = useState(true);
   const [mostraForm, setMostraForm] = useState(searchParams.get('nuova') === '1');
@@ -379,7 +381,7 @@ function PrenotazioniInner() {
           dal={filtroDal}
           al={filtroAl}
           checkinStatus={checkinStatus}
-          nomeCamera={id => camere.find(c => c.id === id)?.nome ?? `Camera ${id}`}
+          nomeCamera={id => camere.find(c => c.id === id)?.nome ?? `${et.Camera} ${id}`}
           onClose={() => {
             setInvioMassivo(false);
             // Aggiorna i badge "link inviato" dopo l'invio
@@ -455,7 +457,7 @@ function PrenotazioniInner() {
             <option value="da_completare">Da completare{daCompletareCount > 0 ? ` (${daCompletareCount})` : ''}</option>
           </select>
           <select value={filtroCamera} onChange={e => setFiltroCamera(e.target.value)} className="border rounded px-2 py-1 text-xs">
-            <option value="tutte">Tutte le camere</option>
+            <option value="tutte">Tutte le {et.camere}</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
           <div className="relative">
@@ -526,7 +528,7 @@ function PrenotazioniInner() {
               <option value="da_completare">Da completare{daCompletareCount > 0 ? ` (${daCompletareCount})` : ''}</option>
             </select>
             <select value={filtroCamera} onChange={e => setFiltroCamera(e.target.value)} className="border rounded px-2 py-1.5 text-xs w-full">
-              <option value="tutte">Tutte le camere</option>
+              <option value="tutte">Tutte le {et.camere}</option>
               {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
             <div className="relative">
@@ -709,7 +711,7 @@ function PrenotazioniInner() {
                     {/* Separatore */}
                     <div className="border-t border-gray-100 mt-2.5 pt-2.5 flex items-center justify-between">
                       {/* Camera */}
-                      <span className="text-xs text-gray-400">{cam?.nome ?? `Camera ${p.camera_id}`}</span>
+                      <span className="text-xs text-gray-400">{cam?.nome ?? `${et.Camera} ${p.camera_id}`}</span>
                       {/* Valore economico */}
                       <div className="flex items-center gap-2">
                         {p.tassa_soggiorno ? (
@@ -743,7 +745,7 @@ function PrenotazioniInner() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Ospite</th>
-                <th className="text-left px-2 py-3 font-medium text-gray-600">Camera</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">{et.Camera}</th>
                 <th className="text-left px-2 py-3 font-medium text-gray-600">Check-in</th>
                 <th className="text-left px-2 py-3 font-medium text-gray-600">Check-out</th>
                 <th className="text-right px-2 py-3 font-medium text-gray-600">Notti</th>

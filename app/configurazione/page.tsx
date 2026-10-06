@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, ChevronRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useStruttura } from '@/hooks/useStruttura';
+import { etichetteUnita } from '@/lib/unita';
 import {
   DatiFiscali, RegoleStruttura, ContoCorrente, TipoContoCorrente, TIPI_CONTO,
   DATI_FISCALI_VUOTI, REGOLE_DEFAULT, Struttura,
@@ -35,6 +36,7 @@ function Campo({ label, hint, children }: { label: string; hint?: string; childr
 export default function ConfigurazionePage() {
   const router = useRouter();
   const { struttura } = useStruttura();
+  const et = etichetteUnita(struttura?.unita_casa);
   const [passo, setPasso] = useState(0);
   const [salvando, setSalvando] = useState(false);
   const [errore, setErrore] = useState('');
@@ -243,7 +245,7 @@ export default function ConfigurazionePage() {
             {camere.map(id => (
               <div key={id} className="grid grid-cols-[2rem_1fr_7rem] gap-2 items-center">
                 <span className="text-sm text-gray-500">{id}</span>
-                <input className={inputCls} placeholder={`Camera ${id}`} value={nomiCamere[id] ?? ''}
+                <input className={inputCls} placeholder={`${et.Camera} ${id}`} value={nomiCamere[id] ?? ''}
                   onChange={e => setNomiCamere(n => ({ ...n, [id]: e.target.value }))} />
                 <input className={inputCls} type="number" min={0} value={prezziCamere[id] ?? ''}
                   onChange={e => setPrezziCamere(p => ({ ...p, [id]: Number(e.target.value) }))} />
@@ -258,7 +260,7 @@ export default function ConfigurazionePage() {
             e Airbnb (Calendario → Disponibilità → Collega calendari). Facoltativo: si può aggiungere anche dopo, in Altro → iCal.
           </p>
           {camere.map(id => (
-            <Campo key={id} label={nomiCamere[id]?.trim() || `Camera ${id}`}>
+            <Campo key={id} label={nomiCamere[id]?.trim() || `${et.Camera} ${id}`}>
               <input className={inputCls} type="url" placeholder="https://ical.booking.com/v1/export?…" value={icalUrls[id] ?? ''}
                 onChange={e => setIcalUrls(u => ({ ...u, [id]: e.target.value }))} />
             </Campo>

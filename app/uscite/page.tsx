@@ -11,6 +11,7 @@ import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
+import { useEtichette } from '@/hooks/useEtichette';
 
 /* ── colori ───────────────────────────────────────────── */
 const COL_USCITA: Record<CategoriaUscita, string> = {
@@ -54,6 +55,7 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
   camere: { id: number; nome: string }[];
   contiCorrenti: ContoCorrente[];
 }) {
+  const et = useEtichette();
   const defaultFonte = contiCorrenti[0]?.nome ?? 'Contanti';
   const [f, setF] = useState({
     data:            iniziale?.data            ?? oggi,
@@ -109,7 +111,7 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
           </select></div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">Camera</label>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">{et.Camera}</label>
           <select value={f.camera_id} onChange={e => set('camera_id', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             <option value="">Generale</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
@@ -133,6 +135,7 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
   camere: { id: number; nome: string }[];
   contiCorrenti: ContoCorrente[];
 }) {
+  const et = useEtichette();
   const defaultFonte = contiCorrenti[0]?.nome ?? 'Contanti';
   const [f, setF] = useState({
     data:            iniziale?.data            ?? oggi,
@@ -186,7 +189,7 @@ function FormEntrata({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
           <select value={f.fonte_pagamento} onChange={e => set('fonte_pagamento', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
           </select></div>
-        <div><label className="block text-sm font-medium text-gray-700 mb-1">Camera</label>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">{et.Camera}</label>
           <select value={f.camera_id} onChange={e => set('camera_id', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
             <option value="">Generale</option>
             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}

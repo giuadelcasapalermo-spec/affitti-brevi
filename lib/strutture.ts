@@ -43,6 +43,7 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS istruzioni_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS ical_urls_airbnb JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS unita_casa BOOLEAN NOT NULL DEFAULT FALSE`,
   ]);
   _tableReady = true;
 }
@@ -84,6 +85,7 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     regole: { ...REGOLE_DEFAULT, ...(row.regole as Partial<RegoleStruttura> | null) },
     istruzioni_checkin: (row.istruzioni_checkin as string | null) ?? '',
     istruzioni_camere: toNumericRecord(row.istruzioni_camere),
+    unita_casa: row.unita_casa === true,
     telefono: (row.telefono as string | null) ?? '',
     automazioni: { ...AUTOMAZIONI_DEFAULT, ...(row.automazioni as Partial<AutomazioniStruttura> | null) },
     created_at: row.created_at as string,
@@ -120,6 +122,7 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     regole: { ...REGOLE_DEFAULT },
     istruzioni_checkin: '',
     istruzioni_camere: {},
+    unita_casa: false,
     telefono: '',
     automazioni: { ...AUTOMAZIONI_DEFAULT },
     alloggiati_camere: {},
@@ -169,6 +172,8 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET istruzioni_checkin = ${fields.istruzioni_checkin} WHERE id = ${id}`;
   if (fields.istruzioni_camere !== undefined)
     await sql`UPDATE strutture SET istruzioni_camere = ${JSON.stringify(fields.istruzioni_camere)} WHERE id = ${id}`;
+  if (fields.unita_casa !== undefined)
+    await sql`UPDATE strutture SET unita_casa = ${fields.unita_casa} WHERE id = ${id}`;
   if (fields.telefono !== undefined)
     await sql`UPDATE strutture SET telefono = ${fields.telefono} WHERE id = ${id}`;
   if (fields.automazioni !== undefined)
@@ -230,6 +235,7 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     regole: { ...REGOLE_DEFAULT },
     istruzioni_checkin: '',
     istruzioni_camere: {},
+    unita_casa: false,
     telefono: '',
     automazioni: { ...AUTOMAZIONI_DEFAULT },
     alloggiati_camere: {},

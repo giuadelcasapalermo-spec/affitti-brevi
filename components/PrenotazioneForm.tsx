@@ -6,6 +6,7 @@ import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO } from 'date-fns';
 import VoiceInput from './VoiceInput';
 import { calcolaImporto, RigaPrezzo } from '@/lib/prezzi';
+import { useEtichette } from '@/hooks/useEtichette';
 
 interface Props {
   iniziale?: Partial<Prenotazione>;
@@ -16,6 +17,7 @@ interface Props {
 export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: Props) {
   const oggi = new Date().toISOString().split('T')[0];
   const camere = useCamere();
+  const et = useEtichette();
 
   const [form, setForm] = useState({
     camera_id: iniziale.camera_id ?? 1,
@@ -97,7 +99,7 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
       <VoiceInput tipo="prenotazione" camere={camere} onParsed={applicaVoce} />
       <div className="grid grid-cols-2 sm:grid-cols-[1fr_6rem_1fr] gap-4">
         <div className="col-span-2 sm:col-span-1">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Camera *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{et.Camera} *</label>
           <select
             value={form.camera_id}
             onChange={(e) => set('camera_id', Number(e.target.value))}

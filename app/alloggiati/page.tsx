@@ -10,6 +10,7 @@ import { getCameraStyle } from '@/lib/camera-colors';
 import { useCamere } from '@/hooks/useCamere';
 import { PAESI, CODICE_ITALIA } from '@/lib/codici-alloggiati';
 import { COMUNI } from '@/lib/comuni-italiani';
+import { useEtichette } from '@/hooks/useEtichette';
 
 const oggi = new Date().toISOString().split('T')[0];
 
@@ -49,6 +50,7 @@ function rigaLabel(a: Alloggiato): string {
 
 export default function AlloggiatiPage() {
   const camere = useCamere();
+  const et = useEtichette();
   const [data, setData] = useState(oggi);
   const [alloggiati, setAlloggiati] = useState<Alloggiato[]>([]);
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
@@ -359,7 +361,7 @@ export default function AlloggiatiPage() {
 
   function getNomeCamera(cameraId: number): string {
     const c = camere.find(c => c.id === cameraId);
-    return c?.nome ?? `Camera ${cameraId}`;
+    return c?.nome ?? `${et.Camera} ${cameraId}`;
   }
 
   function getCameraColor(cameraId: number): string {

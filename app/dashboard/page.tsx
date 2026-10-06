@@ -13,6 +13,7 @@ import { getCameraStyle } from '@/lib/camera-colors';
 import ControlloLavanderia from '@/components/ControlloLavanderia';
 import MargineCamere from '@/components/MargineCamere';
 import { ComposedChart, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useEtichette } from '@/hooks/useEtichette';
 
 
 const COLORI_CAT_USCITA: Record<string, { bar: string; hex: string }> = {
@@ -57,6 +58,7 @@ const DEFAULT_AL = format(endOfMonth(oggi), 'yyyy-MM-dd');
 
 export default function Dashboard() {
   const camere = useCamere();
+  const et = useEtichette();
   const { struttura } = useStruttura();
   const contiCorrenti: ContoCorrente[] = struttura?.conti_correnti?.length
     ? struttura.conti_correnti
@@ -231,7 +233,7 @@ export default function Dashboard() {
 
   function scaricaExcelCamere() {
     const nGiorniPeriodo = differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1;
-    const intestazioni = ['Camera', 'Notti Occupate', `Giorni Periodo`, 'Saturazione %', 'N° Prenotazioni', 'Ricavo Totale (€)', 'Prezzo Medio/Notte (€)', 'Prezzo Base (€)'];
+    const intestazioni = [et.Camera, 'Notti Occupate', `Giorni Periodo`, 'Saturazione %', 'N° Prenotazioni', 'Ricavo Totale (€)', 'Prezzo Medio/Notte (€)', 'Prezzo Base (€)'];
     const righe = camere
       .filter(c => filtroCamera === 'tutte' || c.id === filtroCamera)
       .sort((a, b) => a.id - b.id)
@@ -244,7 +246,7 @@ export default function Dashboard() {
       });
     // Aggiunge prenotazioni dettagliate
     const intestazioniPren = ['', '', '', '', '', '', '', ''];
-    const intestazioniPren2 = ['Camera', 'Ospite', 'Check-in', 'Check-out', 'Notti', 'Importo (€)', 'Fonte', ''];
+    const intestazioniPren2 = [et.Camera, 'Ospite', 'Check-in', 'Check-out', 'Notti', 'Importo (€)', 'Fonte', ''];
     const righePren = prenNelPeriodo
       .sort((a, b) => a.check_in.localeCompare(b.check_in))
       .map(p => {
@@ -335,7 +337,7 @@ export default function Dashboard() {
           }`}
         >
           <BarChart2 size={14} />
-          <span className="sm:hidden">Camere</span><span className="hidden sm:inline">Performance Camere</span>
+          <span className="sm:hidden">{et.Camere}</span><span className="hidden sm:inline">Performance {et.Camere}</span>
         </button>
         <button
           onClick={() => setSezione('prima_nota')}
@@ -450,7 +452,7 @@ export default function Dashboard() {
           <button onClick={() => spostaMese(1)} className="p-1 rounded hover:bg-gray-100 shrink-0"><ChevronRight size={16} /></button>
         </div>
         <div className="w-px h-5 bg-gray-200" />
-        <span className="text-sm font-medium text-gray-600">Camera:</span>
+        <span className="text-sm font-medium text-gray-600">{et.Camera}:</span>
         <select
           value={filtroCamera}
           onChange={(e) => setFiltroCamera(e.target.value === 'tutte' ? 'tutte' : Number(e.target.value))}
@@ -530,7 +532,7 @@ export default function Dashboard() {
             const camFiltrate = camere.filter((c) => filtroCamera === 'tutte' || c.id === filtroCamera).sort((a, b) => a.id - b.id);
             return (
               <div className="bg-white rounded-lg shadow-sm p-3 sm:p-5">
-                <h2 className="font-semibold text-gray-700 mb-3 sm:mb-4 text-sm sm:text-base">Camere nel periodo</h2>
+                <h2 className="font-semibold text-gray-700 mb-3 sm:mb-4 text-sm sm:text-base">{et.Camere} nel periodo</h2>
                 <div className={`grid gap-1.5 sm:gap-3 ${camFiltrate.length === 1 ? 'grid-cols-1' : 'grid-cols-5'}`}>
                   {camFiltrate.map((camera) => {
                     const prenotazioniCamera = prenNelPeriodo.filter((p) => p.camera_id === camera.id);

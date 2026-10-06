@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT, CodiciCamera, OsservatorioCredentials } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
+import { etichetteUnita } from '@/lib/unita';
 import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
@@ -39,6 +40,7 @@ const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_
 export default function ImpostazioniPage() {
   const camere = useCamere();
   const { struttura: strutturaAttiva, strutture, setStruttura: setStrutturaAttiva } = useStruttura();
+  const et = etichetteUnita(strutturaAttiva?.unita_casa);
 
   const [sezione, setSezione] = useState<MainTab>('strutture');
   const [subTab, setSubTab] = useState<SubTab>('camere');
@@ -72,6 +74,9 @@ export default function ImpostazioniPage() {
   const [editDatiNome, setEditDatiNome] = useState('');
   const [editDatiIndirizzo, setEditDatiIndirizzo] = useState('');
   const [editDatiTelefono, setEditDatiTelefono] = useState('');
+  const [editDatiRagione, setEditDatiRagione] = useState('');
+  const [editDatiPiva, setEditDatiPiva] = useState('');
+  const [editDatiCasa, setEditDatiCasa] = useState(false);
   const [salvatoEditDati, setSalvatoEditDati] = useState(false);
 
   // Prezzi periodi
@@ -370,11 +375,18 @@ export default function ImpostazioniPage() {
   }
 
   async function salvaEditDati(id: string) {
+    const s = strutture.find(x => x.id === id);
     await fetch(`/api/strutture/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: editDatiNome.trim(), indirizzo: editDatiIndirizzo.trim(), telefono: editDatiTelefono.trim() }),
+      body: JSON.stringify({
+        nome: editDatiNome.trim(), indirizzo: editDatiIndirizzo.trim(), telefono: editDatiTelefono.trim(),
+        dati_fiscali: { ...s?.dati_fiscali, ragione_sociale: editDatiRagione.trim(), partita_iva: editDatiPiva.replace(/\s/g, '') },
+        unita_casa: editDatiCasa,
+      }),
     });
+    // "Camere" ↔ "Case" cambia le scritte in tutta l'app (anche la barra): si ricarica la pagina
+    if (s && !!s.unita_casa !== editDatiCasa) { window.location.reload(); return; }
     setSalvatoEditDati(true);
     setTimeout(() => { setSalvatoEditDati(false); setEditingDatiId(null); }, 1500);
     caricaStrutture();
@@ -624,7 +636,7 @@ export default function ImpostazioniPage() {
 
   const TAB = [
     { id: 'strutture', label: 'Strutture', icon: Building2, color: 'slate'  },
-    { id: 'camere',    label: 'Camere',    icon: PenLine,   color: 'purple' },
+    { id: 'camere',    label: et.Camere,   icon: PenLine,   color: 'purple' },
     { id: 'account',   label: 'Account',   icon: Shield,    color: 'indigo' },
     { id: 'app',       label: 'App',       icon: Palette,   color: 'teal'   },
     { id: 'sistema',   label: 'Sistema',   icon: Settings2, color: 'orange' },
@@ -664,7 +676,7 @@ export default function ImpostazioniPage() {
   );
 
   const SUB_TABS: { id: SubTab; label: string }[] = [
-    { id: 'camere', label: 'Camere' },
+    { id: 'camere', label: et.Camere },
     { id: 'prezzi', label: 'Prezzi' },
     { id: 'ical',   label: 'iCal'   },
     { id: 'checkin', label: 'Check-in' },
@@ -732,7 +744,7 @@ export default function ImpostazioniPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <PenLine size={16} className="text-purple-600" />
-                      <h3 className="font-semibold text-gray-700 text-sm">Camere</h3>
+                      <h3 className="font-semibold text-gray-700 text-sm">{et.Camere}</h3>
                     </div>
                     <div className="space-y-2 mb-3">
                       <div className="flex items-center gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide pb-1 border-b">
@@ -747,9 +759,9 @@ export default function ImpostazioniPage() {
                           <div key={id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1.5 pb-2 sm:pb-0 border-b sm:border-0 border-gray-100">
                             <div className="flex items-center gap-1.5 w-16 sm:w-20 flex-shrink-0">
                               <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
-                              <span className="text-sm text-gray-400">Cam {id}</span>
+                              <span className="text-sm text-gray-400">{et.Cam} {id}</span>
                             </div>
-                            <input type="text" placeholder={`Camera ${id}`} value={editNomiCamere[id] ?? ''}
+                            <input type="text" placeholder={`${et.Camera} ${id}`} value={editNomiCamere[id] ?? ''}
                               onChange={e => setEditNomiCamere(prev => ({ ...prev, [id]: e.target.value }))}
                               className="flex-1 min-w-0 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
                             />
@@ -777,7 +789,7 @@ export default function ImpostazioniPage() {
                         className="flex items-center gap-1.5 bg-purple-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-purple-700"
                       >
                         <Save size={14} />
-                        {salvatoEditCamere ? 'Salvato!' : 'Salva camere'}
+                        {salvatoEditCamere ? 'Salvato!' : `Salva ${et.camere}`}
                       </button>
                       <button onClick={() => setEditNumCamere(n => n + 1)}
                         className="flex items-center gap-1 border border-purple-300 text-purple-700 px-2 py-1.5 rounded text-sm hover:bg-purple-50"
@@ -801,14 +813,14 @@ export default function ImpostazioniPage() {
                       <h3 className="font-semibold text-gray-700 text-sm">URL iCal Booking.com</h3>
                     </div>
                     <p className="text-xs text-gray-400 mb-3">
-                      Incolla gli URL iCal di importazione da Booking.com per ogni camera.
+                      Incolla gli URL iCal di importazione da Booking.com per ogni {et.camera}.
                     </p>
                     <div className="space-y-2 mb-3">
                       {idsEditCamere.map(id => (
                         <div key={id} className="flex items-center gap-3">
                           <div className="flex items-center gap-1.5 w-24 flex-shrink-0">
                             <div className={`w-2 h-2 rounded-full ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
-                            <span className="text-xs text-gray-500 truncate">{editNomiCamere[id] || `Cam ${id}`}</span>
+                            <span className="text-xs text-gray-500 truncate">{editNomiCamere[id] || `${et.Cam} ${id}`}</span>
                           </div>
                           <input type="url" placeholder="https://ical.booking.com/v1/exportiCalendar?..."
                             value={editIcalUrls[id] ?? ''}
@@ -831,7 +843,7 @@ export default function ImpostazioniPage() {
                         <div key={id} className="flex items-center gap-3">
                           <div className="flex items-center gap-1.5 w-24 flex-shrink-0">
                             <div className={`w-2 h-2 rounded-full ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
-                            <span className="text-xs text-gray-500 truncate">{editNomiCamere[id] || `Cam ${id}`}</span>
+                            <span className="text-xs text-gray-500 truncate">{editNomiCamere[id] || `${et.Cam} ${id}`}</span>
                           </div>
                           <input type="url" placeholder="https://www.airbnb.it/calendar/ical/....ics?s=..."
                             value={editIcalAirbnb[id] ?? ''}
@@ -870,7 +882,7 @@ export default function ImpostazioniPage() {
                             return (
                               <div key={`${r.canale ?? 'booking'}-${r.camera_id}`} className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 ${r.errore ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getCameraStyle(r.camera_id, colori[r.camera_id]).dot}`} />
-                                <span>{r.canale === 'airbnb' ? 'Airbnb · ' : 'Booking · '}{cam?.nome ?? `Camera ${r.camera_id}`}:</span>
+                                <span>{r.canale === 'airbnb' ? 'Airbnb · ' : 'Booking · '}{cam?.nome ?? `${et.Camera} ${r.camera_id}`}:</span>
                                 {r.errore ? <span>{r.errore}</span> : <span>+{r.aggiunte} aggiunte, -{r.rimosse} rimosse</span>}
                               </div>
                             );
@@ -907,7 +919,7 @@ export default function ImpostazioniPage() {
                       </p>
                       <div className="space-y-2">
                         {idsCamereOutput.map(id => {
-                          const nomeAttuale = camere.find(c => c.id === id)?.nome || `Camera ${id}`;
+                          const nomeAttuale = camere.find(c => c.id === id)?.nome || `${et.Camera} ${id}`;
                           const url = urlFeed(id, 'booking');
                           return (
                             <div key={id} className="flex items-center gap-3">
@@ -939,7 +951,7 @@ export default function ImpostazioniPage() {
                       </p>
                       <div className="space-y-2">
                         {idsCamereOutput.map(id => {
-                          const nomeAttuale = camere.find(c => c.id === id)?.nome || `Camera ${id}`;
+                          const nomeAttuale = camere.find(c => c.id === id)?.nome || `${et.Camera} ${id}`;
                           const chiave = `airbnb-${id}`;
                           return (
                             <div key={id} className="flex items-center gap-3">
@@ -1007,7 +1019,7 @@ export default function ImpostazioniPage() {
                     )}
 
                     {idsEditCamere.map(id => {
-                      const nomeCamera = editNomiCamere[id] || `Camera ${id}`;
+                      const nomeCamera = editNomiCamere[id] || `${et.Camera} ${id}`;
                       const periodiCamera = (filtroPeriodo === 'corrente' && !hasPeriodoCorrente ? periodiAttiva : periodiVisibili)
                         .filter(p => p.camera_id === id);
                       if (periodiCamera.length === 0) return null;
@@ -1053,12 +1065,12 @@ export default function ImpostazioniPage() {
                       <p className="text-xs font-medium text-gray-500 mb-3">Aggiungi periodo</p>
                       <div className="grid grid-cols-2 gap-2 mb-3">
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">Camera</label>
+                          <label className="block text-xs text-gray-500 mb-1">{et.Camera}</label>
                           <select value={nuovoPeriodo.camera_id}
                             onChange={e => setNuovoPeriodo(p => ({ ...p, camera_id: Number(e.target.value) }))}
                             className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-green-400"
                           >
-                            {idsEditCamere.map(id => <option key={id} value={id}>{editNomiCamere[id] || `Camera ${id}`}</option>)}
+                            {idsEditCamere.map(id => <option key={id} value={id}>{editNomiCamere[id] || `${et.Camera} ${id}`}</option>)}
                           </select>
                         </div>
                         <div>
@@ -1121,13 +1133,13 @@ export default function ImpostazioniPage() {
                 {/* Sub-tab: CIN / CIR (per camera) */}
                 {subTab === 'codici' && (
                   <div>
-                    <h3 className="font-semibold text-gray-700 text-sm mb-1">CIN / CIR per camera</h3>
-                    <p className="text-xs text-gray-400 mb-3">Le camere senza codici propri usano CIN e CIR della struttura (Altro → Strutture). Un campo lasciato vuoto usa il codice della struttura.</p>
+                    <h3 className="font-semibold text-gray-700 text-sm mb-1">CIN / CIR per {et.camera}</h3>
+                    <p className="text-xs text-gray-400 mb-3">Le {et.camere} senza codici propri usano CIN e CIR della struttura (Altro → Strutture). Un campo lasciato vuoto usa il codice della struttura.</p>
                     <div className="mt-2 mb-3">
                       <div className="space-y-1.5">
                         {Array.from({ length: strutturaAttiva.num_camere }, (_, i) => i + 1).map(id => {
                           const c = editCodiciCamere[id];
-                          const nome = strutturaAttiva.nomi_camere[id] || `Camera ${id}`;
+                          const nome = strutturaAttiva.nomi_camere[id] || `${et.Camera} ${id}`;
                           const setCampo = (k: keyof CodiciCamera, v: string) =>
                             setEditCodiciCamere(prev => ({ ...prev, [id]: { ...(prev[id] ?? { cin: '', cir: '' }), [k]: v } }));
                           return (
@@ -1172,13 +1184,13 @@ export default function ImpostazioniPage() {
                 {/* Sub-tab: ALLOGGIATI WEB (per camera) */}
                 {subTab === 'alloggiati' && (
                   <div>
-                    <h3 className="font-semibold text-gray-700 text-sm mb-1">Alloggiati Web per camera</h3>
-                    <p className="text-xs text-gray-400 mb-3">Le camere senza utenza propria inviano le schedine con le credenziali della struttura (Altro → Strutture).</p>
+                    <h3 className="font-semibold text-gray-700 text-sm mb-1">Alloggiati Web per {et.camera}</h3>
+                    <p className="text-xs text-gray-400 mb-3">Le {et.camere} senza utenza propria inviano le schedine con le credenziali della struttura (Altro → Strutture).</p>
                     <div className="mb-3">
                       <div className="space-y-1.5">
                         {Array.from({ length: strutturaAttiva.num_camere }, (_, i) => i + 1).map(id => {
                           const c = editAlloggiatiCamere[id];
-                          const nome = strutturaAttiva.nomi_camere[id] || `Camera ${id}`;
+                          const nome = strutturaAttiva.nomi_camere[id] || `${et.Camera} ${id}`;
                           const setCampo = (k: keyof AlloggiatiCredentials, v: string) =>
                             setEditAlloggiatiCamere(prev => ({ ...prev, [id]: { ...prev[id], [k]: v } }));
                           return (
@@ -1204,7 +1216,7 @@ export default function ImpostazioniPage() {
                                   <input type="text" placeholder="WsKey" value={c.wskey} onChange={e => setCampo('wskey', e.target.value)}
                                     autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                   {!(c.utente && c.password && c.wskey) && (
-                                    <p className="sm:col-span-3 text-[11px] text-amber-600">Incompleta: finché mancano dei campi non viene salvata e la camera usa le credenziali della struttura.</p>
+                                    <p className="sm:col-span-3 text-[11px] text-amber-600">Incompleta: finché mancano dei campi non viene salvata e la {et.camera} usa le credenziali della struttura.</p>
                                   )}
                                 </div>
                               )}
@@ -1225,15 +1237,15 @@ export default function ImpostazioniPage() {
                 {/* Sub-tab: OSSERVATORIO TURISTICO (per camera) */}
                 {subTab === 'osservatorio' && (
                   <div>
-                    <h3 className="font-semibold text-gray-700 text-sm mb-1">Osservatorio Turistico per camera</h3>
+                    <h3 className="font-semibold text-gray-700 text-sm mb-1">Osservatorio Turistico per {et.camera}</h3>
                     <p className="text-xs text-gray-400 mb-3">
-                      Per le camere registrate all&apos;Osservatorio come struttura a sé (codice struttura proprio).
-                      Le camere senza credenziali proprie usano quelle della struttura (Altro → Strutture).
+                      Per le {et.camere} registrate all&apos;Osservatorio come struttura a sé (codice struttura proprio).
+                      Le {et.camere} senza credenziali proprie usano quelle della struttura (Altro → Strutture).
                     </p>
                     <div className="space-y-1.5 mb-3">
                       {Array.from({ length: strutturaAttiva.num_camere }, (_, i) => i + 1).map(id => {
                         const c = editOssCamere[id];
-                        const nome = strutturaAttiva.nomi_camere[id] || `Camera ${id}`;
+                        const nome = strutturaAttiva.nomi_camere[id] || `${et.Camera} ${id}`;
                         return (
                           <div key={id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
                             <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
@@ -1314,7 +1326,7 @@ export default function ImpostazioniPage() {
                       )}
                       {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey
                         && Object.keys(strutturaAttiva.alloggiati_camere ?? {}).length < strutturaAttiva.num_camere && (
-                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura o di alcune camere (scheda Strutture).</p>
+                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura o di alcune {et.camere} (scheda Strutture).</p>
                       )}
                     </div>
 
@@ -1324,7 +1336,7 @@ export default function ImpostazioniPage() {
                     </div>
                     <p className="text-xs text-gray-400 mb-3">
                       Inviato all&apos;ospite dalla pagina Alloggiati. Tocca un segnaposto per inserirlo: viene sostituito con i dati della prenotazione.
-                      Le camere senza un messaggio proprio usano quello della struttura.
+                      Le {et.camere} senza un messaggio proprio usano quello della struttura.
                     </p>
                     <div className="flex items-center gap-2 mb-3">
                       <label className="text-xs text-gray-600 shrink-0">Messaggio per</label>
@@ -1333,17 +1345,17 @@ export default function ImpostazioniPage() {
                         <option value={0}>Struttura (predefinito)</option>
                         {Array.from({ length: strutturaAttiva.num_camere }, (_, i) => i + 1).map(id => (
                           <option key={id} value={id}>
-                            {strutturaAttiva.nomi_camere[id] || `Camera ${id}`}{editIstrCamere[id]?.trim() ? ' · messaggio proprio' : ' · usa struttura'}
+                            {strutturaAttiva.nomi_camere[id] || `${et.Camera} ${id}`}{editIstrCamere[id]?.trim() ? ' · messaggio proprio' : ' · usa struttura'}
                           </option>
                         ))}
                       </select>
                     </div>
                     {istrSel > 0 && editIstrCamere[istrSel] === undefined ? (
                       <div className="rounded border border-dashed border-gray-300 p-4 text-sm text-gray-600 mb-3">
-                        Questa camera usa il messaggio della struttura.
+                        Questa {et.camera} usa il messaggio della struttura.
                         <button type="button" onClick={() => setEditIstrCamere(prev => ({ ...prev, [istrSel]: editIstruzioni }))}
                           className="block mt-2 text-blue-600 text-sm underline text-left">
-                          Scrivi un messaggio solo per questa camera (parte dal testo della struttura)
+                          Scrivi un messaggio solo per questa {et.camera} (parte dal testo della struttura)
                         </button>
                       </div>
                     ) : (<>
@@ -1377,7 +1389,7 @@ export default function ImpostazioniPage() {
                             className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
                           >
                             <Save size={14} />
-                            {salvatoIstrCamera ? 'Salvato!' : 'Salva messaggio della camera'}
+                            {salvatoIstrCamera ? 'Salvato!' : `Salva messaggio della ${et.camera}`}
                           </button>
                           <button type="button"
                             onClick={() => { const v = { ...editIstrCamere }; delete v[istrSel]; salvaIstruzioniCamere(v); }}
@@ -1420,6 +1432,9 @@ export default function ImpostazioniPage() {
           setEditDatiNome(s.nome);
           setEditDatiIndirizzo(s.indirizzo ?? '');
           setEditDatiTelefono(s.telefono ?? '');
+          setEditDatiRagione(s.dati_fiscali?.ragione_sociale ?? '');
+          setEditDatiPiva(s.dati_fiscali?.partita_iva ?? '');
+          setEditDatiCasa(!!s.unita_casa);
           setSalvatoEditDati(false);
           setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
           setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
@@ -1455,7 +1470,7 @@ export default function ImpostazioniPage() {
               className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 hover:bg-blue-100 transition-colors">
               <div>
                 <span className="text-sm font-semibold text-blue-800 block">Configurazione guidata della struttura attiva</span>
-                <span className="text-xs text-blue-600">Dati societari, CIN/CIR, camere, Alloggiati Web, tassa di soggiorno, istruzioni di check-in</span>
+                <span className="text-xs text-blue-600">Dati societari, CIN/CIR, {et.camere}, Alloggiati Web, tassa di soggiorno, istruzioni di check-in</span>
               </div>
               <ChevronRight size={16} className="text-blue-500 shrink-0" />
             </a>
@@ -1549,6 +1564,31 @@ export default function ImpostazioniPage() {
                       />
                       <p className="text-[11px] text-gray-400 mt-0.5">Riceve gli avvisi quando un invio automatico (link ospite, Alloggiati Web) non riesce.</p>
                     </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs text-gray-500 mb-1">Ragione sociale / titolare</label>
+                      <input type="text" value={editDatiRagione} onChange={e => setEditDatiRagione(e.target.value)}
+                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs text-gray-500 mb-1">Partita IVA</label>
+                      <input type="text" inputMode="numeric" value={editDatiPiva} onChange={e => setEditDatiPiva(e.target.value)} placeholder="11 cifre"
+                        className="w-full border rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                      {editDatiPiva && !/^\d{11}$/.test(editDatiPiva.replace(/\s/g, '')) && (
+                        <p className="text-[11px] text-amber-600 mt-0.5">La partita IVA italiana ha 11 cifre.</p>
+                      )}
+                    </div>
+                    <label className="col-span-2 flex items-start gap-2 cursor-pointer rounded border border-gray-100 bg-gray-50 px-2 py-2">
+                      <input type="checkbox" checked={editDatiCasa} onChange={e => setEditDatiCasa(e.target.checked)} className="mt-0.5" />
+                      <span className="text-sm text-gray-700">
+                        Le unità sono case / appartamenti
+                        <span className="block text-[11px] text-gray-400">
+                          In tutta l&apos;app &quot;Casa/Case&quot; al posto di &quot;Camera/Camere&quot;. Per chi ha più appartamenti con CIN e CIR
+                          diversi ma la stessa partita IVA (CIN/CIR per casa in Altro → Case → CIN / CIR).
+                        </span>
+                      </span>
+                    </label>
                   </div>
                   <button onClick={() => salvaEditDati(selezionata.id)} disabled={!editDatiNome.trim()}
                     className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
@@ -1659,7 +1699,7 @@ export default function ImpostazioniPage() {
                       <Shield size={14} className="text-amber-600" />
                       <span className="font-semibold text-gray-700 text-xs">Codici identificativi (CIN / CIR)</span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-2">Codici della struttura. Valgono per tutte le camere che non hanno codici propri (Altro → Camere → CIN / CIR).</p>
+                    <p className="text-xs text-gray-400 mb-2">Codici della struttura. Valgono per tutte le {et.camere} che non hanno codici propri (Altro → {et.Camere} → CIN / CIR).</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-1">
                       <input type="text" placeholder="CIN (IT…)" value={editCin} onChange={e => setEditCin(e.target.value)}
                         autoComplete="off" className="min-w-0 border rounded px-2 py-1.5 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-amber-400" />
@@ -1686,7 +1726,7 @@ export default function ImpostazioniPage() {
                     <p className="text-xs text-gray-400 mb-2">
                       Credenziali per i gestionali (WebAPI), diverse da quelle del portale: si richiedono all&apos;Osservatorio
                       e valgono per una struttura ricettiva. Il codice struttura è del tipo TRS-IT-SIC-…
-                      Credenziali diverse per singole camere: Altro → Camere → Osservatorio.
+                      Credenziali diverse per singole {et.camere}: Altro → {et.Camere} → Osservatorio.
                     </p>
                     {campiOsservatorio(editOss, (k, v) => setEditOss(prev => ({ ...prev, [k]: v })), 'struttura')}
                     <button onClick={() => salvaOsservatorio(selezionata.id)}
@@ -1703,7 +1743,7 @@ export default function ImpostazioniPage() {
                       <Shield size={14} className="text-blue-600" />
                       <span className="font-semibold text-gray-700 text-xs">AlloggiatiWeb</span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-2">Credenziali del portale Polizia di Stato (Questura) per l&apos;invio delle schedine. Valgono per tutte le camere che non hanno credenziali proprie (Altro → Camere → Alloggiati).</p>
+                    <p className="text-xs text-gray-400 mb-2">Credenziali del portale Polizia di Stato (Questura) per l&apos;invio delle schedine. Valgono per tutte le {et.camere} che non hanno credenziali proprie (Altro → {et.Camere} → Alloggiati).</p>
                     <div className="space-y-2 mb-2">
                       <input type="text" placeholder="Utente" value={editAlloggiatiUtente} onChange={e => setEditAlloggiatiUtente(e.target.value)}
                         autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
@@ -1792,14 +1832,14 @@ export default function ImpostazioniPage() {
                     {/* Mapping camere */}
                     <div className="mb-3">
                       <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
-                        Mapping camere → Room ID Channel Manager
+                        Mapping {et.camere} → Room ID Channel Manager
                       </p>
                       <div className="space-y-1">
                         {idsEditCamere.map(id => (
                           <div key={id} className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5 w-28 shrink-0">
                               <div className={`w-2 h-2 rounded-full ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
-                              <span className="text-xs text-gray-600 truncate">{editNomiCamere[id] || `Camera ${id}`}</span>
+                              <span className="text-xs text-gray-600 truncate">{editNomiCamere[id] || `${et.Camera} ${id}`}</span>
                             </div>
                             <input type="text" placeholder="room-deluxe-01"
                               value={editCmRoomMap[id] ?? ''}
