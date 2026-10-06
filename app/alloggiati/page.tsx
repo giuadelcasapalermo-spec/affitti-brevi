@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { format, addDays, subDays, parseISO, differenceInDays } from 'date-fns';
 import { it } from 'date-fns/locale';
 import TassaSoggiorno from './TassaSoggiorno';
-import { ChevronLeft, ChevronRight, Plus, Download, Pencil, Trash2, X, UserCheck, ScanLine, Loader2, Mail, ClipboardCheck, Clock, SendHorizonal, MessageCircle, Upload } from 'lucide-react';
+import Turistat from './Turistat';
+import { ChevronLeft, ChevronRight, Plus, Download, Pencil, Trash2, X, UserCheck, ScanLine, Loader2, Mail, ClipboardCheck, Clock, SendHorizonal, MessageCircle, Upload, BarChart3 } from 'lucide-react';
 import { Alloggiato, Prenotazione, TIPI_ALLOGGIATO, TipoAlloggiato } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
 import { useCamere } from '@/hooks/useCamere';
@@ -74,7 +75,7 @@ export default function AlloggiatiPage() {
   const [invioPortale, setInvioPortale] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [invioPortaleMsg, setInvioPortaleMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<'alloggiati' | 'tassa'>('alloggiati');
+  const [tab, setTab] = useState<'alloggiati' | 'tassa' | 'turistat'>('alloggiati');
 
   const carica = useCallback(async (d: string) => {
     setLoading(true);
@@ -381,10 +382,10 @@ export default function AlloggiatiPage() {
       </h1>
 
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit max-w-full overflow-x-auto">
         <button
           onClick={() => setTab('alloggiati')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
             tab === 'alloggiati' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -393,16 +394,26 @@ export default function AlloggiatiPage() {
         </button>
         <button
           onClick={() => setTab('tassa')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
             tab === 'tassa' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Upload size={14} />
           Tassa di Soggiorno
         </button>
+        <button
+          onClick={() => setTab('turistat')}
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
+            tab === 'turistat' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <BarChart3 size={14} />
+          Turistat
+        </button>
       </div>
 
       {tab === 'tassa' && <TassaSoggiorno />}
+      {tab === 'turistat' && <Turistat />}
 
       {tab === 'alloggiati' && <>
       <div className="flex items-center justify-between">
