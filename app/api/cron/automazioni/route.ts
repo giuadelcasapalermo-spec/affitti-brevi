@@ -6,17 +6,19 @@
  * agisce solo quando l'ora italiana è quella prevista, così gli orari restano giusti tutto l'anno.
  *   15:00 → schedine Alloggiati Web, primo tentativo (nessun avviso)
  *   21:00 → schedine Alloggiati Web, tentativo finale (avvisi alla struttura)
+ *   23:00 → Osservatorio Turistico Regione Siciliana: arrivi, partenze e chiusura della giornata
  *
- * Prova manuale: ?azione=portale | portale_finale (stessa autorizzazione).
+ * Prova manuale: ?azione=portale | portale_finale | osservatorio (stessa autorizzazione).
  * Protetto da CRON_SECRET (Authorization: Bearer <secret>).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { inviaPortaleAutomatico, oraItalia, type Esito } from '@/lib/automazioni';
+import { inviaOsservatorioAutomatico } from '@/lib/osservatorio';
 
 export const preferredRegion = 'fra1'; // Il portale PS blocca IP USA — usa Francoforte (EU)
 export const maxDuration = 300;
 
-const ORARI: Record<number, 'portale' | 'portale_finale'> = { 15: 'portale', 21: 'portale_finale' };
+const ORARI: Record<number, 'portale' | 'portale_finale' | 'osservatorio'> = { 15: 'portale', 21: 'portale_finale', 23: 'osservatorio' };
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -30,6 +32,7 @@ export async function GET(req: NextRequest) {
 
   let esiti: Esito[];
   if (azione === 'portale' || azione === 'portale_finale') esiti = await inviaPortaleAutomatico(azione === 'portale_finale');
+  else if (azione === 'osservatorio') esiti = await inviaOsservatorioAutomatico();
   else return NextResponse.json({ ok: false, errore: `Azione sconosciuta: ${azione}` }, { status: 400 });
 
   const errori = esiti.filter(e => e.esito === 'errore');

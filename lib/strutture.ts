@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import {
   Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig,
   DatiFiscali, RegoleStruttura, DATI_FISCALI_VUOTI, REGOLE_DEFAULT,
-  AutomazioniStruttura, AUTOMAZIONI_DEFAULT, OSPITI_DEFAULT, CodiciCamera,
+  AutomazioniStruttura, AUTOMAZIONI_DEFAULT, OSPITI_DEFAULT, CodiciCamera, OsservatorioCredentials,
 } from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
@@ -39,6 +39,8 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS ospiti_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS codici_camere JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_credentials JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_camere JSONB DEFAULT NULL`,
   ]);
   _tableReady = true;
 }
@@ -71,6 +73,8 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     alloggiati_camere: Object.fromEntries(Object.entries((row.alloggiati_camere ?? {}) as Record<string, AlloggiatiCredentials>).map(([k, v]) => [Number(k), v])),
     ospiti_camere: toNumericNumberRecord(row.ospiti_camere),
     codici_camere: Object.fromEntries(Object.entries((row.codici_camere ?? {}) as Record<string, CodiciCamera>).map(([k, v]) => [Number(k), v])),
+    osservatorio_credentials: (row.osservatorio_credentials as OsservatorioCredentials | null) ?? undefined,
+    osservatorio_camere: Object.fromEntries(Object.entries((row.osservatorio_camere ?? {}) as Record<string, OsservatorioCredentials>).map(([k, v]) => [Number(k), v])),
     conti_correnti: conti,
     channel_manager_config: row.channel_manager_config as BookingChannelManagerConfig | undefined,
     dati_fiscali: { ...DATI_FISCALI_VUOTI, ...(row.dati_fiscali as Partial<DatiFiscali> | null) },
@@ -115,6 +119,7 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     alloggiati_camere: {},
     ospiti_camere: {},
     codici_camere: {},
+    osservatorio_camere: {},
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -164,6 +169,10 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET ospiti_camere = ${JSON.stringify(fields.ospiti_camere)} WHERE id = ${id}`;
   if (fields.codici_camere !== undefined)
     await sql`UPDATE strutture SET codici_camere = ${JSON.stringify(fields.codici_camere)} WHERE id = ${id}`;
+  if (fields.osservatorio_credentials !== undefined)
+    await sql`UPDATE strutture SET osservatorio_credentials = ${JSON.stringify(fields.osservatorio_credentials)} WHERE id = ${id}`;
+  if (fields.osservatorio_camere !== undefined)
+    await sql`UPDATE strutture SET osservatorio_camere = ${JSON.stringify(fields.osservatorio_camere)} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {
@@ -214,6 +223,7 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     alloggiati_camere: {},
     ospiti_camere: {},
     codici_camere: {},
+    osservatorio_camere: {},
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -289,4 +299,13 @@ export function codiciCamera(s: Struttura, cameraId?: number | null): CodiciCame
     cin: c?.cin?.trim() || s.dati_fiscali.cin,
     cir: c?.cir?.trim() || s.dati_fiscali.cir,
   };
+}
+
+/** Credenziali Osservatorio Turistico per una camera: quelle proprie della camera, se complete, o quelle della struttura */
+export function credenzialiOsservatorio(s: Struttura, cameraId?: number | null): OsservatorioCredentials | null {
+  const complete = (c?: OsservatorioCredentials | null): c is OsservatorioCredentials =>
+    !!(c?.utente && c?.password && c?.codice_struttura);
+  const diCamera = cameraId != null ? s.osservatorio_camere[cameraId] : undefined;
+  if (complete(diCamera)) return diCamera;
+  return complete(s.osservatorio_credentials) ? s.osservatorio_credentials : null;
 }

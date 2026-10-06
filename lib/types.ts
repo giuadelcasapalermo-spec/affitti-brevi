@@ -16,6 +16,14 @@ export interface AlloggiatiCredentials {
   wskey: string;
 }
 
+/** Credenziali per i gestionali dell'Osservatorio Turistico Regione Siciliana (Turist@t), diverse da quelle del portale */
+export interface OsservatorioCredentials {
+  utente: string;
+  password: string;
+  /** Codice struttura rilasciato dall'Osservatorio (es. TRS-IT-SIC-00004) */
+  codice_struttura: string;
+}
+
 export type TipoContoCorrente = 'contanti' | 'pos' | 'bonifico' | 'altro';
 
 export interface ContoCorrente {
@@ -105,6 +113,9 @@ export interface Struttura {
   ospiti_camere: Record<number, number>;
   /** CIN/CIR propri di una camera (unità registrata a parte): i campi vuoti usano quelli della struttura */
   codici_camere: Record<number, CodiciCamera>;
+  osservatorio_credentials?: OsservatorioCredentials;
+  /** Credenziali Osservatorio proprie di una camera (unità registrata a parte), prevalgono su quelle della struttura */
+  osservatorio_camere: Record<number, OsservatorioCredentials>;
   conti_correnti: ContoCorrente[];
   channel_manager_config?: BookingChannelManagerConfig;
   dati_fiscali: DatiFiscali;
@@ -121,9 +132,11 @@ export interface Struttura {
 export interface AutomazioniStruttura {
   /** Invio delle schedine ad Alloggiati Web il giorno del check-in (15:00 e 21:00) */
   portale: boolean;
+  /** Invio giornaliero all'Osservatorio Turistico Regione Siciliana (arrivi, partenze, chiusura giornata) */
+  osservatorio: boolean;
 }
 
-export const AUTOMAZIONI_DEFAULT: AutomazioniStruttura = { portale: false };
+export const AUTOMAZIONI_DEFAULT: AutomazioniStruttura = { portale: false, osservatorio: false };
 
 export interface Prenotazione {
   id: string;
@@ -261,6 +274,10 @@ export interface Alloggiato {
   luogo_rilascio: string;
   /** Impostato quando la schedina è stata accettata da Alloggiati Web */
   inviato_portale_at?: string | null;
+  /** Arrivo comunicato all'Osservatorio Turistico (Sicilia) */
+  osservatorio_inviato_at?: string | null;
+  /** Partenza (check-out) comunicata all'Osservatorio Turistico */
+  osservatorio_checkout_at?: string | null;
   created_at: string;
 }
 

@@ -33,6 +33,8 @@ export async function ensureAlloggiatiTable(): Promise<void> {
     )
   `;
   await sql`ALTER TABLE alloggiati ADD COLUMN IF NOT EXISTS inviato_portale_at TEXT`;
+  await sql`ALTER TABLE alloggiati ADD COLUMN IF NOT EXISTS osservatorio_inviato_at TEXT`;
+  await sql`ALTER TABLE alloggiati ADD COLUMN IF NOT EXISTS osservatorio_checkout_at TEXT`;
   _ready = true;
 }
 
@@ -56,6 +58,8 @@ export function rowToAlloggiato(row: Record<string, unknown>): Alloggiato {
     numero_documento: row.numero_documento as string,
     luogo_rilascio: row.luogo_rilascio as string,
     inviato_portale_at: (row.inviato_portale_at as string | null) ?? null,
+    osservatorio_inviato_at: (row.osservatorio_inviato_at as string | null) ?? null,
+    osservatorio_checkout_at: (row.osservatorio_checkout_at as string | null) ?? null,
     created_at: row.created_at as string,
   };
 }
@@ -138,4 +142,27 @@ export async function marcaInviatiPortale(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   await ensureAlloggiatiTable();
   await sql`UPDATE alloggiati SET inviato_portale_at = ${new Date().toISOString()} WHERE id = ANY(${ids})`;
+}
+
+/** Ospiti arrivati da `dal` in poi, partenza non ancora comunicata all'Osservatorio Turistico */
+export async function leggiAlloggiatiDaComunicare(strutturaId: string, dal: string): Promise<Alloggiato[]> {
+  await ensureAlloggiatiTable();
+  const rows = await sql`
+    SELECT * FROM alloggiati
+    WHERE struttura_id = ${strutturaId} AND data_arrivo >= ${dal} AND osservatorio_checkout_at IS NULL
+    ORDER BY data_arrivo, created_at
+  `;
+  return rows.map(rowToAlloggiato);
+}
+
+/** Segna arrivo (e, se `checkout`, anche partenza) comunicati all'Osservatorio Turistico */
+export async function marcaInviatiOsservatorio(ids: string[], checkout: boolean): Promise<void> {
+  if (ids.length === 0) return;
+  await ensureAlloggiatiTable();
+  const ora = new Date().toISOString();
+  if (checkout) {
+    await sql`UPDATE alloggiati SET osservatorio_inviato_at = COALESCE(osservatorio_inviato_at, ${ora}), osservatorio_checkout_at = ${ora} WHERE id = ANY(${ids})`;
+  } else {
+    await sql`UPDATE alloggiati SET osservatorio_inviato_at = ${ora} WHERE id = ANY(${ids})`;
+  }
 }

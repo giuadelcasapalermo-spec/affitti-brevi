@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT, CodiciCamera } from '@/lib/types';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT, CodiciCamera, OsservatorioCredentials } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
-  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight,
+  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight, BarChart3,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import { SEGNAPOSTO_ISTRUZIONI, MODELLO_ISTRUZIONI_BASE, componiIstruzioni } from '@/lib/istruzioni';
@@ -32,6 +32,7 @@ type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
 
 // Stesso controllo della configurazione guidata
 const CIN_VALIDO = /^IT[A-Z0-9]{10,}$/i;
+const OSS_VUOTE: OsservatorioCredentials = { utente: '', password: '', codice_struttura: '' };
 
 const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_fine: '', prezzo_notte: '', prezzo_booking: '', prezzo_airbnb: '' };
 
@@ -122,6 +123,13 @@ export default function ImpostazioniPage() {
   const [editCir, setEditCir] = useState('');
   const [editCodiciCamere, setEditCodiciCamere] = useState<Record<number, CodiciCamera>>({});
   const [salvatoCodici, setSalvatoCodici] = useState(false);
+
+  // Osservatorio Turistico Regione Siciliana: credenziali per i gestionali (struttura e, facoltative, per camera)
+  const [editOss, setEditOss] = useState<OsservatorioCredentials>({ ...OSS_VUOTE });
+  const [editOssCamere, setEditOssCamere] = useState<Record<number, OsservatorioCredentials>>({});
+  const [salvatoOss, setSalvatoOss] = useState(false);
+  const [provaOss, setProvaOss] = useState<{ chiave: string; ok: boolean; testo: string } | null>(null);
+  const [invioOss, setInvioOss] = useState<{ stato: 'loading' | 'ok' | 'errore'; righe: string[] } | null>(null);
 
   // Booking Channel Manager (per struttura)
   const [editCmUrl, setEditCmUrl] = useState('');
@@ -248,6 +256,56 @@ export default function ImpostazioniPage() {
     setEditCodiciCamere(camere);
     setSalvatoCodici(true);
     setTimeout(() => setSalvatoCodici(false), 2000);
+  }
+
+  async function salvaOsservatorio(id: string) {
+    const pulisci = (c: OsservatorioCredentials) => ({ utente: c.utente.trim(), password: c.password, codice_struttura: c.codice_struttura.trim().toUpperCase() });
+    // Solo le camere con credenziali complete; le altre usano quelle della struttura
+    const camere = Object.fromEntries(
+      Object.entries(editOssCamere).map(([k, c]) => [k, pulisci(c)] as const)
+        .filter(([, c]) => c.utente && c.password && c.codice_struttura),
+    );
+    const struttura = pulisci(editOss);
+    await fetch(`/api/strutture/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        osservatorio_credentials: struttura.utente || struttura.codice_struttura ? struttura : null,
+        osservatorio_camere: camere,
+      }),
+    });
+    setEditOssCamere(camere);
+    setSalvatoOss(true);
+    setTimeout(() => setSalvatoOss(false), 2000);
+  }
+
+  async function provaOsservatorio(chiave: string, c: OsservatorioCredentials) {
+    setProvaOss({ chiave, ok: true, testo: 'Prova in corso…' });
+    try {
+      const res = await fetch('/api/osservatorio/prova', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c),
+      });
+      const j = await res.json();
+      setProvaOss({ chiave, ok: !!j.ok, testo: j.ok ? 'Accesso riuscito' : (j.errore ?? 'Errore') });
+    } catch {
+      setProvaOss({ chiave, ok: false, testo: 'Errore di rete' });
+    }
+  }
+
+  async function inviaOsservatorioOra() {
+    setInvioOss({ stato: 'loading', righe: [] });
+    try {
+      const res = await fetch('/api/osservatorio/invia', { method: 'POST' });
+      const j = await res.json();
+      const righe: string[] = j.errore ? [j.errore]
+        : (j.esiti ?? []).map((e: { ospite?: string; esito: string; dettaglio?: string }) =>
+          `${e.esito === 'errore' ? '✗' : '✓'} ${e.ospite ?? ''}${e.dettaglio ? ` — ${e.dettaglio}` : ''}`);
+      setInvioOss({ stato: j.ok ? 'ok' : 'errore', righe: righe.length ? righe : ['Nessun movimento da comunicare'] });
+    } catch {
+      setInvioOss({ stato: 'errore', righe: ['Errore di rete'] });
+    }
   }
 
   async function salvaChannelManager(id: string) {
@@ -951,6 +1009,34 @@ export default function ImpostazioniPage() {
                           </span>
                         </label>
                       </div>
+                      <div className="space-y-3 mt-3">
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editAutomazioni.osservatorio} onChange={e => cambiaAutomazione('osservatorio', e.target.checked)} className="mt-0.5" />
+                          <span className="text-sm text-gray-700">
+                            Invio all&apos;Osservatorio Turistico della Regione Siciliana
+                            <span className="block text-xs text-gray-400">
+                              Ogni sera alle 23:00: arrivi e partenze del giorno (dalle schede in Alloggiati) e chiusura della giornata,
+                              anche senza movimenti. Spegnilo nei periodi di chiusura della struttura.
+                            </span>
+                          </span>
+                        </label>
+                        {editAutomazioni.osservatorio && !strutturaAttiva.osservatorio_credentials?.codice_struttura
+                          && Object.keys(strutturaAttiva.osservatorio_camere ?? {}).length === 0 && (
+                          <p className="text-xs text-amber-600">Mancano le credenziali dell&apos;Osservatorio (scheda Strutture).</p>
+                        )}
+                        <div>
+                          <button type="button" onClick={inviaOsservatorioOra} disabled={invioOss?.stato === 'loading'}
+                            className="flex items-center gap-1.5 border border-teal-300 text-teal-700 px-2.5 py-1 rounded text-xs font-medium hover:bg-teal-50 disabled:opacity-50">
+                            {invioOss?.stato === 'loading' ? <Loader2 size={12} className="animate-spin" /> : <BarChart3 size={12} />}
+                            Invia ora all&apos;Osservatorio (fino a oggi)
+                          </button>
+                          {invioOss && invioOss.stato !== 'loading' && (
+                            <ul className={`mt-1.5 text-xs rounded px-3 py-2 space-y-0.5 ${invioOss.stato === 'ok' ? 'bg-teal-50 text-teal-800' : 'bg-red-50 text-red-700'}`}>
+                              {invioOss.righe.map((r, i) => <li key={i} className="break-words">{r}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
                       <p className="text-xs text-gray-400 mt-3">Link di registrazione e istruzioni agli ospiti: da Prenotazioni → WhatsApp.</p>
                       {editAutomazioni.portale && !strutturaAttiva.telefono && (
                         <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
@@ -1033,10 +1119,10 @@ export default function ImpostazioniPage() {
           setEditCir(s.dati_fiscali?.cir ?? '');
           setEditCodiciCamere(s.codici_camere ?? {});
           setSalvatoCodici(false);
-          setEditCin(s.dati_fiscali?.cin ?? '');
-          setEditCir(s.dati_fiscali?.cir ?? '');
-          setEditCodiciCamere(s.codici_camere ?? {});
-          setSalvatoCodici(false);
+          setEditOss(s.osservatorio_credentials ?? { ...OSS_VUOTE });
+          setEditOssCamere(s.osservatorio_camere ?? {});
+          setSalvatoOss(false);
+          setProvaOss(null);
           setMostraPasswordAlloggiati(false);
           setSalvatoAlloggiati(false);
           setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
@@ -1320,6 +1406,79 @@ export default function ImpostazioniPage() {
                     >
                       <Save size={12} />
                       {salvatoCodici ? 'Salvato!' : 'Salva codici'}
+                    </button>
+                  </div>
+
+                  {/* Osservatorio Turistico Regione Siciliana */}
+                  <div className="border-t pt-4 mt-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <BarChart3 size={14} className="text-teal-600" />
+                      <span className="font-semibold text-gray-700 text-xs">Osservatorio Turistico (Regione Siciliana)</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">
+                      Credenziali per i gestionali (WebAPI), diverse da quelle del portale: si richiedono all&apos;Osservatorio
+                      e valgono per una struttura ricettiva. Il codice struttura è del tipo TRS-IT-SIC-…
+                    </p>
+                    {(() => {
+                      const campi = (c: OsservatorioCredentials, set: (k: keyof OsservatorioCredentials, v: string) => void, chiave: string) => (
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-1.5">
+                            <input type="text" placeholder="Utente" value={c.utente} onChange={e => set('utente', e.target.value)}
+                              autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                            <input type="password" placeholder="Password" value={c.password} onChange={e => set('password', e.target.value)}
+                              autoComplete="new-password" className="min-w-0 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                            <input type="text" placeholder="Codice struttura" value={c.codice_struttura} onChange={e => set('codice_struttura', e.target.value)}
+                              autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs font-mono uppercase bg-white focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button type="button" disabled={!c.utente || !c.password} onClick={() => provaOsservatorio(chiave, c)}
+                              className="text-[11px] border border-teal-300 text-teal-700 bg-white rounded px-2 py-0.5 hover:bg-teal-50 disabled:opacity-40">
+                              Prova connessione
+                            </button>
+                            {provaOss?.chiave === chiave && (
+                              <span className={`text-[11px] ${provaOss.ok ? 'text-teal-700' : 'text-red-600'}`}>{provaOss.testo}</span>
+                            )}
+                          </div>
+                        </>
+                      );
+                      return (
+                        <>
+                          {campi(editOss, (k, v) => setEditOss(prev => ({ ...prev, [k]: v })), 'struttura')}
+                          <div className="mt-3 mb-3">
+                            <span className="block text-xs font-medium text-gray-600 mb-1">Credenziali per camera</span>
+                            <p className="text-[11px] text-gray-400 mb-1.5">Per le camere registrate all&apos;Osservatorio come struttura a sé (codice struttura proprio).</p>
+                            <div className="space-y-1.5">
+                              {Array.from({ length: selezionata.num_camere }, (_, i) => i + 1).map(id => {
+                                const c = editOssCamere[id];
+                                const nome = selezionata.nomi_camere[id] || `Camera ${id}`;
+                                return (
+                                  <div key={id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+                                    <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                      <input type="checkbox" checked={!!c}
+                                        onChange={e => setEditOssCamere(prev => {
+                                          const nuove = { ...prev };
+                                          if (e.target.checked) nuove[id] = { ...OSS_VUOTE };
+                                          else delete nuove[id];
+                                          return nuove;
+                                        })}
+                                      />
+                                      <span className="font-medium">{nome}</span>
+                                      <span className="text-gray-400 truncate">{c ? 'credenziali proprie' : 'usa quelle della struttura'}</span>
+                                    </label>
+                                    {c && campi(c, (k, v) => setEditOssCamere(prev => ({ ...prev, [id]: { ...prev[id], [k]: v } })), `camera-${id}`)}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                    <button onClick={() => salvaOsservatorio(selezionata.id)}
+                      className="flex items-center gap-1.5 bg-teal-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-teal-700"
+                    >
+                      <Save size={12} />
+                      {salvatoOss ? 'Salvato!' : 'Salva credenziali Osservatorio'}
                     </button>
                   </div>
 

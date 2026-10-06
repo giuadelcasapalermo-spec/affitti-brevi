@@ -136,6 +136,55 @@ export function preparaBatchPerPortale(alloggiati: Alloggiato[]): Alloggiato[] {
   return result;
 }
 
+export interface CodiciOspite {
+  /** Codice 9 cifre della cittadinanza ('' se non risolvibile) */
+  cittadinanza: string;
+  /** Codice 9 cifre dello Stato di nascita come scritto nella scheda ('' = Italia/mancante) */
+  statoNascitaGrezzo: string;
+  natoInItalia: boolean;
+  /** Stato di nascita da comunicare (100000100 se nato in Italia con comune trovato) */
+  statoNascita: string;
+  /** Comune di nascita (codice ISTAT) se nato in Italia, altrimenti codice dello Stato */
+  luogoNascita: string;
+  /** Sigla provincia, 'EE' se nato all'estero */
+  provinciaNascita: string;
+}
+
+/**
+ * Codici della Polizia di Stato (tabelle Alloggiati Web) per cittadinanza e luogo di nascita.
+ * Usati dal file Alloggiati Web e dall'Osservatorio Turistico della Regione Siciliana (stesse tabelle).
+ */
+export function codiciOspite(a: Alloggiato): CodiciOspite {
+  const statoNascitaCode = codicePaeseSanitizzato(a.stato_nascita);
+
+  // Cittadinanza: se vuota nel DB, usa stato_nascita come fallback per stranieri
+  const rawCitt = (a.cittadinanza ?? '').trim();
+  const cittadinanzaCode = /^\d{9}$/.test(rawCitt) ? rawCitt
+    : aggettivoCittadinanzaACodice(rawCitt) || codicePaeseSanitizzato(rawCitt)
+      || (statoNascitaCode && statoNascitaCode !== '100000100' ? statoNascitaCode : '') || '';
+  // Nato in Italia: stato = 100000100, comune = codice ISTAT, provincia = 2 char
+  // Nato all'estero: stato = codice paese, comune = codice paese, provincia = "EE"
+  const natoInItalia = !statoNascitaCode || statoNascitaCode === '100000100';
+  const base = { cittadinanza: cittadinanzaCode, statoNascitaGrezzo: statoNascitaCode, natoInItalia };
+
+  if (natoInItalia) {
+    const comuneNascitaClean = a.comune_nascita.trim().replace(/\s*\([A-Z]{1,3}\)\s*$/i, '').trim();
+    const rawComune = /^\d{9}$/.test(a.comune_nascita.trim())
+      ? a.comune_nascita.trim()
+      : nomeACodiceComune(comuneNascitaClean) || nomeACodiceComune(a.comune_nascita) || '';
+    if (rawComune) {
+      const prov = (a.provincia_nascita?.trim() || COMUNI.find(c => c.codice === rawComune.trim())?.prov || '').toUpperCase();
+      return { ...base, statoNascita: '100000100', luogoNascita: rawComune, provinciaNascita: prov };
+    }
+    // stato_nascita = Italia ma comune non trovato (dato errato o straniero):
+    // usa cittadinanza come paese di nascita con prov "EE"
+    const fallback = cittadinanzaCode || '100000100';
+    return { ...base, statoNascita: fallback, luogoNascita: fallback, provinciaNascita: 'EE' };
+  }
+  // Per stranieri nati all'estero: comune = codice paese, provincia = "EE"
+  return { ...base, statoNascita: statoNascitaCode, luogoNascita: statoNascitaCode, provinciaNascita: 'EE' };
+}
+
 export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
   const righe = alloggiati.map(a => {
     const tipo = pad(a.tipo, 2);
@@ -146,47 +195,13 @@ export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
     const sesso = a.sesso === 'F' ? '2' : '1';
     const dataNascita = formatDataIT(a.data_nascita);
 
-    const statoNascitaCode = codicePaeseSanitizzato(a.stato_nascita);
-
-    // Cittadinanza: se vuota nel DB, usa stato_nascita come fallback per stranieri
-    const rawCitt = (a.cittadinanza ?? '').trim();
-    const cittadinanzaCode = /^\d{9}$/.test(rawCitt) ? rawCitt
-      : aggettivoCittadinanzaACodice(rawCitt) || codicePaeseSanitizzato(rawCitt)
-        || (statoNascitaCode && statoNascitaCode !== '100000100' ? statoNascitaCode : '') || '';
-    const cittadinanza = pad(cittadinanzaCode, 9);
-    // Nato in Italia: stato = 100000100, comune = codice ISTAT, provincia = 2 char
-    // Nato all'estero: stato = codice paese, comune = codice paese, provincia = "EE"
-    const isBornInItaly = !statoNascitaCode || statoNascitaCode === '100000100';
-
-    let comuneNascita: string;
-    let provinciaNascita: string;
-    let statoNascita: string;
-
-    if (isBornInItaly) {
-      const comuneNascitaClean = a.comune_nascita.trim().replace(/\s*\([A-Z]{1,3}\)\s*$/i, '').trim();
-      const rawComune = /^\d{9}$/.test(a.comune_nascita.trim())
-        ? a.comune_nascita.trim()
-        : nomeACodiceComune(comuneNascitaClean) || nomeACodiceComune(a.comune_nascita) || '';
-
-      if (rawComune) {
-        statoNascita = pad('100000100', 9);
-        comuneNascita = pad(rawComune, 9);
-        const provRaw = (a.provincia_nascita?.trim() || COMUNI.find(c => c.codice === rawComune.trim())?.prov || '').toUpperCase();
-        provinciaNascita = pad(provRaw, 2);
-      } else {
-        // stato_nascita = Italia ma comune non trovato (dato errato o straniero):
-        // usa cittadinanza come paese di nascita con prov "EE"
-        const fallback = cittadinanzaCode || '100000100';
-        statoNascita = pad(fallback, 9);
-        comuneNascita = pad(fallback, 9);
-        provinciaNascita = pad('EE', 2);
-      }
-    } else {
-      statoNascita = pad(statoNascitaCode, 9);
-      // Per stranieri nati all'estero: comune = codice paese, provincia = "EE"
-      comuneNascita = pad(statoNascitaCode, 9);
-      provinciaNascita = pad('EE', 2);
-    }
+    const c = codiciOspite(a);
+    const statoNascitaCode = c.statoNascitaGrezzo;
+    const isBornInItaly = c.natoInItalia;
+    const cittadinanza = pad(c.cittadinanza, 9);
+    const statoNascita = pad(c.statoNascita, 9);
+    const comuneNascita = pad(c.luogoNascita, 9);
+    const provinciaNascita = pad(c.provinciaNascita, 2);
     const tipoDocumento = tipoDocumentoSanitizzato(a.tipo_documento);
     const numeroDocumento = pad(a.numero_documento.toUpperCase(), 20);
 

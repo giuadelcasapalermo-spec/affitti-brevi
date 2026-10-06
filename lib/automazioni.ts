@@ -56,14 +56,16 @@ const whatsappConfigurato = () =>
  * Avviso di errore: sempre salvato per il banner dell'app (tabella impostazioni, tipo 'avviso_app');
  * in più WhatsApp al numero della struttura, se Twilio è configurato. L'esito riguarda il WhatsApp.
  */
-async function avvisaStruttura(
+export async function avvisaStruttura(
   s: Struttura, operazione: string, p: Prenotazione | null, errore: string,
+  /** Distingue avvisi diversi per la stessa prenotazione nello stesso giorno (es. Osservatorio vs Alloggiati) */
+  tipo = '',
 ): Promise<Esito['avviso']> {
   const ospite = p
     ? `${p.ospite_nome || 'senza nome'} · check-in ${dataIT(p.check_in)} → ${dataIT(p.check_out)} · ${nomeCamera(s, p.camera_id)}`
       + ` · tel ${p.ospite_telefono || '-'} · email ${p.ospite_email || '-'}`
     : '-';
-  const id = `${dataItalia(0)}:${p?.id ?? s.id}`;
+  const id = `${dataItalia(0)}:${tipo ? tipo + ':' : ''}${p?.id ?? s.id}`;
   const avviso: AvvisoApp = { id, struttura: s.nome, operazione, ospite, errore, creato: new Date().toISOString() };
   await sql`
     INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('avviso_app', ${id}, ${JSON.stringify(avviso)})
