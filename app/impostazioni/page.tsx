@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT } from '@/lib/types';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import {
@@ -47,6 +47,7 @@ export default function ImpostazioniPage() {
   // Edit struttura attiva (camere, ical, prezzi)
   const [editNomiCamere, setEditNomiCamere] = useState<Record<number, string>>({});
   const [editColoriCamere, setEditColoriCamere] = useState<Record<number, string>>({});
+  const [editOspitiCamere, setEditOspitiCamere] = useState<Record<number, number>>({});
   const [editNumCamere, setEditNumCamere] = useState(5);
   const [editIcalUrls, setEditIcalUrls] = useState<Record<number, string>>({});
   const [salvatoEditCamere, setSalvatoEditCamere] = useState(false);
@@ -110,6 +111,8 @@ export default function ImpostazioniPage() {
   const [editAlloggiatiWskey, setEditAlloggiatiWskey] = useState('');
   const [mostraPasswordAlloggiati, setMostraPasswordAlloggiati] = useState(false);
   const [salvatoAlloggiati, setSalvatoAlloggiati] = useState(false);
+  // Credenziali proprie di singole camere (strutture con più codici Alloggiati Web)
+  const [editAlloggiatiCamere, setEditAlloggiatiCamere] = useState<Record<number, AlloggiatiCredentials>>({});
 
   // Booking Channel Manager (per struttura)
   const [editCmUrl, setEditCmUrl] = useState('');
@@ -139,6 +142,8 @@ export default function ImpostazioniPage() {
     if (!strutturaAttiva) return;
     setEditNomiCamere(strutturaAttiva.nomi_camere ?? {});
     setEditColoriCamere(strutturaAttiva.colori_camere ?? {});
+    setEditOspitiCamere(strutturaAttiva.ospiti_camere ?? {});
+    setEditOspitiCamere(strutturaAttiva.ospiti_camere ?? {});
     setEditNumCamere(strutturaAttiva.num_camere ?? 5);
     setEditIcalUrls(strutturaAttiva.ical_urls ?? {});
     // Messaggio vuoto: si parte dal modello, come nella configurazione guidata
@@ -191,17 +196,25 @@ export default function ImpostazioniPage() {
   }
 
   async function salvaCredenziali(id: string) {
+    // Si salvano solo le camere con credenziali complete; le altre usano quelle della struttura
+    const camere = Object.fromEntries(
+      Object.entries(editAlloggiatiCamere)
+        .map(([k, c]) => [k, { utente: c.utente.trim(), password: c.password, wskey: c.wskey.trim() }] as const)
+        .filter(([, c]) => c.utente && c.password && c.wskey),
+    );
     await fetch(`/api/strutture/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        alloggiati_credentials: {
+        alloggiati_credentials: editAlloggiatiUtente.trim() || editAlloggiatiWskey.trim() ? {
           utente: editAlloggiatiUtente.trim(),
           password: editAlloggiatiPassword,
           wskey: editAlloggiatiWskey.trim(),
-        },
+        } : null,
+        alloggiati_camere: camere,
       }),
     });
+    setEditAlloggiatiCamere(camere);
     setSalvatoAlloggiati(true);
     setTimeout(() => setSalvatoAlloggiati(false), 2000);
   }
@@ -265,7 +278,7 @@ export default function ImpostazioniPage() {
     await fetch(`/api/strutture/${strutturaAttiva.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nomi_camere: editNomiCamere, colori_camere: editColoriCamere, num_camere: editNumCamere }),
+      body: JSON.stringify({ nomi_camere: editNomiCamere, colori_camere: editColoriCamere, ospiti_camere: editOspitiCamere, num_camere: editNumCamere }),
     });
     setSalvatoEditCamere(true);
     setTimeout(() => setSalvatoEditCamere(false), 2000);
@@ -567,6 +580,7 @@ export default function ImpostazioniPage() {
                       <div className="flex items-center gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide pb-1 border-b">
                         <span className="w-20 flex-shrink-0">ID</span>
                         <span className="flex-1">Nome</span>
+                        <span className="w-14 text-center" title="Ospiti proposti per le nuove prenotazioni">Ospiti</span>
                         <span>Colore</span>
                       </div>
                       {idsEditCamere.map(id => {
@@ -579,7 +593,12 @@ export default function ImpostazioniPage() {
                             </div>
                             <input type="text" placeholder={`Camera ${id}`} value={editNomiCamere[id] ?? ''}
                               onChange={e => setEditNomiCamere(prev => ({ ...prev, [id]: e.target.value }))}
-                              className="flex-1 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              className="flex-1 min-w-0 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            />
+                            <input type="number" inputMode="numeric" min={1} max={30} title="Ospiti predefiniti"
+                              value={editOspitiCamere[id] ?? OSPITI_DEFAULT}
+                              onChange={e => setEditOspitiCamere(prev => ({ ...prev, [id]: Math.max(1, Number(e.target.value) || OSPITI_DEFAULT) }))}
+                              className="w-14 border rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-400"
                             />
                             <div className="flex items-center gap-0.5 flex-wrap">
                               {PALETTE.map(c => (
@@ -905,8 +924,9 @@ export default function ImpostazioniPage() {
                       {editAutomazioni.portale && !strutturaAttiva.telefono && (
                         <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
                       )}
-                      {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey && (
-                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura (scheda Strutture).</p>
+                      {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey
+                        && Object.keys(strutturaAttiva.alloggiati_camere ?? {}).length < strutturaAttiva.num_camere && (
+                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura o di alcune camere (scheda Strutture).</p>
                       )}
                     </div>
 
@@ -975,6 +995,7 @@ export default function ImpostazioniPage() {
           setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
           setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
           setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
+          setEditAlloggiatiCamere(s.alloggiati_camere ?? {});
           setMostraPasswordAlloggiati(false);
           setSalvatoAlloggiati(false);
           setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
@@ -1204,7 +1225,7 @@ export default function ImpostazioniPage() {
                       <Shield size={14} className="text-blue-600" />
                       <span className="font-semibold text-gray-700 text-xs">AlloggiatiWeb</span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-2">Credenziali per l&apos;invio automatico al portale Polizia di Stato.</p>
+                    <p className="text-xs text-gray-400 mb-2">Credenziali del portale Polizia di Stato (Questura) per l&apos;invio delle schedine. Valgono per tutte le camere che non hanno credenziali proprie.</p>
                     <div className="space-y-2 mb-2">
                       <input type="text" placeholder="Utente" value={editAlloggiatiUtente} onChange={e => setEditAlloggiatiUtente(e.target.value)}
                         autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
@@ -1222,8 +1243,49 @@ export default function ImpostazioniPage() {
                         autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
                       />
                     </div>
+                    {/* Credenziali per camera: camere registrate ad Alloggiati Web con utenze diverse */}
+                    <div className="mb-3">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Credenziali per camera</span>
+                      <p className="text-[11px] text-gray-400 mb-1.5">Se una camera ha un&apos;utenza Alloggiati Web propria, attivala qui: le sue schedine useranno quelle credenziali.</p>
+                      <div className="space-y-1.5">
+                        {Array.from({ length: selezionata.num_camere }, (_, i) => i + 1).map(id => {
+                          const c = editAlloggiatiCamere[id];
+                          const nome = selezionata.nomi_camere[id] || `Camera ${id}`;
+                          const setCampo = (k: keyof AlloggiatiCredentials, v: string) =>
+                            setEditAlloggiatiCamere(prev => ({ ...prev, [id]: { ...prev[id], [k]: v } }));
+                          return (
+                            <div key={id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+                              <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={!!c}
+                                  onChange={e => setEditAlloggiatiCamere(prev => {
+                                    const nuove = { ...prev };
+                                    if (e.target.checked) nuove[id] = { utente: '', password: '', wskey: '' };
+                                    else delete nuove[id];
+                                    return nuove;
+                                  })}
+                                />
+                                <span className="font-medium">{nome}</span>
+                                <span className="text-gray-400">{c ? 'credenziali proprie' : 'usa quelle della struttura'}</span>
+                              </label>
+                              {c && (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-1.5">
+                                  <input type="text" placeholder="Utente" value={c.utente} onChange={e => setCampo('utente', e.target.value)}
+                                    autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                  <input type={mostraPasswordAlloggiati ? 'text' : 'password'} placeholder="Password" value={c.password} onChange={e => setCampo('password', e.target.value)}
+                                    autoComplete="new-password" className="min-w-0 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                  <input type="text" placeholder="WsKey" value={c.wskey} onChange={e => setCampo('wskey', e.target.value)}
+                                    autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                  {!(c.utente && c.password && c.wskey) && (
+                                    <p className="sm:col-span-3 text-[11px] text-amber-600">Incompleta: finché mancano dei campi non viene salvata e la camera usa le credenziali della struttura.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <button onClick={() => salvaCredenziali(selezionata.id)}
-                      disabled={!editAlloggiatiUtente || !editAlloggiatiPassword || !editAlloggiatiWskey}
                       className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-40"
                     >
                       <Save size={12} />

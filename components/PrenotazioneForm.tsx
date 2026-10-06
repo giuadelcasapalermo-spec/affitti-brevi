@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Camera, Prenotazione, PrezzoPerPeriodo } from '@/lib/types';
+import { Camera, Prenotazione, PrezzoPerPeriodo, OSPITI_DEFAULT } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO } from 'date-fns';
 import VoiceInput from './VoiceInput';
@@ -26,6 +26,8 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
     check_out: iniziale.check_out ?? oggi,
     importo_totale: iniziale.importo_totale ?? 0,
     tassa_soggiorno: iniziale.tassa_soggiorno ?? 0,
+    // null = segue il predefinito della camera finché non si modifica a mano
+    num_ospiti: (iniziale.num_ospiti ?? null) as number | null,
     stato: iniziale.stato ?? 'confermata',
     note: iniziale.note ?? '',
   });
@@ -43,6 +45,7 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
   const notti = differenceInDays(parseISO(form.check_out), parseISO(form.check_in));
   const camera = camere.find((c: Camera) => c.id === form.camera_id);
   const prezzoBase = camera?.prezzo_notte ?? 0;
+  const ospiti = form.num_ospiti ?? camera?.ospiti_default ?? OSPITI_DEFAULT;
 
   const calcolato = notti > 0 && prezzoBase > 0
     ? calcolaImporto(
@@ -58,7 +61,7 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.camera_id, form.check_in, form.check_out, periodi]);
 
-  function set(k: string, v: string | number) {
+  function set(k: string, v: string | number | null) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
@@ -68,6 +71,7 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
       ...form,
       importo_totale: Number(form.importo_totale),
       tassa_soggiorno: Number(form.tassa_soggiorno) || undefined,
+      num_ospiti: ospiti,
     };
     onSalva(payload);
   }
@@ -91,8 +95,8 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <VoiceInput tipo="prenotazione" camere={camere} onParsed={applicaVoce} />
-      <div className="grid grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-2 sm:grid-cols-[1fr_6rem_1fr] gap-4">
+        <div className="col-span-2 sm:col-span-1">
           <label className="block text-sm font-medium text-gray-700 mb-1">Camera *</label>
           <select
             value={form.camera_id}
@@ -106,6 +110,18 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Ospiti</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1"
+            max="30"
+            value={ospiti}
+            onChange={(e) => set('num_ospiti', e.target.value ? Math.max(1, Number(e.target.value)) : null)}
+            className="w-full border rounded px-3 py-2 text-sm"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Stato</label>

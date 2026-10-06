@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getStrutturaAttiva } from '@/lib/strutture';
+import { getStrutturaAttiva, ospitiDefaultCamera } from '@/lib/strutture';
 import { Camera } from '@/lib/types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
@@ -16,6 +16,7 @@ export async function GET() {
       nome: struttura.nomi_camere[i] ?? `Camera ${i}`,
       prezzo_notte: struttura.prezzi_camere[i] ?? DEFAULT_PREZZI[i] ?? 60,
       colore: struttura.colori_camere[i],
+      ospiti_default: ospitiDefaultCamera(struttura, i),
     });
   }
   return NextResponse.json(camere);

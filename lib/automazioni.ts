@@ -4,7 +4,7 @@
 // I messaggi agli ospiti (link e istruzioni) si mandano da Prenotazioni → WhatsApp (components/InvioMassivoWhatsApp).
 import sql from './postgres';
 import type { Prenotazione, Struttura, Alloggiato } from './types';
-import { leggiStrutture } from './strutture';
+import { leggiStrutture, credenzialiAlloggiati } from './strutture';
 import { leggiPrenotazioni } from './db';
 import { leggiAlloggiati, marcaInviatiPortale } from './alloggiati-db';
 import { inviaSchedinePortale } from './portale-alloggiati';
@@ -108,14 +108,6 @@ export async function inviaPortaleAutomatico(finale: boolean): Promise<Esito[]> 
     const alloggiati = await leggiAlloggiati(s.id, oggi);
     if (arrivi.length === 0 && alloggiati.length === 0) continue;
 
-    const creds = s.alloggiati_credentials;
-    if (!creds?.utente || !creds?.password || !creds?.wskey) {
-      const errore = 'credenziali Alloggiati Web non configurate (Impostazioni → Strutture)';
-      const avviso = finale ? await avvisaStruttura(s, operazione, null, `${errore}; arrivi di oggi: ${arrivi.map(p => p.ospite_nome).join(', ') || '-'}`) : undefined;
-      esiti.push({ struttura: s.nome, esito: finale ? 'errore' : 'in_attesa', dettaglio: errore, avviso });
-      continue;
-    }
-
     // Gruppi da inviare: uno per prenotazione, più gli ospiti inseriti a mano senza prenotazione
     const idsArrivi = new Set(arrivi.map(p => p.id));
     const gruppi: { p: Prenotazione | null; ospiti: Alloggiato[] }[] = arrivi.map(p => ({
@@ -133,6 +125,15 @@ export async function inviaPortaleAutomatico(finale: boolean): Promise<Esito[]> 
         if (!finale) { esiti.push({ ...base, esito: 'in_attesa', dettaglio: 'ospite non ancora registrato' }); continue; }
         const avviso = await avvisaStruttura(s, operazione, p, 'l\'ospite non ha registrato i documenti: inseriscili in Alloggiati e invia a mano entro 24 ore dall\'arrivo');
         esiti.push({ ...base, esito: 'errore', dettaglio: 'ospite non registrato', avviso });
+        continue;
+      }
+
+      // Credenziali della camera se ne ha di proprie, altrimenti della struttura
+      const creds = credenzialiAlloggiati(s, p?.camera_id);
+      if (!creds) {
+        const errore = `credenziali Alloggiati Web non configurate${p ? ` per la camera ${p.camera_id}` : ''} (Impostazioni → Strutture)`;
+        const avviso = finale ? await avvisaStruttura(s, operazione, p, errore) : undefined;
+        esiti.push({ ...base, esito: finale ? 'errore' : 'in_attesa', dettaglio: errore, avviso });
         continue;
       }
 

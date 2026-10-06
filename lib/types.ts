@@ -3,7 +3,12 @@ export interface Camera {
   nome: string;
   prezzo_notte: number;
   colore?: string;
+  /** Numero di ospiti proposto per le nuove prenotazioni della camera */
+  ospiti_default?: number;
 }
+
+/** Ospiti per prenotazione quando la camera non ha un valore impostato */
+export const OSPITI_DEFAULT = 2;
 
 export interface AlloggiatiCredentials {
   utente: string;
@@ -88,6 +93,10 @@ export interface Struttura {
   colori_camere: Record<number, string>;
   ical_urls: Record<number, string>;
   alloggiati_credentials?: AlloggiatiCredentials;
+  /** Credenziali Alloggiati Web proprie di una camera: se presenti prevalgono su quelle della struttura */
+  alloggiati_camere: Record<number, AlloggiatiCredentials>;
+  /** Ospiti predefiniti per camera (vedi OSPITI_DEFAULT) */
+  ospiti_camere: Record<number, number>;
   conti_correnti: ContoCorrente[];
   channel_manager_config?: BookingChannelManagerConfig;
   dati_fiscali: DatiFiscali;
@@ -121,6 +130,8 @@ export interface Prenotazione {
   tassa_soggiorno?: number;
   tassa_esenti?: number;
   tassa_trovata?: number | null;
+  /** Ospiti della prenotazione; null = predefinito della camera */
+  num_ospiti?: number | null;
   stato: 'confermata' | 'pending' | 'cancellata';
   note: string;
   created_at: string;
