@@ -356,6 +356,30 @@ export async function sincronizzaCalendario(
       continue;
     }
 
+    // Blocco diviso a mano in più soggiorni (Prenotazioni → Dividi) e poi ripubblicato da Booking con un UID nuovo:
+    // le parti con il vecchio UID che insieme coprono esattamente il blocco prendono il nuovo UID e restano divise
+    const partiDivise = (() => {
+      const perUid = new Map<string, Prenotazione[]>();
+      for (const p of orfane) {
+        if (orfaneRiassegnate.has(p.id) || !p.ical_uid || p.stato === 'cancellata') continue;
+        perUid.set(p.ical_uid, [...(perUid.get(p.ical_uid) ?? []), p]);
+      }
+      for (const parti of perUid.values()) {
+        if (parti.length < 2) continue;
+        const ordinate = [...parti].sort((a, b) => a.check_in.localeCompare(b.check_in));
+        const contigue = ordinate.every((p, i) => i === 0 || ordinate[i - 1].check_out === p.check_in);
+        if (contigue && ordinate[0].check_in === checkIn && ordinate[ordinate.length - 1].check_out === checkOut) return ordinate;
+      }
+      return null;
+    })();
+    if (partiDivise) {
+      for (const p of partiDivise) {
+        orfaneRiassegnate.add(p.id);
+        daAggiornare.set(p.id, { ...p, ical_uid: ev.uid });
+      }
+      continue;
+    }
+
     const rinominata = orfane.find(
       (p) => !orfaneRiassegnate.has(p.id) && p.check_in === checkIn && p.check_out === checkOut
     );

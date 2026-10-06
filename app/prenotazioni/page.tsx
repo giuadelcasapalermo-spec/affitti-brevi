@@ -6,7 +6,7 @@ import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO, format, startOfMonth, endOfMonth, addMonths, isToday, isTomorrow } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { fData } from '@/lib/utils';
-import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Mail, MessageCircle, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Mail, MessageCircle, Loader2, Scissors } from 'lucide-react';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import InvioMassivoWhatsApp from '@/components/InvioMassivoWhatsApp';
 import { useSearchParams } from 'next/navigation';
@@ -244,6 +244,28 @@ function PrenotazioniInner() {
       .then(r => r.json())
       .then(saved => setPrenotazioni(prev => prev.map(p => p.id === id ? saved : p)))
       .catch(() => carica());
+  }
+
+  // Booking.com unisce nel calendario iCal i soggiorni consecutivi: qui si divide il blocco nel giorno del cambio ospite
+  async function dividi(p: Prenotazione) {
+    const [y, m, g] = p.check_in.split('-');
+    const testo = prompt(
+      `Booking unisce i soggiorni consecutivi in un solo blocco.\nData del cambio ospite (check-out del primo = check-in del secondo), tra il ${g}/${m}/${y} e il ${p.check_out.split('-').reverse().join('/')}:`,
+      '',
+    );
+    if (!testo) return;
+    const mt = testo.trim().match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?$/);
+    if (!mt) { alert('Scrivi la data come gg/mm o gg/mm/aaaa'); return; }
+    const anno = mt[3] ? (mt[3].length === 2 ? '20' + mt[3] : mt[3]) : y;
+    const data = `${anno}-${mt[2].padStart(2, '0')}-${mt[1].padStart(2, '0')}`;
+    const res = await fetch(`/api/prenotazioni/${p.id}/dividi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(j.errore ?? 'Divisione non riuscita'); return; }
+    carica();
   }
 
   function elimina(id: string) {
@@ -638,7 +660,7 @@ function PrenotazioniInner() {
                     onDoubleClick={() => startEdit(p)}
                   >
                     {/* Nome + badge */}
-                    <div className="flex items-center gap-2 mb-2.5 pr-16 flex-wrap">
+                    <div className={`flex items-center gap-2 mb-2.5 ${p.fonte === 'ical' ? 'pr-24' : 'pr-16'} flex-wrap`}>
                       <span className="font-bold text-gray-900 text-[15px]">{p.ospite_nome}</span>
                       {(p.fonte === 'ical' || p.fonte === 'booking') && (
                         <span className="bg-blue-600 text-white text-[11px] font-bold px-2 py-0.5 rounded">
@@ -664,6 +686,15 @@ function PrenotazioniInner() {
 
                     {/* Azioni modifica / elimina */}
                     <div className="absolute top-3 right-3 flex gap-0.5">
+                      {p.fonte === 'ical' && (
+                        <button
+                          onClick={() => dividi(p)}
+                          title="Dividi: due soggiorni consecutivi uniti da Booking"
+                          className="p-1.5 text-gray-400 active:text-blue-600 touch-manipulation rounded-lg active:bg-blue-50"
+                        >
+                          <Scissors size={17} strokeWidth={1.8} />
+                        </button>
+                      )}
                       <button
                         onClick={() => setEditingCard(p)}
                         className="p-1.5 text-gray-400 active:text-blue-600 touch-manipulation rounded-lg active:bg-blue-50"
@@ -1011,10 +1042,15 @@ function PrenotazioniInner() {
                     </td>
                     <td className="px-2 py-2.5">
                       <div className="flex gap-0 justify-end">
-                        <button onClick={() => startEdit(p)} title="Modifica" className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50">
+                        {p.fonte === 'ical' && (
+                          <button onClick={() => dividi(p)} title="Dividi: due soggiorni consecutivi uniti da Booking" className="text-gray-400 hover:text-blue-600 p-0.5 rounded hover:bg-blue-50">
+                            <Scissors size={14} />
+                          </button>
+                        )}
+                        <button onClick={() => startEdit(p)} title="Modifica" className="text-gray-400 hover:text-blue-600 p-0.5 rounded hover:bg-blue-50">
                           <Pencil size={14} />
                         </button>
-                        <button onClick={() => elimina(p.id)} title="Elimina" className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50">
+                        <button onClick={() => elimina(p.id)} title="Elimina" className="text-gray-400 hover:text-red-600 p-0.5 rounded hover:bg-red-50">
                           <Trash2 size={14} />
                         </button>
                       </div>
