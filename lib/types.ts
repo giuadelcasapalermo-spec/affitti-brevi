@@ -59,6 +59,12 @@ export interface DatiFiscali {
   tipologia: string;
 }
 
+/** Codici identificativi di una camera; vuoti = quelli della struttura (dati_fiscali) */
+export interface CodiciCamera {
+  cin: string;
+  cir: string;
+}
+
 export interface RegoleStruttura {
   comune: string;
   /** Notti massime soggette a tassa di soggiorno per singolo soggiorno */
@@ -97,6 +103,8 @@ export interface Struttura {
   alloggiati_camere: Record<number, AlloggiatiCredentials>;
   /** Ospiti predefiniti per camera (vedi OSPITI_DEFAULT) */
   ospiti_camere: Record<number, number>;
+  /** CIN/CIR propri di una camera (unità registrata a parte): i campi vuoti usano quelli della struttura */
+  codici_camere: Record<number, CodiciCamera>;
   conti_correnti: ContoCorrente[];
   channel_manager_config?: BookingChannelManagerConfig;
   dati_fiscali: DatiFiscali;

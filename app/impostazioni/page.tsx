@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT } from '@/lib/types';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT, CodiciCamera } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import {
@@ -29,6 +29,9 @@ interface ICalSyncResult {
 type MainTab = 'strutture' | 'camere' | 'account' | 'app' | 'sistema';
 type SubTab = 'camere' | 'ical' | 'prezzi' | 'checkin';
 type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
+
+// Stesso controllo della configurazione guidata
+const CIN_VALIDO = /^IT[A-Z0-9]{10,}$/i;
 
 const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_fine: '', prezzo_notte: '', prezzo_booking: '', prezzo_airbnb: '' };
 
@@ -113,6 +116,12 @@ export default function ImpostazioniPage() {
   const [salvatoAlloggiati, setSalvatoAlloggiati] = useState(false);
   // Credenziali proprie di singole camere (strutture con più codici Alloggiati Web)
   const [editAlloggiatiCamere, setEditAlloggiatiCamere] = useState<Record<number, AlloggiatiCredentials>>({});
+
+  // Codici identificativi CIN / CIR (struttura e, facoltativi, per camera)
+  const [editCin, setEditCin] = useState('');
+  const [editCir, setEditCir] = useState('');
+  const [editCodiciCamere, setEditCodiciCamere] = useState<Record<number, CodiciCamera>>({});
+  const [salvatoCodici, setSalvatoCodici] = useState(false);
 
   // Booking Channel Manager (per struttura)
   const [editCmUrl, setEditCmUrl] = useState('');
@@ -217,6 +226,28 @@ export default function ImpostazioniPage() {
     setEditAlloggiatiCamere(camere);
     setSalvatoAlloggiati(true);
     setTimeout(() => setSalvatoAlloggiati(false), 2000);
+  }
+
+  async function salvaCodici(id: string) {
+    const s = strutture.find(x => x.id === id);
+    if (!s) return;
+    // Si salvano solo le camere con almeno un codice; i campi vuoti usano quelli della struttura
+    const camere = Object.fromEntries(
+      Object.entries(editCodiciCamere)
+        .map(([k, c]) => [k, { cin: c.cin.replace(/\s/g, '').toUpperCase(), cir: c.cir.trim() }] as const)
+        .filter(([, c]) => c.cin || c.cir),
+    );
+    await fetch(`/api/strutture/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dati_fiscali: { ...s.dati_fiscali, cin: editCin.replace(/\s/g, '').toUpperCase(), cir: editCir.trim() },
+        codici_camere: camere,
+      }),
+    });
+    setEditCodiciCamere(camere);
+    setSalvatoCodici(true);
+    setTimeout(() => setSalvatoCodici(false), 2000);
   }
 
   async function salvaChannelManager(id: string) {
@@ -971,6 +1002,8 @@ export default function ImpostazioniPage() {
                           tassa: '€ 6,00',
                           indirizzo: strutturaAttiva.indirizzo || 'indirizzo della struttura',
                           struttura: strutturaAttiva.nome,
+                          cin: strutturaAttiva.codici_camere?.[1]?.cin || strutturaAttiva.dati_fiscali.cin,
+                          cir: strutturaAttiva.codici_camere?.[1]?.cir || strutturaAttiva.dati_fiscali.cir,
                         })}
                       </div>
                     </div>
@@ -996,6 +1029,14 @@ export default function ImpostazioniPage() {
           setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
           setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
           setEditAlloggiatiCamere(s.alloggiati_camere ?? {});
+          setEditCin(s.dati_fiscali?.cin ?? '');
+          setEditCir(s.dati_fiscali?.cir ?? '');
+          setEditCodiciCamere(s.codici_camere ?? {});
+          setSalvatoCodici(false);
+          setEditCin(s.dati_fiscali?.cin ?? '');
+          setEditCir(s.dati_fiscali?.cir ?? '');
+          setEditCodiciCamere(s.codici_camere ?? {});
+          setSalvatoCodici(false);
           setMostraPasswordAlloggiati(false);
           setSalvatoAlloggiati(false);
           setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
@@ -1154,7 +1195,7 @@ export default function ImpostazioniPage() {
                       <input type="text" placeholder="Nome (es. Cassa, POS Visa…)" value={nuovoContoNome}
                         onChange={e => setNuovoContoNome(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && nuovoContoNome.trim()) { e.preventDefault(); setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]); setNuovoContoNome(''); }}}
-                        className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        className="flex-1 min-w-0 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
                       />
                       <button type="button" disabled={!nuovoContoNome.trim()}
                         onClick={() => { setEditContiCorrenti(prev => [...prev, { id: crypto.randomUUID(), tipo: nuovoContoTipo, nome: nuovoContoNome.trim() }]); setNuovoContoNome(''); }}
@@ -1217,6 +1258,69 @@ export default function ImpostazioniPage() {
                         )}
                       </>
                     )}
+                  </div>
+
+                  {/* Codici identificativi CIN / CIR */}
+                  <div className="border-t pt-4 mt-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Shield size={14} className="text-amber-600" />
+                      <span className="font-semibold text-gray-700 text-xs">Codici identificativi (CIN / CIR)</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">Codici della struttura. Valgono per tutte le camere che non hanno codici propri.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-1">
+                      <input type="text" placeholder="CIN (IT…)" value={editCin} onChange={e => setEditCin(e.target.value)}
+                        autoComplete="off" className="min-w-0 border rounded px-2 py-1.5 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                      <input type="text" placeholder="CIR / codice regionale" value={editCir} onChange={e => setEditCir(e.target.value)}
+                        autoComplete="off" className="min-w-0 border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                    </div>
+                    {editCin && !CIN_VALIDO.test(editCin.replace(/\s/g, '')) && (
+                      <p className="text-[11px] text-amber-600 mb-1">Il CIN inizia con IT seguito da almeno 10 caratteri.</p>
+                    )}
+                    <div className="mt-2 mb-3">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Codici per camera</span>
+                      <p className="text-[11px] text-gray-400 mb-1.5">Per le camere registrate come unità a sé: un campo lasciato vuoto usa il codice della struttura.</p>
+                      <div className="space-y-1.5">
+                        {Array.from({ length: selezionata.num_camere }, (_, i) => i + 1).map(id => {
+                          const c = editCodiciCamere[id];
+                          const nome = selezionata.nomi_camere[id] || `Camera ${id}`;
+                          const setCampo = (k: keyof CodiciCamera, v: string) =>
+                            setEditCodiciCamere(prev => ({ ...prev, [id]: { ...(prev[id] ?? { cin: '', cir: '' }), [k]: v } }));
+                          return (
+                            <div key={id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+                              <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={!!c}
+                                  onChange={e => setEditCodiciCamere(prev => {
+                                    const nuove = { ...prev };
+                                    if (e.target.checked) nuove[id] = { cin: '', cir: '' };
+                                    else delete nuove[id];
+                                    return nuove;
+                                  })}
+                                />
+                                <span className="font-medium">{nome}</span>
+                                <span className="text-gray-400 truncate">{c ? 'codici propri' : 'usa quelli della struttura'}</span>
+                              </label>
+                              {c && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-1.5">
+                                  <input type="text" placeholder={`CIN (vuoto = ${editCin || 'struttura'})`} value={c.cin} onChange={e => setCampo('cin', e.target.value)}
+                                    autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs font-mono uppercase bg-white focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                                  <input type="text" placeholder={`CIR (vuoto = ${editCir || 'struttura'})`} value={c.cir} onChange={e => setCampo('cir', e.target.value)}
+                                    autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                                  {c.cin && !CIN_VALIDO.test(c.cin.replace(/\s/g, '')) && (
+                                    <p className="sm:col-span-2 text-[11px] text-amber-600">Il CIN inizia con IT seguito da almeno 10 caratteri.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button onClick={() => salvaCodici(selezionata.id)}
+                      className="flex items-center gap-1.5 bg-amber-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-amber-700"
+                    >
+                      <Save size={12} />
+                      {salvatoCodici ? 'Salvato!' : 'Salva codici'}
+                    </button>
                   </div>
 
                   {/* AlloggiatiWeb */}

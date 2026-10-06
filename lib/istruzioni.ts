@@ -6,6 +6,8 @@ export const SEGNAPOSTO_ISTRUZIONI: Record<string, string> = {
   '{tassa}': 'Importo della tassa di soggiorno',
   '{indirizzo}': 'Indirizzo della struttura',
   '{struttura}': 'Nome della struttura',
+  '{cin}': 'CIN (della camera se ne ha uno proprio, altrimenti della struttura)',
+  '{cir}': 'Codice regionale CIR (della camera o della struttura)',
 };
 
 // Proposto dal wizard come punto di partenza: il titolare completa le parti tra [ ]
@@ -31,6 +33,8 @@ export interface VariabiliIstruzioni {
   tassa: string;
   indirizzo: string;
   struttura: string;
+  cin?: string;
+  cir?: string;
 }
 
 export function componiIstruzioni(modello: string, v: VariabiliIstruzioni): string {
@@ -39,5 +43,7 @@ export function componiIstruzioni(modello: string, v: VariabiliIstruzioni): stri
     .replaceAll('{camera}', String(v.camera))
     .replaceAll('{tassa}', v.tassa)
     .replaceAll('{indirizzo}', v.indirizzo)
-    .replaceAll('{struttura}', v.struttura);
+    .replaceAll('{struttura}', v.struttura)
+    .replaceAll('{cin}', v.cin ?? '')
+    .replaceAll('{cir}', v.cir ?? '');
 }

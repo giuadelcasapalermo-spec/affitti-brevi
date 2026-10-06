@@ -152,7 +152,7 @@ export default function ConfigurazionePage() {
 
   const anteprima = componiIstruzioni(istruzioni, {
     ospite: 'Mario Rossi', camera: 1, tassa: `€${(regole.tassa_tariffa * 2 * Math.min(3, regole.tassa_max_notti)).toFixed(0)}`,
-    indirizzo: indirizzo || 'Via Esempio 1', struttura: nome || 'la struttura',
+    indirizzo: indirizzo || 'Via Esempio 1', struttura: nome || 'la struttura', cin: fiscali.cin, cir: fiscali.cir,
   });
 
   return (

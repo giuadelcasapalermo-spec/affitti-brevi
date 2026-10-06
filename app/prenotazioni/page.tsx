@@ -54,6 +54,10 @@ function formatDateRange(checkIn: string, checkOut: string): string {
 
 const INPUT = 'border border-gray-300 rounded px-1.5 py-1 text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-400';
 const INPUT_RIGHT = INPUT + ' text-right';
+// Modifica in riga: larghezze fisse così la tabella non supera lo schermo
+const INPUT_DATA = INPUT.replace('w-full', 'w-[7rem]').replace('text-sm', 'text-xs');
+const INPUT_NUM = (w: string) => INPUT_RIGHT.replace('w-full', w);
+const INPUT_SELECT = (w: string) => INPUT.replace('w-full', w).replace('text-sm', 'text-xs');
 
 function PrenotazioniInner() {
   const searchParams = useSearchParams();
@@ -733,16 +737,16 @@ function PrenotazioniInner() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-3 py-3 font-medium text-gray-600">Ospite</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600">Camera</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600">Check-in</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-600">Check-out</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-600">Notti</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-600">Ospiti</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-600">Importo</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-600">T.d.S.</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-600">Check-in</th>
-                <th className="px-3 py-3 w-20"></th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600 w-40">Ospite</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">Camera</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">Check-in</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">Check-out</th>
+                <th className="text-right px-2 py-3 font-medium text-gray-600">Notti</th>
+                <th className="text-right px-2 py-3 font-medium text-gray-600">Ospiti</th>
+                <th className="text-right px-2 py-3 font-medium text-gray-600">Importo</th>
+                <th className="text-right px-2 py-3 font-medium text-gray-600">T.d.S.</th>
+                <th className="text-center px-2 py-3 font-medium text-gray-600">Check-in</th>
+                <th className="px-1 py-3 w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -759,7 +763,7 @@ function PrenotazioniInner() {
                     <Fragment key={p.id}>
                       <tr className="border-b bg-blue-50">
                         {/* Ospite */}
-                        <td className="px-2 py-2 space-y-1">
+                        <td className="px-2 py-2 space-y-1 w-40">
                           <input
                             type="text"
                             value={(ev.ospite_nome as string) ?? ''}
@@ -787,7 +791,7 @@ function PrenotazioniInner() {
                           <select
                             value={ev.camera_id as number}
                             onChange={e => setEV('camera_id', Number(e.target.value))}
-                            className={INPUT}
+                            className={INPUT_SELECT('w-[5.5rem]')}
                           >
                             {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                           </select>
@@ -798,7 +802,7 @@ function PrenotazioniInner() {
                             type="date"
                             value={(ev.check_in as string) ?? ''}
                             onChange={e => setEV('check_in', e.target.value)}
-                            className={INPUT}
+                            className={INPUT_DATA}
                           />
                         </td>
                         {/* Check-out */}
@@ -807,7 +811,7 @@ function PrenotazioniInner() {
                             type="date"
                             value={(ev.check_out as string) ?? ''}
                             onChange={e => setEV('check_out', e.target.value)}
-                            className={INPUT}
+                            className={INPUT_DATA}
                           />
                         </td>
                         {/* Notti */}
@@ -820,7 +824,7 @@ function PrenotazioniInner() {
                             step="1"
                             value={(ev.num_ospiti as number | null | undefined) ?? camera?.ospiti_default ?? OSPITI_DEFAULT}
                             onChange={e => setEV('num_ospiti', e.target.value ? Math.max(1, Number(e.target.value)) : undefined)}
-                            className={INPUT_RIGHT}
+                            className={INPUT_NUM('w-10')}
                           />
                         </td>
                         {/* Importo */}
@@ -831,7 +835,7 @@ function PrenotazioniInner() {
                             step="0.01"
                             value={(ev.importo_totale as number) ?? 0}
                             onChange={e => setEV('importo_totale', e.target.value)}
-                            className={INPUT_RIGHT}
+                            className={INPUT_NUM('w-[4.5rem]')}
                           />
                         </td>
                         {/* Tassa */}
@@ -842,7 +846,7 @@ function PrenotazioniInner() {
                             step="1"
                             value={(ev.tassa_soggiorno as number) ?? ''}
                             onChange={e => setEV('tassa_soggiorno', e.target.value ? Number(e.target.value) : undefined)}
-                            className={INPUT_RIGHT}
+                            className={INPUT_NUM('w-12')}
                             placeholder="0"
                           />
                         </td>
@@ -851,7 +855,7 @@ function PrenotazioniInner() {
                           <select
                             value={ev.stato as string}
                             onChange={e => setEV('stato', e.target.value)}
-                            className={INPUT}
+                            className={INPUT_SELECT('w-[6.5rem]')}
                           >
                             <option value="confermata">Confermata</option>
                             <option value="pending">In attesa</option>
@@ -860,7 +864,7 @@ function PrenotazioniInner() {
                         </td>
                         {/* Azioni */}
                         <td className="px-2 py-2">
-                          <div className="flex gap-1 justify-end">
+                          <div className="flex gap-0 justify-end">
                             <button onClick={salvaInline} title="Salva" className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50">
                               <Check size={16} />
                             </button>
@@ -896,7 +900,7 @@ function PrenotazioniInner() {
                     className="border-b hover:bg-gray-50 cursor-pointer"
                     onDoubleClick={() => startEdit(p)}
                   >
-                    <td className="px-3 py-2.5">
+                    <td className="px-2 py-2.5">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-gray-800">{p.ospite_nome}</span>
                         {(p.fonte === 'ical' || p.fonte === 'booking') && (
@@ -904,23 +908,23 @@ function PrenotazioniInner() {
                         )}
                       </div>
                       {p.ospite_telefono && <div className="text-xs text-gray-400">{p.ospite_telefono}</div>}
-                      {p.ospite_email && <div className="text-xs text-blue-500 truncate max-w-[180px]">{p.ospite_email}</div>}
-                      {p.note && <div className="text-xs text-gray-400 truncate max-w-[160px]">{p.note}</div>}
+                      {p.ospite_email && <div className="text-xs text-blue-500 truncate max-w-[150px]">{p.ospite_email}</div>}
+                      {p.note && <div className="text-xs text-gray-400 truncate max-w-[150px]">{p.note}</div>}
                     </td>
-                    <td className="px-3 py-2.5 text-gray-600">{camera?.nome}</td>
-                    <td className="px-3 py-2.5 text-gray-600">{fData(p.check_in)}</td>
-                    <td className="px-3 py-2.5 text-gray-600">{fData(p.check_out)}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-600">{notti}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-600">{p.num_ospiti ?? camera?.ospiti_default ?? OSPITI_DEFAULT}</td>
-                    <td className="px-3 py-2.5 text-right font-semibold text-gray-800">
+                    <td className="px-2 py-2.5 text-gray-600">{camera?.nome}</td>
+                    <td className="px-2 py-2.5 text-gray-600">{fData(p.check_in)}</td>
+                    <td className="px-2 py-2.5 text-gray-600">{fData(p.check_out)}</td>
+                    <td className="px-2 py-2.5 text-right text-gray-600">{notti}</td>
+                    <td className="px-2 py-2.5 text-right text-gray-600">{p.num_ospiti ?? camera?.ospiti_default ?? OSPITI_DEFAULT}</td>
+                    <td className="px-2 py-2.5 text-right font-semibold text-gray-800">
                       {p.importo_totale > 0 ? `€${p.importo_totale.toFixed(2)}` : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-sm">
+                    <td className="px-2 py-2.5 text-right text-sm">
                       {p.tassa_soggiorno
                         ? <span className="text-amber-600 font-medium">€{p.tassa_soggiorno.toFixed(2)}</span>
                         : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-center">
+                    <td className="px-2 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
                         {checkinBadge(p.id, p.ospite_email)}
                         {p.ospite_telefono && (
@@ -959,8 +963,8 @@ function PrenotazioniInner() {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex gap-1 justify-end">
+                    <td className="px-2 py-2.5">
+                      <div className="flex gap-0 justify-end">
                         <button onClick={() => startEdit(p)} title="Modifica" className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50">
                           <Pencil size={14} />
                         </button>

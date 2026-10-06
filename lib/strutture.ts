@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import {
   Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig,
   DatiFiscali, RegoleStruttura, DATI_FISCALI_VUOTI, REGOLE_DEFAULT,
-  AutomazioniStruttura, AUTOMAZIONI_DEFAULT, OSPITI_DEFAULT,
+  AutomazioniStruttura, AUTOMAZIONI_DEFAULT, OSPITI_DEFAULT, CodiciCamera,
 } from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
@@ -38,6 +38,7 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS automazioni JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS ospiti_camere JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS codici_camere JSONB DEFAULT NULL`,
   ]);
   _tableReady = true;
 }
@@ -69,6 +70,7 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     alloggiati_credentials: row.alloggiati_credentials as AlloggiatiCredentials | undefined,
     alloggiati_camere: Object.fromEntries(Object.entries((row.alloggiati_camere ?? {}) as Record<string, AlloggiatiCredentials>).map(([k, v]) => [Number(k), v])),
     ospiti_camere: toNumericNumberRecord(row.ospiti_camere),
+    codici_camere: Object.fromEntries(Object.entries((row.codici_camere ?? {}) as Record<string, CodiciCamera>).map(([k, v]) => [Number(k), v])),
     conti_correnti: conti,
     channel_manager_config: row.channel_manager_config as BookingChannelManagerConfig | undefined,
     dati_fiscali: { ...DATI_FISCALI_VUOTI, ...(row.dati_fiscali as Partial<DatiFiscali> | null) },
@@ -112,6 +114,7 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     automazioni: { ...AUTOMAZIONI_DEFAULT },
     alloggiati_camere: {},
     ospiti_camere: {},
+    codici_camere: {},
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -159,6 +162,8 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET alloggiati_camere = ${JSON.stringify(fields.alloggiati_camere)} WHERE id = ${id}`;
   if (fields.ospiti_camere !== undefined)
     await sql`UPDATE strutture SET ospiti_camere = ${JSON.stringify(fields.ospiti_camere)} WHERE id = ${id}`;
+  if (fields.codici_camere !== undefined)
+    await sql`UPDATE strutture SET codici_camere = ${JSON.stringify(fields.codici_camere)} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {
@@ -208,6 +213,7 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     automazioni: { ...AUTOMAZIONI_DEFAULT },
     alloggiati_camere: {},
     ospiti_camere: {},
+    codici_camere: {},
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -274,4 +280,13 @@ export function credenzialiAlloggiati(s: Struttura, cameraId?: number | null): A
 /** Ospiti proposti per una nuova prenotazione della camera */
 export function ospitiDefaultCamera(s: Struttura, cameraId: number): number {
   return s.ospiti_camere[cameraId] || OSPITI_DEFAULT;
+}
+
+/** CIN e CIR validi per una camera: quelli propri della camera, campo per campo, o quelli della struttura */
+export function codiciCamera(s: Struttura, cameraId?: number | null): CodiciCamera {
+  const c = cameraId != null ? s.codici_camere[cameraId] : undefined;
+  return {
+    cin: c?.cin?.trim() || s.dati_fiscali.cin,
+    cir: c?.cir?.trim() || s.dati_fiscali.cir,
+  };
 }

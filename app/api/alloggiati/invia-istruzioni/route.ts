@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getStrutturaAttiva } from '@/lib/strutture';
+import { getStrutturaAttiva, codiciCamera } from '@/lib/strutture';
 import { leggiPrenotazioni } from '@/lib/db';
 import { componiIstruzioni } from '@/lib/istruzioni';
 
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       tassa: imposta > 0 ? `€${imposta.toFixed(0)}` : '(da confermare)',
       indirizzo: struttura.indirizzo || struttura.nome,
       struttura: struttura.nome,
+      ...codiciCamera(struttura, pren.camera_id),
     });
 
     return NextResponse.json({ ok: true, testo, telefono: pren.ospite_telefono });
