@@ -106,6 +106,8 @@ export interface Struttura {
   prezzi_camere: Record<number, number>;
   colori_camere: Record<number, string>;
   ical_urls: Record<number, string>;
+  /** URL iCal di esportazione di Airbnb per camera (importa le prenotazioni Airbnb) */
+  ical_urls_airbnb: Record<number, string>;
   alloggiati_credentials?: AlloggiatiCredentials;
   /** Credenziali Alloggiati Web proprie di una camera: se presenti prevalgono su quelle della struttura */
   alloggiati_camere: Record<number, AlloggiatiCredentials>;
@@ -158,7 +160,8 @@ export interface Prenotazione {
   stato: 'confermata' | 'pending' | 'cancellata';
   note: string;
   created_at: string;
-  fonte: 'manuale' | 'ical' | 'sheet' | 'booking';
+  /** ical = importata dal calendario Booking.com, airbnb = dal calendario Airbnb, booking = channel manager */
+  fonte: 'manuale' | 'ical' | 'sheet' | 'booking' | 'airbnb';
   ical_uid?: string;
 }
 

@@ -15,7 +15,7 @@ import { SEGNAPOSTO_ISTRUZIONI, MODELLO_ISTRUZIONI_BASE, componiIstruzioni } fro
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
 
 interface UtenteInfo { id: string; username: string; solo_calendario: boolean; }
-interface SyncResult { camera_id: number; aggiunte: number; rimosse: number; errore?: string; }
+interface SyncResult { camera_id: number; canale?: 'booking' | 'airbnb'; aggiunte: number; rimosse: number; errore?: string; }
 interface ICalSyncResult {
   ok: boolean;
   risultati: SyncResult[];
@@ -54,6 +54,7 @@ export default function ImpostazioniPage() {
   const [editOspitiCamere, setEditOspitiCamere] = useState<Record<number, number>>({});
   const [editNumCamere, setEditNumCamere] = useState(5);
   const [editIcalUrls, setEditIcalUrls] = useState<Record<number, string>>({});
+  const [editIcalAirbnb, setEditIcalAirbnb] = useState<Record<number, string>>({});
   const [salvatoEditCamere, setSalvatoEditCamere] = useState(false);
   const [salvatoEditIcal, setSalvatoEditIcal] = useState(false);
   const [editIstruzioni, setEditIstruzioni] = useState('');
@@ -90,7 +91,7 @@ export default function ImpostazioniPage() {
   const [togglingSheets, setTogglingSheets] = useState(false);
 
   // iCal output
-  const [copiato, setCopiato] = useState<number | null>(null);
+  const [copiato, setCopiato] = useState<string | null>(null);
   const [origin, setOrigin] = useState('');
 
   // Account
@@ -171,6 +172,7 @@ export default function ImpostazioniPage() {
     setEditOspitiCamere(strutturaAttiva.ospiti_camere ?? {});
     setEditNumCamere(strutturaAttiva.num_camere ?? 5);
     setEditIcalUrls(strutturaAttiva.ical_urls ?? {});
+    setEditIcalAirbnb(strutturaAttiva.ical_urls_airbnb ?? {});
     // Messaggio vuoto: si parte dal modello, come nella configurazione guidata
     setEditIstruzioni(strutturaAttiva.istruzioni_checkin || MODELLO_ISTRUZIONI_BASE);
     setModelloNonSalvato(!strutturaAttiva.istruzioni_checkin);
@@ -394,7 +396,7 @@ export default function ImpostazioniPage() {
     await fetch(`/api/strutture/${strutturaAttiva.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ical_urls: editIcalUrls }),
+      body: JSON.stringify({ ical_urls: editIcalUrls, ical_urls_airbnb: editIcalAirbnb }),
     });
     setSalvatoEditIcal(true);
     setTimeout(() => setSalvatoEditIcal(false), 2000);
@@ -509,9 +511,13 @@ export default function ImpostazioniPage() {
     fetch('/api/auth/utenti').then(r => r.json()).then(setUtenti);
   }
 
-  async function copia(cameraId: number) {
-    await navigator.clipboard.writeText(`${origin}/api/ical/${cameraId}`);
-    setCopiato(cameraId);
+  // Feed in uscita: per Booking.com (predefinito) o per Airbnb (?canale=airbnb)
+  const urlFeed = (cameraId: number, canale: 'booking' | 'airbnb') =>
+    `${origin || '…'}/api/ical/${cameraId}${canale === 'airbnb' ? '?canale=airbnb' : ''}`;
+
+  async function copia(cameraId: number, canale: 'booking' | 'airbnb' = 'booking') {
+    await navigator.clipboard.writeText(urlFeed(cameraId, canale));
+    setCopiato(`${canale}-${cameraId}`);
     setTimeout(() => setCopiato(null), 2000);
   }
 
@@ -812,6 +818,29 @@ export default function ImpostazioniPage() {
                         </div>
                       ))}
                     </div>
+                    <div className="flex items-center gap-2 mb-3 mt-5">
+                      <Link size={16} className="text-rose-500" />
+                      <h3 className="font-semibold text-gray-700 text-sm">URL iCal Airbnb</h3>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3">
+                      Su Airbnb: Calendario → annuncio → Disponibilità → Collega calendari → Esporta calendario. Si importano solo
+                      le prenotazioni (Airbnb non pubblica nome e importo: si completano a mano in Prenotazioni).
+                    </p>
+                    <div className="space-y-2 mb-3">
+                      {idsEditCamere.map(id => (
+                        <div key={id} className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5 w-24 flex-shrink-0">
+                            <div className={`w-2 h-2 rounded-full ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
+                            <span className="text-xs text-gray-500 truncate">{editNomiCamere[id] || `Cam ${id}`}</span>
+                          </div>
+                          <input type="url" placeholder="https://www.airbnb.it/calendar/ical/....ics?s=..."
+                            value={editIcalAirbnb[id] ?? ''}
+                            onChange={e => setEditIcalAirbnb(prev => ({ ...prev, [id]: e.target.value }))}
+                            className="flex-1 min-w-0 border rounded px-3 py-1.5 text-xs font-mono text-gray-600 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                          />
+                        </div>
+                      ))}
+                    </div>
                     <button onClick={salvaEditIcal}
                       className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700"
                     >
@@ -839,9 +868,9 @@ export default function ImpostazioniPage() {
                           {risultatiIcal.risultati.map(r => {
                             const cam = camere.find(c => c.id === r.camera_id);
                             return (
-                              <div key={r.camera_id} className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 ${r.errore ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                              <div key={`${r.canale ?? 'booking'}-${r.camera_id}`} className={`text-xs px-3 py-1.5 rounded flex items-center gap-2 ${r.errore ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getCameraStyle(r.camera_id, colori[r.camera_id]).dot}`} />
-                                <span>{cam?.nome ?? `Camera ${r.camera_id}`}:</span>
+                                <span>{r.canale === 'airbnb' ? 'Airbnb · ' : 'Booking · '}{cam?.nome ?? `Camera ${r.camera_id}`}:</span>
                                 {r.errore ? <span>{r.errore}</span> : <span>+{r.aggiunte} aggiunte, -{r.rimosse} rimosse</span>}
                               </div>
                             );
@@ -872,11 +901,14 @@ export default function ImpostazioniPage() {
                         <Link size={16} className="text-green-600" />
                         <h3 className="font-semibold text-gray-700 text-sm">iCal Output — Blocca date su Booking.com</h3>
                       </div>
-                      <p className="text-xs text-gray-400 mb-3">Extranet → Proprietà → Disponibilità → Sincronizzazione calendario → Importa calendario</p>
+                      <p className="text-xs text-gray-400 mb-3">
+                        Extranet → Proprietà → Disponibilità → Sincronizzazione calendario → Importa calendario.
+                        Contiene le prenotazioni manuali e quelle di Airbnb.
+                      </p>
                       <div className="space-y-2">
                         {idsCamereOutput.map(id => {
                           const nomeAttuale = camere.find(c => c.id === id)?.nome || `Camera ${id}`;
-                          const url = origin ? `${origin}/api/ical/${id}` : `…/api/ical/${id}`;
+                          const url = urlFeed(id, 'booking');
                           return (
                             <div key={id} className="flex items-center gap-3">
                               <div className="flex items-center gap-1.5 w-24 flex-shrink-0">
@@ -885,9 +917,41 @@ export default function ImpostazioniPage() {
                               </div>
                               <code className="flex-1 text-xs bg-gray-50 border rounded px-3 py-2 text-gray-600 truncate">{url}</code>
                               <button onClick={() => copia(id)} title="Copia URL"
-                                className={`flex items-center gap-1 px-2 py-2 rounded text-xs font-medium transition-colors flex-shrink-0 ${copiato === id ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                className={`flex items-center gap-1 px-2 py-2 rounded text-xs font-medium transition-colors flex-shrink-0 ${copiato === `booking-${id}` ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                               >
-                                {copiato === id ? <Check size={14} /> : <Copy size={14} />}
+                                {copiato === `booking-${id}` ? <Check size={14} /> : <Copy size={14} />}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* iCal Output per Airbnb */}
+                    <div className="border-t pt-5 mt-5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Link size={16} className="text-rose-500" />
+                        <h3 className="font-semibold text-gray-700 text-sm">iCal Output — Blocca date su Airbnb</h3>
+                      </div>
+                      <p className="text-xs text-gray-400 mb-3">
+                        Su Airbnb: Calendario → annuncio → Disponibilità → Collega calendari → Importa calendario, un link per annuncio.
+                        Contiene le prenotazioni manuali e quelle di Booking.com, senza nomi degli ospiti.
+                      </p>
+                      <div className="space-y-2">
+                        {idsCamereOutput.map(id => {
+                          const nomeAttuale = camere.find(c => c.id === id)?.nome || `Camera ${id}`;
+                          const chiave = `airbnb-${id}`;
+                          return (
+                            <div key={id} className="flex items-center gap-3">
+                              <div className="flex items-center gap-1.5 w-24 flex-shrink-0">
+                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${getCameraStyle(id, colori[id]).dot}`} />
+                                <span className="text-sm text-gray-600 truncate">{nomeAttuale}</span>
+                              </div>
+                              <code className="flex-1 min-w-0 text-xs bg-gray-50 border rounded px-3 py-2 text-gray-600 truncate">{urlFeed(id, 'airbnb')}</code>
+                              <button onClick={() => copia(id, 'airbnb')} title="Copia URL"
+                                className={`flex items-center gap-1 px-2 py-2 rounded text-xs font-medium transition-colors flex-shrink-0 ${copiato === chiave ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                              >
+                                {copiato === chiave ? <Check size={14} /> : <Copy size={14} />}
                               </button>
                             </div>
                           );

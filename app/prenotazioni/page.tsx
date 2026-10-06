@@ -25,12 +25,12 @@ function statoColore(stato: Prenotazione['stato']) {
   return 'bg-red-100 text-red-800';
 }
 
-// Prenotazioni create dalla sync iCal ma senza nome/importo reali: Booking.com non li
-// fornisce più via email, vanno completate a mano (da Pulse/extranet) modificandole qui.
+// Prenotazioni create dalla sync iCal ma senza nome/importo reali: né Booking.com né Airbnb li
+// pubblicano nel calendario, vanno completate a mano (da extranet/app) modificandole qui.
 function daCompletare(p: Prenotazione): boolean {
   if (p.stato === 'cancellata') return false;
-  if (p.fonte !== 'ical') return false;
-  const nomeVuoto = !p.ospite_nome?.trim() || p.ospite_nome === 'Ospite Booking.com';
+  if (p.fonte !== 'ical' && p.fonte !== 'airbnb') return false;
+  const nomeVuoto = !p.ospite_nome?.trim() || p.ospite_nome === 'Ospite Booking.com' || p.ospite_nome === 'Ospite Airbnb';
   return nomeVuoto || !p.importo_totale;
 }
 
@@ -611,6 +611,11 @@ function PrenotazioniInner() {
                           Booking
                         </span>
                       )}
+                      {p.fonte === 'airbnb' && (
+                        <span className="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded">
+                          Airbnb
+                        </span>
+                      )}
                       {p.stato === 'pending' && (
                         <span className="bg-yellow-400 text-yellow-900 text-[11px] font-bold px-2 py-0.5 rounded">
                           In attesa
@@ -905,6 +910,9 @@ function PrenotazioniInner() {
                         <span className="font-medium text-gray-800">{p.ospite_nome}</span>
                         {(p.fonte === 'ical' || p.fonte === 'booking') && (
                           <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">BK</span>
+                        )}
+                        {p.fonte === 'airbnb' && (
+                          <span className="text-xs bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-medium">AB</span>
                         )}
                       </div>
                       {p.ospite_telefono && <div className="text-xs text-gray-400">{p.ospite_telefono}</div>}

@@ -39,12 +39,18 @@ export async function GET(
   const cameraNome = imp.nomi_camere[cameraIdNum] ?? `Camera ${cameraIdNum}`;
   const nomeApp = imp.nome_app || 'Affitti Brevi';
 
+  // Un feed per canale: ognuno esclude le prenotazioni che arrivano da quel canale stesso
+  // (se no il canale vedrebbe le proprie prenotazioni come date bloccate da un altro calendario).
+  //   ?canale=airbnb → per Airbnb: manuali + Booking.com (iCal e channel manager)
+  //   predefinito    → per Booking.com: manuali + Airbnb (come prima, senza le importate da Booking)
+  const perAirbnb = req.nextUrl.searchParams.get('canale') === 'airbnb';
   const prenotazioni = (await leggiPrenotazioni()).filter(
     (p) =>
       p.camera_id === cameraIdNum &&
       p.stato !== 'cancellata' &&
-      p.fonte !== 'ical' &&
-      !p.note?.includes('BK:')
+      (perAirbnb
+        ? p.fonte !== 'airbnb'
+        : p.fonte !== 'ical' && !p.note?.includes('BK:'))
   );
 
   const now = new Date()
@@ -53,15 +59,18 @@ export async function GET(
     .replace(/\.\d{3}/, '');
 
   const eventi = prenotazioni.map((p) => {
-    const uid = p.ical_uid ?? `${p.id}@affitti-brevi`;
+    // UID propri per le prenotazioni importate da un altro calendario (non si ripubblica l'UID altrui)
+    const importata = p.fonte === 'ical' || p.fonte === 'airbnb';
+    const uid = (!importata && p.ical_uid) || `${p.id}@affitti-brevi`;
     return [
       'BEGIN:VEVENT',
       `UID:${uid}`,
       `DTSTAMP:${now}Z`,
       `DTSTART;VALUE=DATE:${icalDate(p.check_in)}`,
       `DTEND;VALUE=DATE:${icalDate(p.check_out)}`,
-      `SUMMARY:${escape(p.ospite_nome)}`,
-      p.note ? `DESCRIPTION:${escape(p.note)}` : '',
+      // Il feed è pubblico: ad Airbnb solo "non disponibile", senza nomi né note
+      `SUMMARY:${perAirbnb ? 'Non disponibile' : escape(p.ospite_nome)}`,
+      !perAirbnb && p.note ? `DESCRIPTION:${escape(p.note)}` : '',
       `STATUS:CONFIRMED`,
       'END:VEVENT',
     ]
@@ -85,7 +94,7 @@ export async function GET(
     headers: {
       ...CORS,
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': `attachment; filename="camera-${cameraIdNum}.ics"`,
+      'Content-Disposition': `attachment; filename="camera-${cameraIdNum}${perAirbnb ? '-airbnb' : ''}.ics"`,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
   });

@@ -10,9 +10,9 @@ export async function POST() {
   const strutturaId = cookieStore.get('struttura_id')?.value;
   const struttura = await getStrutturaAttiva(strutturaId);
 
-  // 1. Import from iCal using struttura's ical_urls (aggiorna/marca cancellate per UID,
-  // non cancella mai le prenotazioni esistenti: preserva l'id e il collegamento con l'anagrafica alloggiati)
-  const risultatiIcal = await sincronizzaTutti(struttura.ical_urls, struttura.id);
+  // 1. Import from iCal using struttura's ical_urls (Booking.com) e ical_urls_airbnb (aggiorna/marca
+  // cancellate per UID, non cancella mai le prenotazioni esistenti: preserva l'id e il collegamento con l'anagrafica alloggiati)
+  const risultatiIcal = await sincronizzaTutti(struttura.ical_urls, struttura.id, struttura.ical_urls_airbnb);
 
   // 2. Google Sheets sync
   const imp = await leggiImpostazioni();
@@ -47,7 +47,8 @@ export async function POST() {
   const righeScheletroCreate: string[] = [];
   const righeScheletroErrori: string[] = [];
   if (sheetsConfigurato) {
-    const daInserire = risultatiIcal.flatMap(r => [...(r.nuove ?? []), ...(r.riattivate ?? [])]);
+    // Solo i blocchi di Booking.com: le righe del foglio sono quelle dei ricavi Booking
+    const daInserire = risultatiIcal.filter(r => r.canale !== 'airbnb').flatMap(r => [...(r.nuove ?? []), ...(r.riattivate ?? [])]);
     if (daInserire.length > 0) {
       const attuali = new Map((await leggiPrenotazioni(struttura.id)).map(p => [p.id, p]));
       for (const p of daInserire) {

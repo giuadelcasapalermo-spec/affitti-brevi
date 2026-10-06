@@ -42,6 +42,7 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_credentials JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS istruzioni_camere JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS ical_urls_airbnb JSONB DEFAULT NULL`,
   ]);
   _tableReady = true;
 }
@@ -70,6 +71,7 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     prezzi_camere: toNumericNumberRecord(row.prezzi_camere),
     colori_camere: toNumericRecord(row.colori_camere),
     ical_urls: toNumericRecord(row.ical_urls),
+    ical_urls_airbnb: toNumericRecord(row.ical_urls_airbnb),
     alloggiati_credentials: row.alloggiati_credentials as AlloggiatiCredentials | undefined,
     alloggiati_camere: Object.fromEntries(Object.entries((row.alloggiati_camere ?? {}) as Record<string, AlloggiatiCredentials>).map(([k, v]) => [Number(k), v])),
     ospiti_camere: toNumericNumberRecord(row.ospiti_camere),
@@ -112,6 +114,7 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     prezzi_camere: Object.fromEntries(Array.from({ length: numCamere }, (_, i) => [i + 1, DEFAULT_PREZZI[i + 1] ?? 60])) as Record<number, number>,
     colori_camere: {},
     ical_urls: {},
+    ical_urls_airbnb: {},
     conti_correnti: conti,
     dati_fiscali: { ...DATI_FISCALI_VUOTI },
     regole: { ...REGOLE_DEFAULT },
@@ -150,6 +153,8 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET colori_camere = ${JSON.stringify(fields.colori_camere)} WHERE id = ${id}`;
   if (fields.ical_urls !== undefined)
     await sql`UPDATE strutture SET ical_urls = ${JSON.stringify(fields.ical_urls)} WHERE id = ${id}`;
+  if (fields.ical_urls_airbnb !== undefined)
+    await sql`UPDATE strutture SET ical_urls_airbnb = ${JSON.stringify(fields.ical_urls_airbnb)} WHERE id = ${id}`;
   if (fields.alloggiati_credentials !== undefined)
     await sql`UPDATE strutture SET alloggiati_credentials = ${JSON.stringify(fields.alloggiati_credentials)} WHERE id = ${id}`;
   if (fields.conti_correnti !== undefined)
@@ -219,6 +224,7 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     prezzi_camere: prezzi,
     colori_camere: colori,
     ical_urls: ical,
+    ical_urls_airbnb: {},
     conti_correnti: conti,
     dati_fiscali: { ...DATI_FISCALI_VUOTI },
     regole: { ...REGOLE_DEFAULT },

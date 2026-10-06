@@ -102,6 +102,7 @@ interface ICalEvent {
   start: Date;
   end: Date;
   summary: string;
+  description: string;
 }
 
 function parseIcalDate(val: string): Date {
@@ -127,6 +128,7 @@ function parseIcal(text: string): ICalEvent[] {
   let start: Date | null = null;
   let end: Date | null = null;
   let summary = '';
+  let description = '';
 
   for (const line of lines) {
     if (line === 'BEGIN:VEVENT') {
@@ -135,12 +137,13 @@ function parseIcal(text: string): ICalEvent[] {
       start = null;
       end = null;
       summary = '';
+      description = '';
       continue;
     }
     if (line === 'END:VEVENT') {
       inEvent = false;
       if (uid && start && end) {
-        events.push({ uid, start, end, summary });
+        events.push({ uid, start, end, summary, description });
       }
       continue;
     }
@@ -156,6 +159,8 @@ function parseIcal(text: string): ICalEvent[] {
       end = parseIcalDate(val);
     } else if (line.startsWith('SUMMARY:')) {
       summary = line.slice(8).trim();
+    } else if (line.startsWith('DESCRIPTION:')) {
+      description = line.slice(12).replace(/\\n/g, '\n').trim();
     }
   }
 
@@ -183,6 +188,8 @@ function isBloccoGenerico(summary: string, start: Date, end: Date): boolean {
 
 export interface SyncResult {
   camera_id: number;
+  /** Calendario di provenienza (Booking.com se assente) */
+  canale?: 'booking' | 'airbnb';
   aggiunte: number;
   rimosse: number;
   errore?: string;
@@ -232,6 +239,21 @@ async function rimuoviUidIgnorato(uid: string): Promise<void> {
   await sql`DELETE FROM impostazioni WHERE tipo = 'ical_ignora' AND chiave = ${uid}`;
 }
 
+async function scaricaIcal(url: string): Promise<string> {
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; CalendarBot/1.0; +https://affitti-brevi.vercel.app)',
+      'Accept': 'text/calendar, text/plain, */*',
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}${body ? ': ' + body.slice(0, 200) : ''}`);
+  }
+  return res.text();
+}
+
 export async function sincronizzaCalendario(
   cameraId: number,
   url: string,
@@ -240,18 +262,7 @@ export async function sincronizzaCalendario(
   let testo: string;
 
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CalendarBot/1.0; +https://affitti-brevi.vercel.app)',
-        'Accept': 'text/calendar, text/plain, */*',
-      },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}${body ? ': ' + body.slice(0, 200) : ''}`);
-    }
-    testo = await res.text();
+    testo = await scaricaIcal(url);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Errore sconosciuto';
     return { camera_id: cameraId, aggiunte: 0, rimosse: 0, errore: msg };
@@ -514,13 +525,119 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
   return modificate;
 }
 
-export async function sincronizzaTutti(icalUrls: Record<number, string>, strutturaId: string): Promise<SyncResult[]> {
+// ── Airbnb ──────────────────────────────────────────────────────────────────
+// Il calendario esportato da Airbnb contiene le prenotazioni (SUMMARY "Reserved", nella
+// DESCRIPTION il link con il codice HM… e le ultime cifre del telefono) e i giorni non
+// disponibili ("Airbnb (Not available)"): questi ultimi comprendono anche le date che Airbnb
+// blocca leggendo il NOSTRO feed, quindi importarli creerebbe un'eco. Si importano solo le
+// prenotazioni. Airbnb non pubblica il nome dell'ospite.
+const ospiteAirbnb = 'Ospite Airbnb';
+
+function isPrenotazioneAirbnb(summary: string): boolean {
+  return /reserved|prenotat/i.test(summary) && !/not available|non disponibile/i.test(summary);
+}
+
+function noteAirbnb(description: string): string {
+  const codice = description.match(/details\/([A-Z0-9]{6,})/i)?.[1];
+  const tel = description.match(/Last 4 Digits\)?:?\s*(\d{3,4})/i)?.[1];
+  return ['Importata da Airbnb (iCal)', codice && `codice ${codice}`, tel && `tel. …${tel}`].filter(Boolean).join(' — ');
+}
+
+export async function sincronizzaCalendarioAirbnb(cameraId: number, url: string, strutturaId: string): Promise<SyncResult> {
+  let testo: string;
+  try {
+    testo = await scaricaIcal(url);
+  } catch (err) {
+    return { camera_id: cameraId, canale: 'airbnb', aggiunte: 0, rimosse: 0, errore: err instanceof Error ? err.message : 'Errore sconosciuto' };
+  }
+  if (!testo.includes('BEGIN:VCALENDAR')) {
+    return { camera_id: cameraId, canale: 'airbnb', aggiunte: 0, rimosse: 0, errore: 'la risposta non è un calendario iCal (controlla l\'URL)' };
+  }
+
+  const eventi = parseIcal(testo).filter((e) => isPrenotazioneAirbnb(e.summary));
+  const uidRemoti = new Set(eventi.map((e) => e.uid));
+  const prenotazioni = await leggiPrenotazioni(strutturaId);
+  const esistenti = prenotazioni.filter((p) => p.camera_id === cameraId && p.fonte === 'airbnb');
+  const uidIgnorati = await leggiUidIgnorati();
+  const oggi = format(new Date(), 'yyyy-MM-dd');
+
+  const nuove: Prenotazione[] = [];
+  const riattivate: Prenotazione[] = [];
+  const daAggiornare = new Map<string, Prenotazione>();
+
+  for (const ev of eventi) {
+    const checkIn = format(ev.start, 'yyyy-MM-dd');
+    const checkOut = format(ev.end, 'yyyy-MM-dd');
+    // Eliminata a mano in app: resta fuori finché Airbnb non ne cambia le date
+    const ignorato = uidIgnorati.get(ev.uid);
+    if (ignorato) {
+      if (!ignorato.check_in || !ignorato.check_out) { await fissaDateUidIgnorato(ev.uid, cameraId, checkIn, checkOut); continue; }
+      if (ignorato.check_in === checkIn && ignorato.check_out === checkOut) continue;
+      await rimuoviUidIgnorato(ev.uid);
+    }
+
+    const presente = esistenti.find((p) => p.ical_uid === ev.uid);
+    if (presente) {
+      const cambiata = presente.check_in !== checkIn || presente.check_out !== checkOut;
+      if (presente.stato === 'cancellata' || cambiata) {
+        const agg: Prenotazione = { ...presente, check_in: checkIn, check_out: checkOut, stato: presente.stato === 'cancellata' ? 'confermata' : presente.stato };
+        daAggiornare.set(presente.id, agg);
+        if (presente.stato === 'cancellata') riattivate.push(agg);
+      }
+      continue;
+    }
+
+    nuove.push({
+      id: randomUUID(),
+      struttura_id: strutturaId,
+      camera_id: cameraId,
+      ospite_nome: ospiteAirbnb,
+      ospite_telefono: '',
+      ospite_email: '',
+      check_in: checkIn,
+      check_out: checkOut,
+      importo_totale: 0,
+      stato: 'confermata',
+      note: noteAirbnb(ev.description),
+      created_at: new Date().toISOString(),
+      fonte: 'airbnb',
+      ical_uid: ev.uid,
+    });
+  }
+
+  // Sparite dal feed con check-in ancora futuro: cancellate su Airbnb (non si eliminano, per
+  // non perdere il collegamento con gli alloggiati)
+  let rimosse = 0;
+  const aggiornate = prenotazioni.map((p) => {
+    const agg = daAggiornare.get(p.id);
+    if (agg) return agg;
+    if (p.camera_id === cameraId && p.fonte === 'airbnb' && p.stato !== 'cancellata' && p.check_in > oggi
+      && !uidRemoti.has(p.ical_uid ?? '') && !uidIgnorati.has(p.ical_uid ?? '')) {
+      rimosse++;
+      return { ...p, stato: 'cancellata' as const };
+    }
+    return p;
+  });
+
+  if (nuove.length || daAggiornare.size || rimosse) await scriviPrenotazioni([...aggiornate, ...nuove], strutturaId);
+  return { camera_id: cameraId, canale: 'airbnb', aggiunte: nuove.length, rimosse, nuove, riattivate };
+}
+
+export async function sincronizzaTutti(
+  icalUrls: Record<number, string>,
+  strutturaId: string,
+  icalUrlsAirbnb: Record<number, string> = {},
+): Promise<SyncResult[]> {
   const risultati: SyncResult[] = [];
 
   for (const [idStr, url] of Object.entries(icalUrls)) {
     if (!url?.trim()) continue;
     const res = await sincronizzaCalendario(Number(idStr), url, strutturaId);
-    risultati.push(res);
+    risultati.push({ ...res, canale: 'booking' });
+  }
+  for (const [idStr, url] of Object.entries(icalUrlsAirbnb)) {
+    if (!url?.trim()) continue;
+    risultati.push(await sincronizzaCalendarioAirbnb(Number(idStr), url.trim(), strutturaId));
   }
 
   try {

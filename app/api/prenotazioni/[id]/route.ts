@@ -63,7 +63,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const rows = await sql`DELETE FROM prenotazioni WHERE id = ${id} RETURNING id, camera_id, fonte, ical_uid`;
   if (rows.length === 0) return NextResponse.json({ error: 'Non trovata' }, { status: 404 });
   const deleted = rows[0];
-  if (deleted.fonte === 'ical' && deleted.ical_uid) {
+  // Importata da un calendario (Booking.com o Airbnb): non va reimportata alla prossima sync
+  if ((deleted.fonte === 'ical' || deleted.fonte === 'airbnb') && deleted.ical_uid) {
     await ignoraUidIcal(deleted.ical_uid as string, deleted.camera_id as number);
   }
   return NextResponse.json({ ok: true });
