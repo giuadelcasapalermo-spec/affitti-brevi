@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { leggiLinksPerPrenotazioni } from '@/lib/link-alloggiati';
+import { ensureAlloggiatiTable } from '@/lib/alloggiati-db';
+import { leggiIstruzioniInviate } from '@/lib/istruzioni-inviate';
 import sql from '@/lib/postgres';
 
 export async function GET(req: NextRequest) {
@@ -7,22 +9,33 @@ export async function GET(req: NextRequest) {
   const ids = idsParam.split(',').filter(Boolean);
   if (ids.length === 0) return NextResponse.json({});
 
-  const [links, countRows] = await Promise.all([
+  await ensureAlloggiatiTable();
+  const [links, countRows, istruzioni] = await Promise.all([
     leggiLinksPerPrenotazioni(ids),
-    sql`SELECT prenotazione_id, COUNT(*)::int as count FROM alloggiati WHERE prenotazione_id = ANY(${ids}) GROUP BY prenotazione_id`,
+    sql`SELECT prenotazione_id, COUNT(*)::int AS count,
+               COUNT(inviato_portale_at)::int AS inviati,
+               MAX(inviato_portale_at) AS ultimo_invio
+        FROM alloggiati WHERE prenotazione_id = ANY(${ids}) GROUP BY prenotazione_id`,
+    leggiIstruzioniInviate(ids),
   ]);
 
-  const counts: Record<string, number> = {};
-  for (const row of countRows) {
-    counts[row.prenotazione_id as string] = Number(row.count);
-  }
-
-  const result: Record<string, { linkInviato: boolean; linkCreatedAt: string | null; alloggiatiCount: number }> = {};
+  const perId = new Map(countRows.map(r => [r.prenotazione_id as string, r]));
+  const result: Record<string, {
+    linkInviato: boolean; linkCreatedAt: string | null; alloggiatiCount: number;
+    /** Schede già accettate da Alloggiati Web (Questura) */
+    questuraInviati: number; questuraUltimoInvio: string | null;
+    /** Ultima volta che è stato preparato il messaggio WhatsApp con le istruzioni di check-in */
+    istruzioniInviateAt: string | null;
+  }> = {};
   for (const id of ids) {
+    const r = perId.get(id);
     result[id] = {
       linkInviato: !!links[id],
       linkCreatedAt: links[id]?.created_at ?? null,
-      alloggiatiCount: counts[id] ?? 0,
+      alloggiatiCount: Number(r?.count ?? 0),
+      questuraInviati: Number(r?.inviati ?? 0),
+      questuraUltimoInvio: (r?.ultimo_invio as string | null) ?? null,
+      istruzioniInviateAt: istruzioni[id] ?? null,
     };
   }
   return NextResponse.json(result);

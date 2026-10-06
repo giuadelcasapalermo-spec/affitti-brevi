@@ -54,7 +54,17 @@ export async function POST(req: NextRequest) {
                                  || nomePaeseACodice(json.paese_nascita ?? '');
     // Il comune di nascita ha senso solo per chi è nato in Italia: per gli stranieri
     // il segnale che deve andare al form è "non valorizzare il comune", non il nome della città estera
-    json.nato_in_italia = !json.paese_nascita || normalizzaNome(json.paese_nascita) === 'ITALIA';
+    // Paese di nascita non letto: si considera nato in Italia solo se il luogo di nascita è un comune italiano
+    // (o se è cittadino italiano). Altrimenti la città estera finiva nel "comune di nascita" e la Questura
+    // rifiutava la schedina con "Comune di nascita non trovato": in quel caso Stato di nascita = cittadinanza.
+    const comuneNascita = nomeACodiceComune(json.luogo_nascita_testo ?? '');
+    const cittadinoItaliano = json.codice_cittadinanza === '100000100';
+    json.nato_in_italia = json.paese_nascita
+      ? normalizzaNome(json.paese_nascita) === 'ITALIA'
+      : !!comuneNascita || cittadinoItaliano || !json.codice_cittadinanza;
+    if (!json.nato_in_italia && !json.codice_stato_nascita && json.codice_cittadinanza) {
+      json.codice_stato_nascita = json.codice_cittadinanza;
+    }
     // Luogo di rilascio: prova prima come comune italiano, altrimenti come nome di stato estero
     // (un permesso/documento rilasciato da un'autorità estera riporta lo STATO, non una città)
     const comuneRilascio = nomeACodiceComune(json.luogo_rilascio_testo ?? '');

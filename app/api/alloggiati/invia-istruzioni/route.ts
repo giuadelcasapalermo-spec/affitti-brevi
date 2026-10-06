@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { getStrutturaAttiva, codiciCamera, istruzioniCamera } from '@/lib/strutture';
 import { leggiPrenotazioni } from '@/lib/db';
 import { componiIstruzioni } from '@/lib/istruzioni';
+import { segnaIstruzioniInviate } from '@/lib/istruzioni-inviate';
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
       ...codiciCamera(struttura, pren.camera_id),
     });
 
-    return NextResponse.json({ ok: true, testo, telefono: pren.ospite_telefono });
+    const inviateAt = await segnaIstruzioniInviate(pren.id);
+    return NextResponse.json({ ok: true, testo, telefono: pren.ospite_telefono, inviateAt });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ errore: msg }, { status: 500 });

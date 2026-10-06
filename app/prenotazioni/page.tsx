@@ -18,6 +18,17 @@ type CheckinStatus = {
   linkInviato: boolean;
   linkCreatedAt: string | null;
   alloggiatiCount: number;
+  /** Schede già accettate da Alloggiati Web (Questura) */
+  questuraInviati?: number;
+  questuraUltimoInvio?: string | null;
+  /** Ultimo messaggio WhatsApp con le istruzioni di check-in preparato dall'app */
+  istruzioniInviateAt?: string | null;
+};
+
+const fDataOraBreve = (iso?: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
 function statoColore(stato: Prenotazione['stato']) {
@@ -179,6 +190,12 @@ function PrenotazioniInner() {
                   : num;
       window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(json.testo)}`, '_blank');
       setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'ok' }));
+      if (json.inviateAt) {
+        setCheckinStatus(prev => ({
+          ...prev,
+          [prenotazioneId]: { ...(prev[prenotazioneId] ?? { linkInviato: false, linkCreatedAt: null, alloggiatiCount: 0 }), istruzioniInviateAt: json.inviateAt },
+        }));
+      }
     } catch {
       setInvioIstr(prev => ({ ...prev, [prenotazioneId]: 'error' }));
     }
@@ -304,7 +321,22 @@ function PrenotazioniInner() {
     const s = checkinStatus[prenId];
     if (!s && !email) return null;
     if (s?.alloggiatiCount > 0) {
-      return <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold whitespace-nowrap"><Check size={9} /> Documenti caricati</span>;
+      const inviati = s.questuraInviati ?? 0;
+      return (
+        <>
+          <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold whitespace-nowrap"><Check size={9} /> {s.alloggiatiCount} {s.alloggiatiCount === 1 ? 'documento' : 'documenti'}</span>
+          {inviati >= s.alloggiatiCount ? (
+            <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-600 text-white font-semibold whitespace-nowrap"
+              title={`Schedine inviate ad Alloggiati Web il ${fDataOraBreve(s.questuraUltimoInvio)}`}>
+              <Check size={9} /> Questura {fDataOraBreve(s.questuraUltimoInvio)}
+            </span>
+          ) : (
+            <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">
+              Questura {inviati > 0 ? `${inviati}/${s.alloggiatiCount}` : 'da inviare'}
+            </span>
+          )}
+        </>
+      );
     }
     if (s?.linkInviato) {
       return <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">In attesa risposta</span>;
@@ -692,16 +724,18 @@ function PrenotazioniInner() {
                           <button
                             onClick={() => inviaIstruzioni(p.id, p.ospite_telefono)}
                             disabled={invioIstr[p.id] === 'loading'}
-                            title="Invia istruzioni check-in"
+                            title={checkinStatus[p.id]?.istruzioniInviateAt ? `Istruzioni già inviate il ${fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt)}: tocca per reinviarle` : 'Invia istruzioni check-in'}
                             className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
                               invioIstr[p.id] === 'ok' ? 'border-blue-300 text-blue-700 bg-blue-50'
                               : invioIstr[p.id] === 'error' ? 'border-red-300 text-red-600'
+                              : checkinStatus[p.id]?.istruzioniInviateAt ? 'border-blue-400 text-blue-800 bg-blue-50'
                               : 'border-blue-300 text-blue-700 bg-white'
                             }`}
                           >
                             {invioIstr[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
                             : invioIstr[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
                             : invioIstr[p.id] === 'error' ? '✗'
+                            : checkinStatus[p.id]?.istruzioniInviateAt ? <><Check size={10} /> Check-in {fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt).slice(0, 5)}</>
                             : <><MessageCircle size={10} /> Check-in</>}
                           </button>
                         </>
@@ -957,17 +991,19 @@ function PrenotazioniInner() {
                             <button
                               onClick={() => inviaIstruzioni(p.id, p.ospite_telefono)}
                               disabled={invioIstr[p.id] === 'loading'}
-                              title="Invia istruzioni check-in"
+                              title={checkinStatus[p.id]?.istruzioniInviateAt ? `Istruzioni già inviate il ${fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt)}: tocca per reinviarle` : 'Invia istruzioni check-in'}
                               className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
                                 invioIstr[p.id] === 'ok' ? 'border-blue-300 text-blue-700 bg-blue-50'
                                 : invioIstr[p.id] === 'error' ? 'border-red-300 text-red-600'
+                                : checkinStatus[p.id]?.istruzioniInviateAt ? 'border-blue-400 text-blue-800 bg-blue-50'
                                 : 'border-blue-300 text-blue-700 bg-white hover:bg-blue-50'
                               }`}
                             >
                               {invioIstr[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
                               : invioIstr[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
                               : invioIstr[p.id] === 'error' ? '✗'
-                              : <><MessageCircle size={10} /> Check-in</>}
+                              : checkinStatus[p.id]?.istruzioniInviateAt ? <><Check size={10} /> Check-in {fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt).slice(0, 5)}</>
+                            : <><MessageCircle size={10} /> Check-in</>}
                             </button>
                           </>
                         )}

@@ -254,13 +254,16 @@ export function validaBatch(alloggiati: Alloggiato[]): ErroreValidazione[] {
     const statoCode = codicePaeseSanitizzato(a.stato_nascita);
     const isBornAbroad = statoCode && statoCode !== '100000100';
 
+    // Stato di nascita vuoto e comune non italiano (città estera letta dal documento) con cittadinanza
+    // straniera: il file usa la cittadinanza come Stato di nascita (codiciOspite), quindi non è un errore
+    const cittStraniera = (() => { const c = codiciOspite(a).cittadinanza; return !!c && c !== '100000100'; })();
     if (!isBornAbroad) {
       // Nato in Italia: deve risolvere il comune di nascita
       const comuneClean = a.comune_nascita.trim().replace(/\s*\([A-Z]{1,3}\)\s*$/i, '').trim();
       const comuneCode = /^\d{9}$/.test(a.comune_nascita.trim())
         ? a.comune_nascita.trim()
         : nomeACodiceComune(comuneClean) || nomeACodiceComune(a.comune_nascita);
-      if (!comuneCode) {
+      if (!comuneCode && !(cittStraniera && !statoCode)) {
         errori.push(
           a.comune_nascita.trim()
             ? `Comune di nascita non trovato: "${a.comune_nascita}" — verifica la grafia o inserisci il codice ISTAT`
