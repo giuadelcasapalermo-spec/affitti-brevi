@@ -122,6 +122,8 @@ export interface Struttura {
   regole: RegoleStruttura;
   /** Modello del messaggio di check-in; segnaposto: {ospite} {camera} {tassa} {indirizzo} {struttura} */
   istruzioni_checkin: string;
+  /** Messaggio di check-in proprio di una camera; vuoto/assente = quello della struttura */
+  istruzioni_camere: Record<number, string>;
   /** Numero WhatsApp della struttura: riceve gli avvisi di errore delle automazioni */
   telefono: string;
   automazioni: AutomazioniStruttura;

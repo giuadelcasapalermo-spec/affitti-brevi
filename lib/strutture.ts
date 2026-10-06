@@ -41,6 +41,7 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS codici_camere JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_credentials JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS osservatorio_camere JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS istruzioni_camere JSONB DEFAULT NULL`,
   ]);
   _tableReady = true;
 }
@@ -80,6 +81,7 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     dati_fiscali: { ...DATI_FISCALI_VUOTI, ...(row.dati_fiscali as Partial<DatiFiscali> | null) },
     regole: { ...REGOLE_DEFAULT, ...(row.regole as Partial<RegoleStruttura> | null) },
     istruzioni_checkin: (row.istruzioni_checkin as string | null) ?? '',
+    istruzioni_camere: toNumericRecord(row.istruzioni_camere),
     telefono: (row.telefono as string | null) ?? '',
     automazioni: { ...AUTOMAZIONI_DEFAULT, ...(row.automazioni as Partial<AutomazioniStruttura> | null) },
     created_at: row.created_at as string,
@@ -114,6 +116,7 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     dati_fiscali: { ...DATI_FISCALI_VUOTI },
     regole: { ...REGOLE_DEFAULT },
     istruzioni_checkin: '',
+    istruzioni_camere: {},
     telefono: '',
     automazioni: { ...AUTOMAZIONI_DEFAULT },
     alloggiati_camere: {},
@@ -159,6 +162,8 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET regole = ${JSON.stringify(fields.regole)} WHERE id = ${id}`;
   if (fields.istruzioni_checkin !== undefined)
     await sql`UPDATE strutture SET istruzioni_checkin = ${fields.istruzioni_checkin} WHERE id = ${id}`;
+  if (fields.istruzioni_camere !== undefined)
+    await sql`UPDATE strutture SET istruzioni_camere = ${JSON.stringify(fields.istruzioni_camere)} WHERE id = ${id}`;
   if (fields.telefono !== undefined)
     await sql`UPDATE strutture SET telefono = ${fields.telefono} WHERE id = ${id}`;
   if (fields.automazioni !== undefined)
@@ -218,6 +223,7 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     dati_fiscali: { ...DATI_FISCALI_VUOTI },
     regole: { ...REGOLE_DEFAULT },
     istruzioni_checkin: '',
+    istruzioni_camere: {},
     telefono: '',
     automazioni: { ...AUTOMAZIONI_DEFAULT },
     alloggiati_camere: {},
@@ -308,4 +314,10 @@ export function credenzialiOsservatorio(s: Struttura, cameraId?: number | null):
   const diCamera = cameraId != null ? s.osservatorio_camere[cameraId] : undefined;
   if (complete(diCamera)) return diCamera;
   return complete(s.osservatorio_credentials) ? s.osservatorio_credentials : null;
+}
+
+/** Messaggio di check-in per una camera: quello proprio della camera, se scritto, o quello della struttura */
+export function istruzioniCamera(s: Struttura, cameraId?: number | null): string {
+  const diCamera = cameraId != null ? s.istruzioni_camere[cameraId] : undefined;
+  return diCamera?.trim() ? diCamera : s.istruzioni_checkin;
 }
