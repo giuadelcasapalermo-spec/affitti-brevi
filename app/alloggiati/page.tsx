@@ -12,6 +12,7 @@ import { useCamere } from '@/hooks/useCamere';
 import { PAESI, CODICE_ITALIA } from '@/lib/codici-alloggiati';
 import { COMUNI } from '@/lib/comuni-italiani';
 import { useEtichette } from '@/hooks/useEtichette';
+import { useStruttura } from '@/hooks/useStruttura';
 
 const oggi = new Date().toISOString().split('T')[0];
 
@@ -52,6 +53,8 @@ function rigaLabel(a: Alloggiato): string {
 export default function AlloggiatiPage() {
   const camere = useCamere();
   const et = useEtichette();
+  const { struttura } = useStruttura();
+  const turistatAttivo = !!(struttura?.osservatorio_credentials?.codice_struttura || Object.keys(struttura?.osservatorio_camere ?? {}).length);
   const [data, setData] = useState(oggi);
   const [alloggiati, setAlloggiati] = useState<Alloggiato[]>([]);
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
@@ -332,6 +335,7 @@ export default function AlloggiatiPage() {
       if (json.ok) {
         setInvioPortale('ok');
         setInvioPortaleMsg(json.messaggio ?? 'Inviato con successo');
+        carica(data);
       } else {
         let msg = json.errore ?? 'Errore sconosciuto';
         if (json.diagnosi) {
@@ -495,6 +499,16 @@ export default function AlloggiatiPage() {
           <div className="text-2xl font-bold text-gray-800">{numPrenotazioniCollegate}</div>
           <div className="text-xs text-gray-400">prenotazioni collegate</div>
         </div>
+        {alloggiati.length > 0 && (
+          <div className="border-l border-gray-100 pl-6">
+            <div className="text-2xl font-bold">
+              <span className="text-green-700">{alloggiati.filter(a => a.inviato_portale_at).length}</span>
+              <span className="text-gray-300 text-lg"> / </span>
+              <span className={alloggiati.some(a => !a.inviato_portale_at) ? 'text-amber-600' : 'text-gray-400'}>{alloggiati.filter(a => !a.inviato_portale_at).length}</span>
+            </div>
+            <div className="text-xs text-gray-400">inviate / da inviare</div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center justify-between gap-3">
@@ -716,6 +730,7 @@ export default function AlloggiatiPage() {
                         style={style}
                         onEdit={() => apriModal(pren.id, a)}
                         onDelete={() => elimina(a.id)}
+                        turistat={turistatAttivo}
                       />
                     ))
                   )}
@@ -744,6 +759,7 @@ export default function AlloggiatiPage() {
                     style={getCameraStyle(0)}
                     onEdit={() => apriModal(null, a)}
                     onDelete={() => elimina(a.id)}
+                    turistat={turistatAttivo}
                   />
                 ))}
               </div>
@@ -763,6 +779,7 @@ export default function AlloggiatiPage() {
                     style={getCameraStyle(0)}
                     onEdit={() => apriModal(null, a)}
                     onDelete={() => elimina(a.id)}
+                    turistat={turistatAttivo}
                   />
                 ))}
               </div>
@@ -993,16 +1010,24 @@ export default function AlloggiatiPage() {
   );
 }
 
+const fDataOra = (iso: string) => {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
 function RigaAlloggiato({
   a,
   style,
   onEdit,
   onDelete,
+  turistat = false,
 }: {
   a: Alloggiato;
   style: ReturnType<typeof getCameraStyle>;
   onEdit: () => void;
   onDelete: () => void;
+  /** Mostra anche lo stato di invio all'Osservatorio Turistico */
+  turistat?: boolean;
 }) {
   return (
     <div
@@ -1015,6 +1040,25 @@ function RigaAlloggiato({
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${style.leggero}`}>
             {TIPI_ALLOGGIATO[a.tipo]}
           </span>
+          {a.inviato_portale_at ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-green-50 text-green-700 border border-green-200"
+              title={`Inviata ad Alloggiati Web il ${fDataOra(a.inviato_portale_at)}`}>
+              ✓ Questura {fDataOra(a.inviato_portale_at)}
+            </span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-amber-50 text-amber-700 border border-amber-200">
+              Questura: da inviare
+            </span>
+          )}
+          {turistat && (
+            a.osservatorio_checkout_at ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-teal-50 text-teal-700 border border-teal-200">✓ Turistat</span>
+            ) : a.osservatorio_inviato_at ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-teal-50 text-teal-700 border border-teal-200">Turistat: arrivo</span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-gray-50 text-gray-500 border border-gray-200">Turistat: da inviare</span>
+            )
+          )}
         </div>
         {a.tipo_documento && (
           <div className="text-xs text-gray-400 mt-0.5">
