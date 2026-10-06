@@ -31,6 +31,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
+  // iOS: niente zoom automatico quando si tocca un campo con testo < 16px (lo zoom con due dita resta)
+  maximumScale: 1,
+  // Contenuto fino ai bordi (notch, indicatore Home): i margini li danno le env(safe-area-inset-*)
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

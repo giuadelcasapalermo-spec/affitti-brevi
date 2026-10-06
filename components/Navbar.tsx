@@ -161,7 +161,7 @@ export default function Navbar() {
       </nav>
 
       {/* Mobile top bar */}
-      <nav className="md:hidden bg-blue-700 text-white shadow-md">
+      <nav className="md:hidden bg-blue-700 text-white shadow-md pt-[env(safe-area-inset-top)]">
         <div className="px-4 flex items-center justify-between h-12">
           {/* Logo + switcher mobile */}
           <div className="relative" ref={undefined}>
@@ -240,7 +240,7 @@ export default function Navbar() {
       </nav>
 
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 shadow-lg pb-[env(safe-area-inset-bottom)]">
         {(() => {
           const tabLinks = links.filter(l => l.href !== '/impostazioni' && !l.webOnly);
           return (

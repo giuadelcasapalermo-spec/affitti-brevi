@@ -578,16 +578,16 @@ export default function ImpostazioniPage() {
                     </div>
                     <div className="space-y-2 mb-3">
                       <div className="flex items-center gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide pb-1 border-b">
-                        <span className="w-20 flex-shrink-0">ID</span>
+                        <span className="w-16 sm:w-20 flex-shrink-0">ID</span>
                         <span className="flex-1">Nome</span>
                         <span className="w-14 text-center" title="Ospiti proposti per le nuove prenotazioni">Ospiti</span>
-                        <span>Colore</span>
+                        <span className="hidden sm:inline">Colore</span>
                       </div>
                       {idsEditCamere.map(id => {
                         const coloreAttuale = (editColoriCamere[id] as CameraColor | undefined) ?? DEFAULT_COLOR_BY_ID[id] ?? 'gray';
                         return (
-                          <div key={id} className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5 w-20 flex-shrink-0">
+                          <div key={id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1.5 pb-2 sm:pb-0 border-b sm:border-0 border-gray-100">
+                            <div className="flex items-center gap-1.5 w-16 sm:w-20 flex-shrink-0">
                               <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
                               <span className="text-sm text-gray-400">Cam {id}</span>
                             </div>
@@ -600,7 +600,7 @@ export default function ImpostazioniPage() {
                               onChange={e => setEditOspitiCamere(prev => ({ ...prev, [id]: Math.max(1, Number(e.target.value) || OSPITI_DEFAULT) }))}
                               className="w-14 border rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-400"
                             />
-                            <div className="flex items-center gap-0.5 flex-wrap">
+                            <div className="flex items-center gap-1 sm:gap-0.5 flex-wrap w-full sm:w-auto pl-[4.75rem] sm:pl-0">
                               {PALETTE.map(c => (
                                 <button key={c} type="button"
                                   onClick={() => setEditColoriCamere(prev => ({ ...prev, [id]: c }))}

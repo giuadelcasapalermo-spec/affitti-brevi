@@ -97,7 +97,7 @@ export default function InvioMassivoWhatsApp({ prenotazioni, dal, al, checkinSta
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="bg-white w-full sm:max-w-lg rounded-t-xl sm:rounded-xl shadow-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-white w-full sm:max-w-lg rounded-t-xl sm:rounded-xl shadow-xl max-h-[90dvh] flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div>
             <h2 className="font-semibold text-gray-800 flex items-center gap-2"><MessageCircle size={18} className="text-green-600" />Invio WhatsApp agli ospiti</h2>

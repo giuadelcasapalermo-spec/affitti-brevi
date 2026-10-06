@@ -557,7 +557,7 @@ function PrenotazioniInner() {
           onClick={() => setEditingCard(null)}
         >
           <div
-            className="bg-white rounded-t-2xl w-full p-5 max-h-[92vh] overflow-y-auto"
+            className="bg-white rounded-t-2xl w-full p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-h-[92dvh] overflow-y-auto overscroll-contain"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Affitti Brevi',
     short_name: 'Affitti Brevi',
-    description: 'Gestione affitti brevi - 5 camere',
+    description: 'Gestione affitti brevi',
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait',

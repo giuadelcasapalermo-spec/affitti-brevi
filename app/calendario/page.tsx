@@ -856,7 +856,7 @@ export default function CalendarioPage() {
         const checkOut = format(addDays(parseISO(nuovaPrenotazione.checkIn), 1), 'yyyy-MM-dd');
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setNuovaPrenotazione(null)}>
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b">
                 <div>
                   <h2 className="font-semibold text-gray-800">Nuova prenotazione</h2>
@@ -889,7 +889,7 @@ export default function CalendarioPage() {
       {/* Modale imposta di soggiorno */}
       {impSoggiornoAperto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setImpSoggiornoAperto(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <div>
                 <h2 className="font-semibold text-gray-800">Imposta di soggiorno</h2>

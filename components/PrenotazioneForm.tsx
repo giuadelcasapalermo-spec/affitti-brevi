@@ -219,7 +219,7 @@ export default function PrenotazioneForm({ iniziale = {}, onSalva, onAnnulla }: 
             <div className="mt-1.5 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-gray-600 space-y-0.5">
               {righeCalcolo.map((r, i) => (
                 <div key={i} className="flex justify-between">
-                  <span>{r.notti} notte{r.notti !== 1 ? 'i' : ''} × €{r.prezzo_notte} <span className="text-gray-400">({r.nome_periodo})</span></span>
+                  <span>{r.notti} {r.notti === 1 ? 'notte' : 'notti'} × €{r.prezzo_notte} <span className="text-gray-400">({r.nome_periodo})</span></span>
                   <span className="font-medium">€{r.subtotale}</span>
                 </div>
               ))}
