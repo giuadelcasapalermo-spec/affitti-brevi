@@ -140,6 +140,8 @@ export interface AutomazioniStruttura {
   portale: boolean;
   /** Invio giornaliero all'Osservatorio Turistico Regione Siciliana (arrivi, partenze, chiusura giornata) */
   osservatorio: boolean;
+  /** Prima data di arrivo comunicata dall'invio automatico (AAAA-MM-GG); vuoto = ultimi 60 giorni */
+  osservatorio_dal?: string;
 }
 
 export const AUTOMAZIONI_DEFAULT: AutomazioniStruttura = { portale: false, osservatorio: false };

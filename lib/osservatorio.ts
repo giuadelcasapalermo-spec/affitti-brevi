@@ -180,14 +180,44 @@ async function salvaChiusura(codice: string, data: string): Promise<void> {
  * Comunica all'Osservatorio arrivi e partenze fino a `oggi` e chiude la giornata, per ogni codice struttura
  * (della struttura e delle camere con credenziali proprie). Gli errori diventano avvisi nell'app.
  */
-export async function inviaOsservatorioStruttura(s: Struttura, oggi = dataItalia(0)): Promise<Esito[]> {
+export interface OpzioniInvio {
+  /** Giorno di riferimento (partenze fino a questo giorno, chiusura di questo giorno) */
+  oggi?: string;
+  /** Invio storico: solo arrivi in questo intervallo (AAAA-MM-GG), senza limite dei 60 giorni */
+  dal?: string;
+  al?: string;
+  /** Solo prenotazioni arrivate da Booking.com (iCal o channel manager) */
+  soloBooking?: boolean;
+  /** Chiusura giornaliera (predefinito sì; no per l'invio storico) */
+  chiusura?: boolean;
+  /** Massimo numero di soggiorni da trattare (prova con un solo soggiorno) */
+  limite?: number;
+  /** Avvisi nell'app per gli errori (predefinito sì; l'invio storico mostra gli errori a schermo) */
+  avvisi?: boolean;
+}
+
+export async function inviaOsservatorioStruttura(s: Struttura, opz: OpzioniInvio = {}): Promise<Esito[]> {
+  const oggi = opz.oggi ?? dataItalia(0);
+  const storico = !!opz.dal;
+  const conAvvisi = opz.avvisi ?? true;
+  const avvisa = (p: Prenotazione | null, errore: string) => conAvvisi ? avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') : Promise.resolve(undefined);
+  // Invio automatico: solo arrivi dalla data di attivazione (i precedenti sono già stati inseriti sul portale),
+  // ma le partenze dei soggiorni già comunicati si inviano comunque
+  const inizioAuto = s.automazioni.osservatorio_dal || '';
   const esiti: Esito[] = [];
   const prenotazioni = await leggiPrenotazioni(s.id);
   const perId = new Map(prenotazioni.map(p => [p.id, p]));
-  const alloggiati = (await leggiAlloggiatiDaComunicare(s.id, aggiungiGiorni(oggi, -GIORNI_INDIETRO)))
-    .filter(a => isoData(a.data_arrivo) && isoData(a.data_arrivo) <= oggi)
+  const fineArrivi = opz.al && opz.al < oggi ? opz.al : oggi;
+  const alloggiati = (await leggiAlloggiatiDaComunicare(s.id, opz.dal ?? aggiungiGiorni(oggi, -GIORNI_INDIETRO)))
+    .filter(a => isoData(a.data_arrivo) && isoData(a.data_arrivo) <= fineArrivi)
+    .filter(a => storico || a.osservatorio_inviato_at || !inizioAuto || isoData(a.data_arrivo) >= inizioAuto)
     // Prenotazioni cancellate dopo la registrazione: non sono soggiorni
-    .filter(a => !a.prenotazione_id || perId.get(a.prenotazione_id)?.stato !== 'cancellata');
+    .filter(a => !a.prenotazione_id || perId.get(a.prenotazione_id)?.stato !== 'cancellata')
+    .filter(a => {
+      if (!opz.soloBooking) return true;
+      const p = a.prenotazione_id ? perId.get(a.prenotazione_id) : undefined;
+      return p?.fonte === 'ical' || p?.fonte === 'booking';
+    });
 
   // Un soggiorno per prenotazione; gli ospiti inseriti a mano senza prenotazione sono soggiorni a sé
   const soggiorni = new Map<string, { p: Prenotazione | null; ospiti: Alloggiato[] }>();
@@ -211,21 +241,26 @@ export async function inviaOsservatorioStruttura(s: Struttura, oggi = dataItalia
     if (c?.utente && c.password && c.codice_struttura) codiciUsati.set(c.codice_struttura, c);
   }
 
+  let trattati = 0;
   try {
     for (const [chiave, { p, ospiti }] of soggiorni) {
+      if (opz.limite && trattati >= opz.limite) break;
+      // Già comunicati per intero (arrivo e partenza) non contano per il limite
+      if (ospiti.every(a => a.osservatorio_inviato_at) && !ospiti.some(a => aggiungiGiorni(isoData(a.data_arrivo), Math.max(1, a.permanenza)) <= oggi)) continue;
+      trattati++;
       const nome = p?.ospite_nome ?? ospiti.map(a => `${a.nome} ${a.cognome}`).join(', ');
       const base = { struttura: s.nome, prenotazione: p?.id, ospite: nome };
       const cameraId = p?.camera_id ?? null;
       const creds = credenzialiOsservatorio(s, cameraId);
       if (!creds) {
         const errore = `credenziali Osservatorio non configurate${cameraId ? ` per la camera ${cameraId}` : ''} (Impostazioni → Strutture)`;
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') });
+        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisa(p, errore) });
         continue;
       }
       const incompleti = ospiti.map(a => ({ a, e: datiOspite(a).errori })).filter(x => x.e.length);
       if (incompleti.length) {
         const errore = incompleti.map(x => `${x.a.nome} ${x.a.cognome}: ${x.e.join(', ')}`).join(' | ') + ' — correggi la scheda in Alloggiati';
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') });
+        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisa(p, errore) });
         continue;
       }
 
@@ -255,9 +290,11 @@ export async function inviaOsservatorioStruttura(s: Struttura, oggi = dataItalia
         }
       } catch (e) {
         const errore = e instanceof Error ? e.message : String(e);
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') });
+        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisa(p, errore) });
       }
     }
+
+    if (opz.chiusura === false) return esiti;
 
     // Chiusura giornaliera (recupera i giorni mancati, al massimo una settimana)
     for (const [codice, creds] of codiciUsati) {

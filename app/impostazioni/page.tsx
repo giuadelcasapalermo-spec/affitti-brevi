@@ -141,6 +141,8 @@ export default function ImpostazioniPage() {
   const [salvatoCamera, setSalvatoCamera] = useState<'codici' | 'alloggiati' | 'osservatorio' | null>(null);
   const [provaOss, setProvaOss] = useState<{ chiave: string; ok: boolean; testo: string } | null>(null);
   const [invioOss, setInvioOss] = useState<{ stato: 'loading' | 'ok' | 'errore'; righe: string[] } | null>(null);
+  // Invio storico all'Osservatorio (periodo di arrivi, solo Booking)
+  const [storicoOss, setStoricoOss] = useState({ dal: '', al: '', solo_booking: true });
 
   // Booking Channel Manager (per struttura)
   const [editCmUrl, setEditCmUrl] = useState('');
@@ -317,10 +319,15 @@ export default function ImpostazioniPage() {
     }
   }
 
-  async function inviaOsservatorioOra() {
+  async function inviaOsservatorioOra(storico?: { dal: string; al: string; solo_booking: boolean; limite?: number }) {
+    if (storico && !storico.limite && !confirm(`Inviare all'Osservatorio tutti i soggiorni con arrivo dal ${storico.dal} al ${storico.al}${storico.solo_booking ? ' (solo Booking)' : ''}? I soggiorni già inviati non vengono ripetuti.`)) return;
     setInvioOss({ stato: 'loading', righe: [] });
     try {
-      const res = await fetch('/api/osservatorio/invia', { method: 'POST' });
+      const res = await fetch('/api/osservatorio/invia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(storico ?? {}),
+      });
       const j = await res.json();
       const righe: string[] = j.errore ? [j.errore]
         : (j.esiti ?? []).map((e: { ospite?: string; esito: string; dettaglio?: string }) =>
@@ -427,7 +434,7 @@ export default function ImpostazioniPage() {
   }
 
   // Interruttori delle automazioni: salvati subito
-  async function cambiaAutomazione(chiave: keyof AutomazioniStruttura, valore: boolean) {
+  async function cambiaAutomazione(chiave: keyof AutomazioniStruttura, valore: boolean | string) {
     if (!strutturaAttiva) return;
     const nuove = { ...editAutomazioni, [chiave]: valore };
     setEditAutomazioni(nuove);
@@ -1307,12 +1314,52 @@ export default function ImpostazioniPage() {
                           && Object.keys(strutturaAttiva.osservatorio_camere ?? {}).length === 0 && (
                           <p className="text-xs text-amber-600">Mancano le credenziali dell&apos;Osservatorio (scheda Strutture).</p>
                         )}
+                        <div className="flex items-center gap-2 flex-wrap pl-6">
+                          <label className="text-xs text-gray-600">Invia gli arrivi dal</label>
+                          <input type="date" value={editAutomazioni.osservatorio_dal ?? ''}
+                            onChange={e => cambiaAutomazione('osservatorio_dal', e.target.value)}
+                            className="border rounded px-2 py-1 text-xs w-[8.5rem]" />
+                          <span className="text-[11px] text-gray-400 basis-full">
+                            Gli arrivi precedenti non vengono inviati in automatico (es. già inseriti a mano sul portale); le partenze dei soggiorni già comunicati sì.
+                          </span>
+                        </div>
                         <div>
-                          <button type="button" onClick={inviaOsservatorioOra} disabled={invioOss?.stato === 'loading'}
+                          <button type="button" onClick={() => inviaOsservatorioOra()} disabled={invioOss?.stato === 'loading'}
                             className="flex items-center gap-1.5 border border-teal-300 text-teal-700 px-2.5 py-1 rounded text-xs font-medium hover:bg-teal-50 disabled:opacity-50">
                             {invioOss?.stato === 'loading' ? <Loader2 size={12} className="animate-spin" /> : <BarChart3 size={12} />}
                             Invia ora all&apos;Osservatorio (fino a oggi)
                           </button>
+                          <div className="mt-3 rounded border border-gray-200 p-3 space-y-2">
+                            <div className="text-xs font-semibold text-gray-700">Invio storico (massivo)</div>
+                            <p className="text-[11px] text-gray-400">
+                              Soggiorni con arrivo nel periodo: arrivo e partenza, senza chiusure giornaliere. Prima prova con un solo soggiorno
+                              e controlla sul portale dell&apos;Osservatorio che sia arrivato giusto.
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <label className="text-xs text-gray-600">Arrivi dal</label>
+                              <input type="date" value={storicoOss.dal} onChange={e => setStoricoOss(v => ({ ...v, dal: e.target.value }))}
+                                className="border rounded px-2 py-1 text-xs w-[8.5rem]" />
+                              <label className="text-xs text-gray-600">al</label>
+                              <input type="date" value={storicoOss.al} onChange={e => setStoricoOss(v => ({ ...v, al: e.target.value }))}
+                                className="border rounded px-2 py-1 text-xs w-[8.5rem]" />
+                            </div>
+                            <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                              <input type="checkbox" checked={storicoOss.solo_booking} onChange={e => setStoricoOss(v => ({ ...v, solo_booking: e.target.checked }))} />
+                              Solo prenotazioni Booking.com
+                            </label>
+                            <div className="flex gap-2 flex-wrap">
+                              <button type="button" disabled={!storicoOss.dal || !storicoOss.al || invioOss?.stato === 'loading'}
+                                onClick={() => inviaOsservatorioOra({ ...storicoOss, limite: 1 })}
+                                className="border border-teal-300 text-teal-700 px-2.5 py-1 rounded text-xs font-medium hover:bg-teal-50 disabled:opacity-40">
+                                Prova con un solo soggiorno
+                              </button>
+                              <button type="button" disabled={!storicoOss.dal || !storicoOss.al || invioOss?.stato === 'loading'}
+                                onClick={() => inviaOsservatorioOra(storicoOss)}
+                                className="bg-teal-600 text-white px-2.5 py-1 rounded text-xs font-medium hover:bg-teal-700 disabled:opacity-40">
+                                Invia tutto il periodo
+                              </button>
+                            </div>
+                          </div>
                           {invioOss && invioOss.stato !== 'loading' && (
                             <ul className={`mt-1.5 text-xs rounded px-3 py-2 space-y-0.5 ${invioOss.stato === 'ok' ? 'bg-teal-50 text-teal-800' : 'bg-red-50 text-red-700'}`}>
                               {invioOss.righe.map((r, i) => <li key={i} className="break-words">{r}</li>)}
