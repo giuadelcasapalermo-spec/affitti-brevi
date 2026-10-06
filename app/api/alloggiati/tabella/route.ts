@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { Agent } from 'undici';
-import { getStrutturaAttiva } from '@/lib/strutture';
+import { getStrutturaAttiva, credenzialiAlloggiati } from '@/lib/strutture';
 
 export const preferredRegion = 'fra1'; // Il portale PS blocca IP USA — usa Francoforte (EU)
 
@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
     const cookieStore = await cookies();
     const strutturaId = cookieStore.get('struttura_id')?.value;
     const struttura = await getStrutturaAttiva(strutturaId);
-    const creds = struttura.alloggiati_credentials;
+    // Le tabelle del portale sono uguali per tutte le utenze: va bene anche quella di una camera
+    const creds = credenzialiAlloggiati(struttura) ?? Object.values(struttura.alloggiati_camere)[0];
     if (!creds?.utente || !creds?.password || !creds?.wskey) {
       return NextResponse.json({ errore: 'Credenziali non configurate' }, { status: 400 });
     }

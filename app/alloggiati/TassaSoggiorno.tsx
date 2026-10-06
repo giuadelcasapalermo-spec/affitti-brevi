@@ -41,6 +41,7 @@ type DatiPeriodo = {
   prenotazioni: Prenotazione[];
   totale_riscosso: number;
   notti_totali: number;
+  max_notti: number;
   ospiti_totali: number;
   adulti_totali: number;
   esenti_totali: number;
@@ -189,7 +190,7 @@ export default function TassaSoggiorno() {
       ['Check-in', format(parseISO(p.check_in), 'd MMMM yyyy', { locale: it })],
       ['Check-out', format(parseISO(p.check_out), 'd MMMM yyyy', { locale: it })],
       ['Notti di soggiorno', String(p.notti)],
-      ['Notti imponibili (max 4)', String(p.notti_tassabili)],
+      [`Notti imponibili (max ${dati?.max_notti ?? 4})`, String(p.notti_tassabili)],
       ['Ospiti totali', p.n_ospiti === null ? 'documenti non caricati' : String(p.n_ospiti)],
       ['di cui adulti', p.adulti === null ? '-' : String(p.adulti)],
       ['di cui esenti', p.minori > 0 ? `${p.esenti} (${p.minori} minori di 10 anni)` : String(p.esenti)],
@@ -437,7 +438,7 @@ export default function TassaSoggiorno() {
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-700">Dettaglio presenze</span>
-                <span className="text-xs text-gray-400">max 4 notti tassabili per soggiorno (Palermo)</span>
+                <span className="text-xs text-gray-400">max {dati.max_notti} notti tassabili per soggiorno</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">

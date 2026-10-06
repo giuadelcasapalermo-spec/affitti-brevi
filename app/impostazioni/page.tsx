@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente } from '@/lib/types';
+import { useEffect, useRef, useState } from 'react';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
-  Plug, ArrowDownToLine, Wifi, WifiOff,
+  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
+import { SEGNAPOSTO_ISTRUZIONI, MODELLO_ISTRUZIONI_BASE, componiIstruzioni } from '@/lib/istruzioni';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
 
 interface UtenteInfo { id: string; username: string; solo_calendario: boolean; }
@@ -26,7 +27,7 @@ interface ICalSyncResult {
 }
 
 type MainTab = 'strutture' | 'camere' | 'account' | 'app' | 'sistema';
-type SubTab = 'camere' | 'ical' | 'prezzi';
+type SubTab = 'camere' | 'ical' | 'prezzi' | 'checkin';
 type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
 
 const DEFAULT_PERIODO = { camera_id: 1, nome_periodo: '', data_inizio: '', data_fine: '', prezzo_notte: '', prezzo_booking: '', prezzo_airbnb: '' };
@@ -46,15 +47,22 @@ export default function ImpostazioniPage() {
   // Edit struttura attiva (camere, ical, prezzi)
   const [editNomiCamere, setEditNomiCamere] = useState<Record<number, string>>({});
   const [editColoriCamere, setEditColoriCamere] = useState<Record<number, string>>({});
+  const [editOspitiCamere, setEditOspitiCamere] = useState<Record<number, number>>({});
   const [editNumCamere, setEditNumCamere] = useState(5);
   const [editIcalUrls, setEditIcalUrls] = useState<Record<number, string>>({});
   const [salvatoEditCamere, setSalvatoEditCamere] = useState(false);
   const [salvatoEditIcal, setSalvatoEditIcal] = useState(false);
+  const [editIstruzioni, setEditIstruzioni] = useState('');
+  const [salvatoIstruzioni, setSalvatoIstruzioni] = useState(false);
+  const [modelloNonSalvato, setModelloNonSalvato] = useState(false);
+  const [editAutomazioni, setEditAutomazioni] = useState<AutomazioniStruttura>({ ...AUTOMAZIONI_DEFAULT });
+  const istruzioniRef = useRef<HTMLTextAreaElement>(null);
 
   // Inline editing dati struttura (nel tab Strutture)
   const [editingDatiId, setEditingDatiId] = useState<string | null>(null);
   const [editDatiNome, setEditDatiNome] = useState('');
   const [editDatiIndirizzo, setEditDatiIndirizzo] = useState('');
+  const [editDatiTelefono, setEditDatiTelefono] = useState('');
   const [salvatoEditDati, setSalvatoEditDati] = useState(false);
 
   // Prezzi periodi
@@ -103,6 +111,8 @@ export default function ImpostazioniPage() {
   const [editAlloggiatiWskey, setEditAlloggiatiWskey] = useState('');
   const [mostraPasswordAlloggiati, setMostraPasswordAlloggiati] = useState(false);
   const [salvatoAlloggiati, setSalvatoAlloggiati] = useState(false);
+  // Credenziali proprie di singole camere (strutture con più codici Alloggiati Web)
+  const [editAlloggiatiCamere, setEditAlloggiatiCamere] = useState<Record<number, AlloggiatiCredentials>>({});
 
   // Booking Channel Manager (per struttura)
   const [editCmUrl, setEditCmUrl] = useState('');
@@ -132,8 +142,14 @@ export default function ImpostazioniPage() {
     if (!strutturaAttiva) return;
     setEditNomiCamere(strutturaAttiva.nomi_camere ?? {});
     setEditColoriCamere(strutturaAttiva.colori_camere ?? {});
+    setEditOspitiCamere(strutturaAttiva.ospiti_camere ?? {});
+    setEditOspitiCamere(strutturaAttiva.ospiti_camere ?? {});
     setEditNumCamere(strutturaAttiva.num_camere ?? 5);
     setEditIcalUrls(strutturaAttiva.ical_urls ?? {});
+    // Messaggio vuoto: si parte dal modello, come nella configurazione guidata
+    setEditIstruzioni(strutturaAttiva.istruzioni_checkin || MODELLO_ISTRUZIONI_BASE);
+    setModelloNonSalvato(!strutturaAttiva.istruzioni_checkin);
+    setEditAutomazioni({ ...AUTOMAZIONI_DEFAULT, ...strutturaAttiva.automazioni });
     setNuovoPeriodo(p => ({ ...p, camera_id: 1 }));
   }, [strutturaAttiva?.id]);
 
@@ -180,17 +196,25 @@ export default function ImpostazioniPage() {
   }
 
   async function salvaCredenziali(id: string) {
+    // Si salvano solo le camere con credenziali complete; le altre usano quelle della struttura
+    const camere = Object.fromEntries(
+      Object.entries(editAlloggiatiCamere)
+        .map(([k, c]) => [k, { utente: c.utente.trim(), password: c.password, wskey: c.wskey.trim() }] as const)
+        .filter(([, c]) => c.utente && c.password && c.wskey),
+    );
     await fetch(`/api/strutture/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        alloggiati_credentials: {
+        alloggiati_credentials: editAlloggiatiUtente.trim() || editAlloggiatiWskey.trim() ? {
           utente: editAlloggiatiUtente.trim(),
           password: editAlloggiatiPassword,
           wskey: editAlloggiatiWskey.trim(),
-        },
+        } : null,
+        alloggiati_camere: camere,
       }),
     });
+    setEditAlloggiatiCamere(camere);
     setSalvatoAlloggiati(true);
     setTimeout(() => setSalvatoAlloggiati(false), 2000);
   }
@@ -242,7 +266,7 @@ export default function ImpostazioniPage() {
     await fetch(`/api/strutture/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nome: editDatiNome.trim(), indirizzo: editDatiIndirizzo.trim() }),
+      body: JSON.stringify({ nome: editDatiNome.trim(), indirizzo: editDatiIndirizzo.trim(), telefono: editDatiTelefono.trim() }),
     });
     setSalvatoEditDati(true);
     setTimeout(() => { setSalvatoEditDati(false); setEditingDatiId(null); }, 1500);
@@ -254,7 +278,7 @@ export default function ImpostazioniPage() {
     await fetch(`/api/strutture/${strutturaAttiva.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nomi_camere: editNomiCamere, colori_camere: editColoriCamere, num_camere: editNumCamere }),
+      body: JSON.stringify({ nomi_camere: editNomiCamere, colori_camere: editColoriCamere, ospiti_camere: editOspitiCamere, num_camere: editNumCamere }),
     });
     setSalvatoEditCamere(true);
     setTimeout(() => setSalvatoEditCamere(false), 2000);
@@ -269,6 +293,39 @@ export default function ImpostazioniPage() {
     });
     setSalvatoEditIcal(true);
     setTimeout(() => setSalvatoEditIcal(false), 2000);
+  }
+
+  async function salvaIstruzioni() {
+    if (!strutturaAttiva || !editIstruzioni.trim()) return;
+    await fetch(`/api/strutture/${strutturaAttiva.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ istruzioni_checkin: editIstruzioni }),
+    });
+    setModelloNonSalvato(false);
+    setSalvatoIstruzioni(true);
+    setTimeout(() => setSalvatoIstruzioni(false), 2000);
+  }
+
+  // Interruttori delle automazioni: salvati subito
+  async function cambiaAutomazione(chiave: keyof AutomazioniStruttura, valore: boolean) {
+    if (!strutturaAttiva) return;
+    const nuove = { ...editAutomazioni, [chiave]: valore };
+    setEditAutomazioni(nuove);
+    await fetch(`/api/strutture/${strutturaAttiva.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ automazioni: nuove }),
+    });
+  }
+
+  // Inserisce il segnaposto nel punto del cursore
+  function inserisciSegnaposto(s: string) {
+    const ta = istruzioniRef.current;
+    const inizio = ta?.selectionStart ?? editIstruzioni.length;
+    const fine = ta?.selectionEnd ?? editIstruzioni.length;
+    setEditIstruzioni(t => t.slice(0, inizio) + s + t.slice(fine));
+    requestAnimationFrame(() => { ta?.focus(); ta?.setSelectionRange(inizio + s.length, inizio + s.length); });
   }
 
   async function aggiungiPeriodo() {
@@ -455,6 +512,7 @@ export default function ImpostazioniPage() {
     { id: 'camere', label: 'Camere' },
     { id: 'prezzi', label: 'Prezzi' },
     { id: 'ical',   label: 'iCal'   },
+    { id: 'checkin', label: 'Check-in' },
   ];
 
   return (
@@ -522,6 +580,7 @@ export default function ImpostazioniPage() {
                       <div className="flex items-center gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide pb-1 border-b">
                         <span className="w-20 flex-shrink-0">ID</span>
                         <span className="flex-1">Nome</span>
+                        <span className="w-14 text-center" title="Ospiti proposti per le nuove prenotazioni">Ospiti</span>
                         <span>Colore</span>
                       </div>
                       {idsEditCamere.map(id => {
@@ -534,7 +593,12 @@ export default function ImpostazioniPage() {
                             </div>
                             <input type="text" placeholder={`Camera ${id}`} value={editNomiCamere[id] ?? ''}
                               onChange={e => setEditNomiCamere(prev => ({ ...prev, [id]: e.target.value }))}
-                              className="flex-1 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                              className="flex-1 min-w-0 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-400"
+                            />
+                            <input type="number" inputMode="numeric" min={1} max={30} title="Ospiti predefiniti"
+                              value={editOspitiCamere[id] ?? OSPITI_DEFAULT}
+                              onChange={e => setEditOspitiCamere(prev => ({ ...prev, [id]: Math.max(1, Number(e.target.value) || OSPITI_DEFAULT) }))}
+                              className="w-14 border rounded px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-400"
                             />
                             <div className="flex items-center gap-0.5 flex-wrap">
                               {PALETTE.map(c => (
@@ -838,6 +902,80 @@ export default function ImpostazioniPage() {
                   </div>
                 )}
 
+                {/* Sub-tab: CHECK-IN */}
+                {subTab === 'checkin' && (
+                  <div>
+                    {/* Invii automatici */}
+                    <div className="mb-6 pb-5 border-b">
+                      <div className="flex items-center gap-2 mb-3">
+                        <RefreshCw size={16} className="text-blue-600" />
+                        <h3 className="font-semibold text-gray-700 text-sm">Invii automatici</h3>
+                      </div>
+                      <div className="space-y-3">
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input type="checkbox" checked={editAutomazioni.portale} onChange={e => cambiaAutomazione('portale', e.target.checked)} className="mt-0.5" />
+                          <span className="text-sm text-gray-700">
+                            Invio delle schedine ad Alloggiati Web il giorno del check-in
+                            <span className="block text-xs text-gray-400">Alle 15:00 e alle 21:00; le schedine già inviate non vengono ripetute.</span>
+                          </span>
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-3">Link di registrazione e istruzioni agli ospiti: da Prenotazioni → WhatsApp.</p>
+                      {editAutomazioni.portale && !strutturaAttiva.telefono && (
+                        <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
+                      )}
+                      {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey
+                        && Object.keys(strutturaAttiva.alloggiati_camere ?? {}).length < strutturaAttiva.num_camere && (
+                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura o di alcune camere (scheda Strutture).</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-3">
+                      <Mail size={16} className="text-blue-600" />
+                      <h3 className="font-semibold text-gray-700 text-sm">Messaggio di check-in</h3>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3">
+                      Inviato all&apos;ospite dalla pagina Alloggiati. Tocca un segnaposto per inserirlo: viene sostituito con i dati della prenotazione.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {Object.entries(SEGNAPOSTO_ISTRUZIONI).map(([s, descr]) => (
+                        <button key={s} type="button" onClick={() => inserisciSegnaposto(s)} title={descr}
+                          className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea ref={istruzioniRef} value={editIstruzioni} onChange={e => setEditIstruzioni(e.target.value)}
+                      rows={14}
+                      className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                    {modelloNonSalvato && (
+                      <p className="text-xs text-amber-600 mt-1">Modello di partenza, non ancora salvato: completa le parti tra [ ].</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-3">
+                      <button onClick={salvaIstruzioni} disabled={!editIstruzioni.trim()}
+                        className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <Save size={14} />
+                        {salvatoIstruzioni ? 'Salvato!' : 'Salva messaggio'}
+                      </button>
+                    </div>
+
+                    <div className="border-t pt-4 mt-5">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Anteprima (dati di esempio)</h4>
+                      <div className="bg-gray-50 rounded p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+                        {componiIstruzioni(editIstruzioni, {
+                          ospite: 'Mario Rossi',
+                          camera: 1,
+                          tassa: '€ 6,00',
+                          indirizzo: strutturaAttiva.indirizzo || 'indirizzo della struttura',
+                          struttura: strutturaAttiva.nome,
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -845,17 +983,19 @@ export default function ImpostazioniPage() {
         </>
       )}
 
-      {/* ── STRUTTURE ─────────────────────────────────────────────────── */}
+      {/* ── STRUTTURE─────────────────────────────────────────────────── */}
       {sezione === 'strutture' && (() => {
         const selezionata = strutture.find(s => s.id === editingDatiId) ?? null;
         function seleziona(s: typeof strutture[0]) {
           setEditingDatiId(s.id);
           setEditDatiNome(s.nome);
           setEditDatiIndirizzo(s.indirizzo ?? '');
+          setEditDatiTelefono(s.telefono ?? '');
           setSalvatoEditDati(false);
           setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
           setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
           setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
+          setEditAlloggiatiCamere(s.alloggiati_camere ?? {});
           setMostraPasswordAlloggiati(false);
           setSalvatoAlloggiati(false);
           setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
@@ -875,6 +1015,16 @@ export default function ImpostazioniPage() {
         }
         return (
           <div className="space-y-4">
+
+            {/* Configurazione guidata: dati fiscali, CIN/CIR, regole, istruzioni check-in */}
+            <a href="/configurazione"
+              className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 hover:bg-blue-100 transition-colors">
+              <div>
+                <span className="text-sm font-semibold text-blue-800 block">Configurazione guidata della struttura attiva</span>
+                <span className="text-xs text-blue-600">Dati societari, CIN/CIR, camere, Alloggiati Web, tassa di soggiorno, istruzioni di check-in</span>
+              </div>
+              <ChevronRight size={16} className="text-blue-500 shrink-0" />
+            </a>
 
             {/* Lista strutture */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -958,12 +1108,19 @@ export default function ImpostazioniPage() {
                         className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
                       />
                     </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs text-gray-500 mb-1">Telefono WhatsApp della struttura</label>
+                      <input type="tel" value={editDatiTelefono} onChange={e => setEditDatiTelefono(e.target.value)} placeholder="+39 333 1234567"
+                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                      <p className="text-[11px] text-gray-400 mt-0.5">Riceve gli avvisi quando un invio automatico (link ospite, Alloggiati Web) non riesce.</p>
+                    </div>
                   </div>
                   <button onClick={() => salvaEditDati(selezionata.id)} disabled={!editDatiNome.trim()}
                     className="flex items-center gap-1.5 bg-slate-700 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
                   >
                     <Save size={13} />
-                    {salvatoEditDati ? 'Salvato!' : 'Salva nome/indirizzo'}
+                    {salvatoEditDati ? 'Salvato!' : 'Salva dati struttura'}
                   </button>
 
                   {/* Conti correnti */}
@@ -1068,7 +1225,7 @@ export default function ImpostazioniPage() {
                       <Shield size={14} className="text-blue-600" />
                       <span className="font-semibold text-gray-700 text-xs">AlloggiatiWeb</span>
                     </div>
-                    <p className="text-xs text-gray-400 mb-2">Credenziali per l&apos;invio automatico al portale Polizia di Stato.</p>
+                    <p className="text-xs text-gray-400 mb-2">Credenziali del portale Polizia di Stato (Questura) per l&apos;invio delle schedine. Valgono per tutte le camere che non hanno credenziali proprie.</p>
                     <div className="space-y-2 mb-2">
                       <input type="text" placeholder="Utente" value={editAlloggiatiUtente} onChange={e => setEditAlloggiatiUtente(e.target.value)}
                         autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
@@ -1086,8 +1243,49 @@ export default function ImpostazioniPage() {
                         autoComplete="off" className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
                       />
                     </div>
+                    {/* Credenziali per camera: camere registrate ad Alloggiati Web con utenze diverse */}
+                    <div className="mb-3">
+                      <span className="block text-xs font-medium text-gray-600 mb-1">Credenziali per camera</span>
+                      <p className="text-[11px] text-gray-400 mb-1.5">Se una camera ha un&apos;utenza Alloggiati Web propria, attivala qui: le sue schedine useranno quelle credenziali.</p>
+                      <div className="space-y-1.5">
+                        {Array.from({ length: selezionata.num_camere }, (_, i) => i + 1).map(id => {
+                          const c = editAlloggiatiCamere[id];
+                          const nome = selezionata.nomi_camere[id] || `Camera ${id}`;
+                          const setCampo = (k: keyof AlloggiatiCredentials, v: string) =>
+                            setEditAlloggiatiCamere(prev => ({ ...prev, [id]: { ...prev[id], [k]: v } }));
+                          return (
+                            <div key={id} className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5">
+                              <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={!!c}
+                                  onChange={e => setEditAlloggiatiCamere(prev => {
+                                    const nuove = { ...prev };
+                                    if (e.target.checked) nuove[id] = { utente: '', password: '', wskey: '' };
+                                    else delete nuove[id];
+                                    return nuove;
+                                  })}
+                                />
+                                <span className="font-medium">{nome}</span>
+                                <span className="text-gray-400">{c ? 'credenziali proprie' : 'usa quelle della struttura'}</span>
+                              </label>
+                              {c && (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-1.5">
+                                  <input type="text" placeholder="Utente" value={c.utente} onChange={e => setCampo('utente', e.target.value)}
+                                    autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                  <input type={mostraPasswordAlloggiati ? 'text' : 'password'} placeholder="Password" value={c.password} onChange={e => setCampo('password', e.target.value)}
+                                    autoComplete="new-password" className="min-w-0 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                  <input type="text" placeholder="WsKey" value={c.wskey} onChange={e => setCampo('wskey', e.target.value)}
+                                    autoComplete="off" className="min-w-0 border rounded px-2 py-1 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                  {!(c.utente && c.password && c.wskey) && (
+                                    <p className="sm:col-span-3 text-[11px] text-amber-600">Incompleta: finché mancano dei campi non viene salvata e la camera usa le credenziali della struttura.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <button onClick={() => salvaCredenziali(selezionata.id)}
-                      disabled={!editAlloggiatiUtente || !editAlloggiatiPassword || !editAlloggiatiWskey}
                       className="flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-40"
                     >
                       <Save size={12} />

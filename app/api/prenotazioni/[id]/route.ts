@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/postgres';
+import { migraStruttura } from '@/lib/strutture';
 import { ignoraUidIcal, leggiImpostazioni } from '@/lib/ical';
 import { aggiornaRigaSheetPerPrenotazione } from '@/lib/googlesheets';
 
@@ -13,6 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
+  await migraStruttura();
 
   const rows = await sql`
     UPDATE prenotazioni SET
@@ -24,6 +26,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       check_out        = COALESCE(${body.check_out        ?? null}, check_out),
       importo_totale   = COALESCE(${body.importo_totale   ?? null}, importo_totale),
       tassa_soggiorno  = COALESCE(${body.tassa_soggiorno  ?? null}, tassa_soggiorno),
+      num_ospiti       = COALESCE(${Number(body.num_ospiti) > 0 ? Number(body.num_ospiti) : null}, num_ospiti),
       stato            = COALESCE(${body.stato            ?? null}, stato),
       note             = COALESCE(${body.note             ?? null}, note)
     WHERE id = ${id}

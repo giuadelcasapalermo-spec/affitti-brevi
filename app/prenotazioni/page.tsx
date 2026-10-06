@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Prenotazione } from '@/lib/types';
+import { Prenotazione, OSPITI_DEFAULT } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO, format, startOfMonth, endOfMonth, addMonths, isToday, isTomorrow } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -251,6 +251,7 @@ function PrenotazioniInner() {
       ...editValues,
       importo_totale:  Number(editValues.importo_totale)  || 0,
       tassa_soggiorno: editValues.tassa_soggiorno ? Number(editValues.tassa_soggiorno) : undefined,
+      num_ospiti:      editValues.num_ospiti ?? camere.find(c => c.id === editValues.camera_id)?.ospiti_default ?? OSPITI_DEFAULT,
     });
   }
 
@@ -591,6 +592,7 @@ function PrenotazioniInner() {
                 const notiMob = (p.check_in && p.check_out)
                   ? differenceInDays(parseISO(p.check_out), parseISO(p.check_in))
                   : 0;
+                const ospitiMob = p.num_ospiti ?? cam?.ospiti_default ?? OSPITI_DEFAULT;
                 return (
                   <div
                     key={p.id}
@@ -641,7 +643,7 @@ function PrenotazioniInner() {
                     {/* Notti */}
                     <div className="flex items-center gap-2 text-sm text-gray-600 mb-1.5">
                       <Moon size={15} className="text-gray-400 flex-shrink-0" />
-                      <span>{notiMob} {notiMob === 1 ? 'notte' : 'notti'}</span>
+                      <span>{notiMob} {notiMob === 1 ? 'notte' : 'notti'} · {ospitiMob} {ospitiMob === 1 ? 'ospite' : 'ospiti'}</span>
                     </div>
                     {/* Telefono o note */}
                     {(p.ospite_telefono || p.note) && (
@@ -736,6 +738,7 @@ function PrenotazioniInner() {
                 <th className="text-left px-3 py-3 font-medium text-gray-600">Check-in</th>
                 <th className="text-left px-3 py-3 font-medium text-gray-600">Check-out</th>
                 <th className="text-right px-3 py-3 font-medium text-gray-600">Notti</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-600">Ospiti</th>
                 <th className="text-right px-3 py-3 font-medium text-gray-600">Importo</th>
                 <th className="text-right px-3 py-3 font-medium text-gray-600">T.d.S.</th>
                 <th className="text-center px-3 py-3 font-medium text-gray-600">Check-in</th>
@@ -809,6 +812,17 @@ function PrenotazioniInner() {
                         </td>
                         {/* Notti */}
                         <td className="px-2 py-2 text-right text-gray-600 font-medium">{notti > 0 ? notti : '—'}</td>
+                        {/* Ospiti */}
+                        <td className="px-2 py-2">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={(ev.num_ospiti as number | null | undefined) ?? camera?.ospiti_default ?? OSPITI_DEFAULT}
+                            onChange={e => setEV('num_ospiti', e.target.value ? Math.max(1, Number(e.target.value)) : undefined)}
+                            className={INPUT_RIGHT}
+                          />
+                        </td>
                         {/* Importo */}
                         <td className="px-2 py-2">
                           <input
@@ -861,7 +875,7 @@ function PrenotazioniInner() {
                       </tr>
                       {/* Riga note */}
                       <tr className="bg-blue-50 border-b">
-                        <td colSpan={9} className="px-3 pb-2">
+                        <td colSpan={10} className="px-3 pb-2">
                           <input
                             type="text"
                             value={(ev.note as string) ?? ''}
@@ -897,6 +911,7 @@ function PrenotazioniInner() {
                     <td className="px-3 py-2.5 text-gray-600">{fData(p.check_in)}</td>
                     <td className="px-3 py-2.5 text-gray-600">{fData(p.check_out)}</td>
                     <td className="px-3 py-2.5 text-right text-gray-600">{notti}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-600">{p.num_ospiti ?? camera?.ospiti_default ?? OSPITI_DEFAULT}</td>
                     <td className="px-3 py-2.5 text-right font-semibold text-gray-800">
                       {p.importo_totale > 0 ? `€${p.importo_totale.toFixed(2)}` : <span className="text-gray-300">—</span>}
                     </td>

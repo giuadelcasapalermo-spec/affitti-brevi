@@ -32,6 +32,7 @@ export async function ensureAlloggiatiTable(): Promise<void> {
       created_at TEXT NOT NULL
     )
   `;
+  await sql`ALTER TABLE alloggiati ADD COLUMN IF NOT EXISTS inviato_portale_at TEXT`;
   _ready = true;
 }
 
@@ -54,6 +55,7 @@ export function rowToAlloggiato(row: Record<string, unknown>): Alloggiato {
     tipo_documento: row.tipo_documento as string,
     numero_documento: row.numero_documento as string,
     luogo_rilascio: row.luogo_rilascio as string,
+    inviato_portale_at: (row.inviato_portale_at as string | null) ?? null,
     created_at: row.created_at as string,
   };
 }
@@ -129,4 +131,11 @@ export async function aggiornaAlloggiato(id: string, data: Partial<Omit<Alloggia
 export async function eliminaAlloggiato(id: string): Promise<void> {
   await ensureAlloggiatiTable();
   await sql`DELETE FROM alloggiati WHERE id = ${id}`;
+}
+
+/** Segna le schedine accettate da Alloggiati Web, così le automazioni non le reinviano */
+export async function marcaInviatiPortale(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await ensureAlloggiatiTable();
+  await sql`UPDATE alloggiati SET inviato_portale_at = ${new Date().toISOString()} WHERE id = ANY(${ids})`;
 }

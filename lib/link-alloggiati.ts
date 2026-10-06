@@ -109,3 +109,9 @@ export async function leggiLinksPerPrenotazioni(prenotazioneIds: string[]): Prom
   }
   return result;
 }
+
+/** Testo del messaggio con il link di registrazione (usato anche dal pulsante WhatsApp in Alloggiati) */
+export function testoLinkRegistrazione(ospite: string, struttura: string, checkIn: string, url: string): string {
+  const data = checkIn.split('-').reverse().join('/');
+  return `Buongiorno ${ospite},\nLe scriviamo da ${struttura}.\nPer velocizzare il check-in del ${data} La invitiamo a registrare in anticipo i suoi dati d'identità cliccando qui:\n${url}\n\nPuò importare i dati inquadrando direttamente il documento con la fotocamera, senza bisogno di trascriverli.\nUna volta ricevuti i documenti, Le invieremo le istruzioni per il check-in.\n\n---\n\nGood morning ${ospite},\nWe are writing from ${struttura}.\nTo speed up your check-in on ${data}, please register your identity details in advance here:\n${url}\n\nYou can import your data by scanning your document with the camera — no need to type anything manually.\nOnce we receive your documents, we will send you the check-in instructions.`;
+}

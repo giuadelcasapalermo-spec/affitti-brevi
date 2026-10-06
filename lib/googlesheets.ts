@@ -8,11 +8,13 @@ import { getStrutturaAttiva } from './strutture';
 import { leggiImpostazioni, riconciliaBlocchiIcal } from './ical';
 import { randomUUID } from 'crypto';
 
-const SPREADSHEET_ID_FALLBACK = '1t8sY-JBkSDAnIBhQA_xwotRjxAzRCJ1XMUrxbpHlJpM';
+// ID del foglio: da Impostazioni, altrimenti da GOOGLE_SHEET_ID (per istanza). Nessun default nel codice.
 
 async function getSpreadsheetId(): Promise<string> {
   const imp = await leggiImpostazioni();
-  return imp.google_sheet_id?.trim() || SPREADSHEET_ID_FALLBACK;
+  const id = imp.google_sheet_id?.trim() || process.env.GOOGLE_SHEET_ID?.trim();
+  if (!id) throw new Error("Google Sheet non configurato: impostare l'ID in Impostazioni o GOOGLE_SHEET_ID");
+  return id;
 }
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME ?? 'Prima Nota App';
 

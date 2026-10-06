@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getStrutturaAttiva } from '@/lib/strutture';
+import { getStrutturaAttiva, credenzialiAlloggiati } from '@/lib/strutture';
 import { leggiAlloggiati, generaFileAlloggiati, preparaBatchPerPortale, validaBatch } from '@/lib/alloggiati';
 
 const SOAP_NS = 'AlloggiatiService';
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const strutturaId = cookieStore.get('struttura_id')?.value;
     const struttura = await getStrutturaAttiva(strutturaId);
 
-    const creds = struttura.alloggiati_credentials;
+    const creds = credenzialiAlloggiati(struttura);
     if (!creds?.utente || !creds?.password || !creds?.wskey) {
       return NextResponse.json(
         { ok: false, errore: 'Credenziali AlloggiatiWeb non configurate. Vai in Impostazioni → Strutture → Modifica.' },

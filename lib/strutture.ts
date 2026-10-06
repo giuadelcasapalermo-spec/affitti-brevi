@@ -1,6 +1,10 @@
 import sql from './postgres';
 import { randomUUID } from 'crypto';
-import { Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig } from './types';
+import {
+  Struttura, AlloggiatiCredentials, ContoCorrente, BookingChannelManagerConfig,
+  DatiFiscali, RegoleStruttura, DATI_FISCALI_VUOTI, REGOLE_DEFAULT,
+  AutomazioniStruttura, AUTOMAZIONI_DEFAULT, OSPITI_DEFAULT,
+} from './types';
 
 const DEFAULT_PREZZI: Record<number, number> = { 1: 60, 2: 60, 3: 65, 4: 65, 5: 70 };
 const DEFAULT_CONTI: ContoCorrente[] = [{ id: 'contanti-default', tipo: 'contanti', nome: 'Contanti' }];
@@ -27,6 +31,13 @@ async function ensureTable(): Promise<void> {
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_credentials JSONB DEFAULT NULL`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS conti_correnti JSONB DEFAULT '[]'`,
     sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS channel_manager_config JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS dati_fiscali JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS regole JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS istruzioni_checkin TEXT NOT NULL DEFAULT ''`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS telefono TEXT NOT NULL DEFAULT ''`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS automazioni JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS alloggiati_camere JSONB DEFAULT NULL`,
+    sql`ALTER TABLE strutture ADD COLUMN IF NOT EXISTS ospiti_camere JSONB DEFAULT NULL`,
   ]);
   _tableReady = true;
 }
@@ -56,8 +67,15 @@ function rowToStruttura(row: Record<string, unknown>): Struttura {
     colori_camere: toNumericRecord(row.colori_camere),
     ical_urls: toNumericRecord(row.ical_urls),
     alloggiati_credentials: row.alloggiati_credentials as AlloggiatiCredentials | undefined,
+    alloggiati_camere: Object.fromEntries(Object.entries((row.alloggiati_camere ?? {}) as Record<string, AlloggiatiCredentials>).map(([k, v]) => [Number(k), v])),
+    ospiti_camere: toNumericNumberRecord(row.ospiti_camere),
     conti_correnti: conti,
     channel_manager_config: row.channel_manager_config as BookingChannelManagerConfig | undefined,
+    dati_fiscali: { ...DATI_FISCALI_VUOTI, ...(row.dati_fiscali as Partial<DatiFiscali> | null) },
+    regole: { ...REGOLE_DEFAULT, ...(row.regole as Partial<RegoleStruttura> | null) },
+    istruzioni_checkin: (row.istruzioni_checkin as string | null) ?? '',
+    telefono: (row.telefono as string | null) ?? '',
+    automazioni: { ...AUTOMAZIONI_DEFAULT, ...(row.automazioni as Partial<AutomazioniStruttura> | null) },
     created_at: row.created_at as string,
   };
 }
@@ -87,6 +105,13 @@ export async function creaStruttura(nome: string, indirizzo: string, numCamere =
     colori_camere: {},
     ical_urls: {},
     conti_correnti: conti,
+    dati_fiscali: { ...DATI_FISCALI_VUOTI },
+    regole: { ...REGOLE_DEFAULT },
+    istruzioni_checkin: '',
+    telefono: '',
+    automazioni: { ...AUTOMAZIONI_DEFAULT },
+    alloggiati_camere: {},
+    ospiti_camere: {},
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -120,6 +145,20 @@ export async function aggiornaStruttura(id: string, fields: Partial<Omit<Struttu
     await sql`UPDATE strutture SET conti_correnti = ${JSON.stringify(fields.conti_correnti)} WHERE id = ${id}`;
   if (fields.channel_manager_config !== undefined)
     await sql`UPDATE strutture SET channel_manager_config = ${JSON.stringify(fields.channel_manager_config)} WHERE id = ${id}`;
+  if (fields.dati_fiscali !== undefined)
+    await sql`UPDATE strutture SET dati_fiscali = ${JSON.stringify(fields.dati_fiscali)} WHERE id = ${id}`;
+  if (fields.regole !== undefined)
+    await sql`UPDATE strutture SET regole = ${JSON.stringify(fields.regole)} WHERE id = ${id}`;
+  if (fields.istruzioni_checkin !== undefined)
+    await sql`UPDATE strutture SET istruzioni_checkin = ${fields.istruzioni_checkin} WHERE id = ${id}`;
+  if (fields.telefono !== undefined)
+    await sql`UPDATE strutture SET telefono = ${fields.telefono} WHERE id = ${id}`;
+  if (fields.automazioni !== undefined)
+    await sql`UPDATE strutture SET automazioni = ${JSON.stringify(fields.automazioni)} WHERE id = ${id}`;
+  if (fields.alloggiati_camere !== undefined)
+    await sql`UPDATE strutture SET alloggiati_camere = ${JSON.stringify(fields.alloggiati_camere)} WHERE id = ${id}`;
+  if (fields.ospiti_camere !== undefined)
+    await sql`UPDATE strutture SET ospiti_camere = ${JSON.stringify(fields.ospiti_camere)} WHERE id = ${id}`;
 }
 
 export async function eliminaStruttura(id: string): Promise<void> {
@@ -162,6 +201,13 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
     colori_camere: colori,
     ical_urls: ical,
     conti_correnti: conti,
+    dati_fiscali: { ...DATI_FISCALI_VUOTI },
+    regole: { ...REGOLE_DEFAULT },
+    istruzioni_checkin: '',
+    telefono: '',
+    automazioni: { ...AUTOMAZIONI_DEFAULT },
+    alloggiati_camere: {},
+    ospiti_camere: {},
     created_at: new Date().toISOString(),
   };
   await sql`
@@ -177,9 +223,22 @@ export async function getOrCreateDefaultStruttura(): Promise<Struttura> {
 export async function migraStruttura(): Promise<string> {
   if (_migrated) return '';
   const s = await getOrCreateDefaultStruttura();
+  // Su un'istanza nuova prezzi_periodi non esiste ancora: va creata prima di ALTER/UPDATE
+  await sql`
+    CREATE TABLE IF NOT EXISTS prezzi_periodi (
+      id TEXT PRIMARY KEY,
+      camera_id INT NOT NULL,
+      nome_periodo TEXT NOT NULL DEFAULT '',
+      data_inizio TEXT NOT NULL,
+      data_fine TEXT NOT NULL,
+      prezzo_notte REAL NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `;
   await Promise.all([
     sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
     sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS tassa_esenti INT NOT NULL DEFAULT 0`,
+    sql`ALTER TABLE prenotazioni ADD COLUMN IF NOT EXISTS num_ospiti INT DEFAULT NULL`,
     sql`ALTER TABLE prezzi_periodi ADD COLUMN IF NOT EXISTS struttura_id TEXT`,
   ]);
   await Promise.all([
@@ -196,4 +255,23 @@ export async function getStrutturaAttiva(strutturaId?: string): Promise<Struttur
     if (s) return s;
   }
   return getOrCreateDefaultStruttura();
+}
+
+function credenzialiComplete(c: AlloggiatiCredentials | undefined): c is AlloggiatiCredentials {
+  return !!(c?.utente && c?.password && c?.wskey);
+}
+
+/**
+ * Credenziali Alloggiati Web da usare per una camera: quelle proprie della camera
+ * (strutture con più ragioni sociali / codici struttura per camera) o, se mancano, quelle della struttura.
+ */
+export function credenzialiAlloggiati(s: Struttura, cameraId?: number | null): AlloggiatiCredentials | null {
+  const diCamera = cameraId != null ? s.alloggiati_camere[cameraId] : undefined;
+  if (credenzialiComplete(diCamera)) return diCamera;
+  return credenzialiComplete(s.alloggiati_credentials) ? s.alloggiati_credentials : null;
+}
+
+/** Ospiti proposti per una nuova prenotazione della camera */
+export function ospitiDefaultCamera(s: Struttura, cameraId: number): number {
+  return s.ospiti_camere[cameraId] || OSPITI_DEFAULT;
 }

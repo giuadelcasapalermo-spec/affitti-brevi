@@ -21,7 +21,7 @@ const TIPI: Record<Tipo, { label: string; descr: string; rotta: string; corpo: (
   },
   istruzioni: {
     label: 'Istruzioni di check-in',
-    descr: 'Il messaggio con le istruzioni per il check-in.',
+    descr: 'Il messaggio di check-in della struttura (Altro → Camere → Check-in).',
     rotta: '/api/alloggiati/invia-istruzioni',
     corpo: id => ({ prenotazione_id: id }),
   },

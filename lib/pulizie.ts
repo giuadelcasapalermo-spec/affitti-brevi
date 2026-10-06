@@ -1,9 +1,13 @@
 import { differenceInDays, parseISO } from 'date-fns';
-import type { Prenotazione } from './types';
+import { REGOLE_DEFAULT, type Prenotazione } from './types';
 
-// Costo diretto della collaboratrice: pulizia completa al check-out, cambio per soggiorni lunghi
-export const COSTO_PULIZIA_CHECKOUT = 7;
-export const COSTO_CAMBIO_STANZA = 4;
+// Costo diretto della collaboratrice: pulizia completa al check-out, cambio per soggiorni lunghi.
+// I valori effettivi sono per struttura (regole); questi sono i default.
+export interface CostiPulizia { checkout: number; cambio: number }
+export const COSTI_PULIZIA_DEFAULT: CostiPulizia = {
+  checkout: REGOLE_DEFAULT.costo_pulizia_checkout,
+  cambio: REGOLE_DEFAULT.costo_cambio_stanza,
+};
 
 export type TipoPulizia = 'checkout' | 'cambio';
 
@@ -36,8 +40,8 @@ export function puliziaGiorno(prenotazioni: Prenotazione[], giorno: string): Map
   return pulizie;
 }
 
-export function costoPulizia(tipo: TipoPulizia | undefined): number {
-  return tipo === 'checkout' ? COSTO_PULIZIA_CHECKOUT : tipo === 'cambio' ? COSTO_CAMBIO_STANZA : 0;
+export function costoPulizia(tipo: TipoPulizia | undefined, costi: CostiPulizia = COSTI_PULIZIA_DEFAULT): number {
+  return tipo === 'checkout' ? costi.checkout : tipo === 'cambio' ? costi.cambio : 0;
 }
 
 // Quota di ricavo della notte (come nel calendario): importo del soggiorno diviso le notti

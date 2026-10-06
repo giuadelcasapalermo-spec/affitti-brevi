@@ -3,7 +3,12 @@ export interface Camera {
   nome: string;
   prezzo_notte: number;
   colore?: string;
+  /** Numero di ospiti proposto per le nuove prenotazioni della camera */
+  ospiti_default?: number;
 }
+
+/** Ospiti per prenotazione quando la camera non ha un valore impostato */
+export const OSPITI_DEFAULT = 2;
 
 export interface AlloggiatiCredentials {
   utente: string;
@@ -41,6 +46,43 @@ export interface BookingChannelManagerConfig {
   room_id_map: Record<number, string>;
 }
 
+export interface DatiFiscali {
+  ragione_sociale: string;
+  partita_iva: string;
+  codice_fiscale: string;
+  sede_legale: string;
+  pec: string;
+  /** Codice Identificativo Nazionale (BDSR, Ministero del Turismo) */
+  cin: string;
+  /** Codice identificativo regionale (CIR/CIS/CITR a seconda della regione) */
+  cir: string;
+  tipologia: string;
+}
+
+export interface RegoleStruttura {
+  comune: string;
+  /** Notti massime soggette a tassa di soggiorno per singolo soggiorno */
+  tassa_max_notti: number;
+  /** Tariffa per persona per notte (€), solo informativa */
+  tassa_tariffa: number;
+  costo_pulizia_checkout: number;
+  costo_cambio_stanza: number;
+}
+
+// Valori in uso prima della configurazione per struttura (Palermo)
+export const REGOLE_DEFAULT: RegoleStruttura = {
+  comune: '',
+  tassa_max_notti: 4,
+  tassa_tariffa: 0,
+  costo_pulizia_checkout: 7,
+  costo_cambio_stanza: 4,
+};
+
+export const DATI_FISCALI_VUOTI: DatiFiscali = {
+  ragione_sociale: '', partita_iva: '', codice_fiscale: '', sede_legale: '',
+  pec: '', cin: '', cir: '', tipologia: '',
+};
+
 export interface Struttura {
   id: string;
   nome: string;
@@ -51,10 +93,29 @@ export interface Struttura {
   colori_camere: Record<number, string>;
   ical_urls: Record<number, string>;
   alloggiati_credentials?: AlloggiatiCredentials;
+  /** Credenziali Alloggiati Web proprie di una camera: se presenti prevalgono su quelle della struttura */
+  alloggiati_camere: Record<number, AlloggiatiCredentials>;
+  /** Ospiti predefiniti per camera (vedi OSPITI_DEFAULT) */
+  ospiti_camere: Record<number, number>;
   conti_correnti: ContoCorrente[];
   channel_manager_config?: BookingChannelManagerConfig;
+  dati_fiscali: DatiFiscali;
+  regole: RegoleStruttura;
+  /** Modello del messaggio di check-in; segnaposto: {ospite} {camera} {tassa} {indirizzo} {struttura} */
+  istruzioni_checkin: string;
+  /** Numero WhatsApp della struttura: riceve gli avvisi di errore delle automazioni */
+  telefono: string;
+  automazioni: AutomazioniStruttura;
   created_at: string;
 }
+
+/** Invii automatici (cron /api/cron/automazioni), spenti finché il titolare non li attiva */
+export interface AutomazioniStruttura {
+  /** Invio delle schedine ad Alloggiati Web il giorno del check-in (15:00 e 21:00) */
+  portale: boolean;
+}
+
+export const AUTOMAZIONI_DEFAULT: AutomazioniStruttura = { portale: false };
 
 export interface Prenotazione {
   id: string;
@@ -69,6 +130,8 @@ export interface Prenotazione {
   tassa_soggiorno?: number;
   tassa_esenti?: number;
   tassa_trovata?: number | null;
+  /** Ospiti della prenotazione; null = predefinito della camera */
+  num_ospiti?: number | null;
   stato: 'confermata' | 'pending' | 'cancellata';
   note: string;
   created_at: string;
@@ -188,6 +251,8 @@ export interface Alloggiato {
   tipo_documento: string;
   numero_documento: string;
   luogo_rilascio: string;
+  /** Impostato quando la schedina è stata accettata da Alloggiati Web */
+  inviato_portale_at?: string | null;
   created_at: string;
 }
 
