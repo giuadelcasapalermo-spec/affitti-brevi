@@ -141,8 +141,8 @@ export default function ImpostazioniPage() {
   const [salvatoCamera, setSalvatoCamera] = useState<'codici' | 'alloggiati' | 'osservatorio' | null>(null);
   const [provaOss, setProvaOss] = useState<{ chiave: string; ok: boolean; testo: string } | null>(null);
   const [invioOss, setInvioOss] = useState<{ stato: 'loading' | 'ok' | 'errore'; righe: string[] } | null>(null);
-  // Invio storico all'Osservatorio (periodo di arrivi, solo Booking)
-  const [storicoOss, setStoricoOss] = useState({ dal: '', al: '', solo_booking: true });
+  // Invio storico all'Osservatorio (periodo di arrivi, solo prenotazioni con tassa di soggiorno)
+  const [storicoOss, setStoricoOss] = useState({ dal: '', al: '', solo_con_tassa: true });
 
   // Booking Channel Manager (per struttura)
   const [editCmUrl, setEditCmUrl] = useState('');
@@ -319,8 +319,8 @@ export default function ImpostazioniPage() {
     }
   }
 
-  async function inviaOsservatorioOra(storico?: { dal: string; al: string; solo_booking: boolean; limite?: number }) {
-    if (storico && !storico.limite && !confirm(`Inviare all'Osservatorio tutti i soggiorni con arrivo dal ${storico.dal} al ${storico.al}${storico.solo_booking ? ' (solo Booking)' : ''}? I soggiorni già inviati non vengono ripetuti.`)) return;
+  async function inviaOsservatorioOra(storico?: { dal: string; al: string; solo_con_tassa: boolean; limite?: number }) {
+    if (storico && !storico.limite && !confirm(`Inviare all'Osservatorio tutti i soggiorni con arrivo dal ${storico.dal} al ${storico.al}${storico.solo_con_tassa ? ' (solo prenotazioni con tassa di soggiorno)' : ''}? I soggiorni già inviati non vengono ripetuti.`)) return;
     setInvioOss({ stato: 'loading', righe: [] });
     try {
       const res = await fetch('/api/osservatorio/invia', {
@@ -1344,8 +1344,8 @@ export default function ImpostazioniPage() {
                                 className="border rounded px-2 py-1 text-xs w-[8.5rem]" />
                             </div>
                             <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                              <input type="checkbox" checked={storicoOss.solo_booking} onChange={e => setStoricoOss(v => ({ ...v, solo_booking: e.target.checked }))} />
-                              Solo prenotazioni Booking.com
+                              <input type="checkbox" checked={storicoOss.solo_con_tassa} onChange={e => setStoricoOss(v => ({ ...v, solo_con_tassa: e.target.checked }))} />
+                              Solo prenotazioni con tassa di soggiorno
                             </label>
                             <div className="flex gap-2 flex-wrap">
                               <button type="button" disabled={!storicoOss.dal || !storicoOss.al || invioOss?.stato === 'loading'}

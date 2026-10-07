@@ -186,8 +186,8 @@ export interface OpzioniInvio {
   /** Invio storico: solo arrivi in questo intervallo (AAAA-MM-GG), senza limite dei 60 giorni */
   dal?: string;
   al?: string;
-  /** Solo prenotazioni arrivate da Booking.com (iCal o channel manager) */
-  soloBooking?: boolean;
+  /** Solo prenotazioni con la tassa di soggiorno registrata (importo > 0), da qualunque canale */
+  soloConTassa?: boolean;
   /** Chiusura giornaliera (predefinito sì; no per l'invio storico) */
   chiusura?: boolean;
   /** Massimo numero di soggiorni da trattare (prova con un solo soggiorno) */
@@ -214,9 +214,9 @@ export async function inviaOsservatorioStruttura(s: Struttura, opz: OpzioniInvio
     // Prenotazioni cancellate dopo la registrazione: non sono soggiorni
     .filter(a => !a.prenotazione_id || perId.get(a.prenotazione_id)?.stato !== 'cancellata')
     .filter(a => {
-      if (!opz.soloBooking) return true;
+      if (!opz.soloConTassa) return true;
       const p = a.prenotazione_id ? perId.get(a.prenotazione_id) : undefined;
-      return p?.fonte === 'ical' || p?.fonte === 'booking';
+      return (p?.tassa_soggiorno ?? 0) > 0;
     });
 
   // Un soggiorno per prenotazione; gli ospiti inseriti a mano senza prenotazione sono soggiorni a sé
