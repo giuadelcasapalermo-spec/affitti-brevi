@@ -177,47 +177,36 @@ async function salvaChiusura(codice: string, data: string): Promise<void> {
 }
 
 /**
- * Comunica all'Osservatorio arrivi e partenze fino a `oggi` e chiude la giornata, per ogni codice struttura
- * (della struttura e delle camere con credenziali proprie). Gli errori diventano avvisi nell'app.
+ * Comunica all'Osservatorio arrivi e partenze e chiude le giornate, per ogni codice struttura (della struttura e delle
+ * camere con credenziali proprie). Gli errori diventano avvisi nell'app.
+ *
+ * Il portale lavora una giornata alla volta: accetta solo arrivi con data uguale alla sua "data di sistema" (la giornata
+ * aperta) e la chiusura giornaliera passa a quella dopo. Si procede quindi giorno per giorno, dalla giornata aperta a
+ * oggi: arrivi del giorno, partenze del giorno, chiusura. Giornata aperta = il giorno dopo l'ultima chiusura mandata
+ * dall'app, oppure (prima chiusura) la data di inizio impostata in Camere → Check-in, oppure oggi.
+ * Gli arrivi di giornate già chiuse non si possono più comunicare: vanno inseriti a mano sul portale.
  */
 export interface OpzioniInvio {
-  /** Giorno di riferimento (partenze fino a questo giorno, chiusura di questo giorno) */
+  /** Giorno di riferimento (predefinito: oggi in Italia) */
   oggi?: string;
-  /** Invio storico: solo arrivi in questo intervallo (AAAA-MM-GG), senza limite dei 60 giorni */
-  dal?: string;
-  al?: string;
-  /** Solo prenotazioni con la tassa di soggiorno registrata (importo > 0), da qualunque canale */
-  soloConTassa?: boolean;
-  /** Chiusura giornaliera (predefinito sì; no per l'invio storico) */
-  chiusura?: boolean;
-  /** Massimo numero di soggiorni da trattare (prova con un solo soggiorno) */
-  limite?: number;
-  /** Avvisi nell'app per gli errori (predefinito sì; l'invio storico mostra gli errori a schermo) */
-  avvisi?: boolean;
+  /** Chiude anche la giornata di riferimento (sì per l'invio serale; no per "Invia ora", che chiude solo fino a ieri) */
+  chiudiOggi?: boolean;
 }
 
 export async function inviaOsservatorioStruttura(s: Struttura, opz: OpzioniInvio = {}): Promise<Esito[]> {
   const oggi = opz.oggi ?? dataItalia(0);
-  const storico = !!opz.dal;
-  const conAvvisi = opz.avvisi ?? true;
-  const avvisa = (p: Prenotazione | null, errore: string) => conAvvisi ? avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') : Promise.resolve(undefined);
-  // Invio automatico: solo arrivi dalla data di attivazione (i precedenti sono già stati inseriti sul portale),
+  const chiudiOggi = opz.chiudiOggi ?? true;
+  // Solo arrivi dalla data di attivazione (i precedenti sono già stati inseriti sul portale),
   // ma le partenze dei soggiorni già comunicati si inviano comunque
   const inizioAuto = s.automazioni.osservatorio_dal || '';
   const esiti: Esito[] = [];
   const prenotazioni = await leggiPrenotazioni(s.id);
   const perId = new Map(prenotazioni.map(p => [p.id, p]));
-  const fineArrivi = opz.al && opz.al < oggi ? opz.al : oggi;
-  const alloggiati = (await leggiAlloggiatiDaComunicare(s.id, opz.dal ?? aggiungiGiorni(oggi, -GIORNI_INDIETRO)))
-    .filter(a => isoData(a.data_arrivo) && isoData(a.data_arrivo) <= fineArrivi)
-    .filter(a => storico || a.osservatorio_inviato_at || !inizioAuto || isoData(a.data_arrivo) >= inizioAuto)
+  const alloggiati = (await leggiAlloggiatiDaComunicare(s.id, aggiungiGiorni(oggi, -GIORNI_INDIETRO)))
+    .filter(a => isoData(a.data_arrivo) && isoData(a.data_arrivo) <= oggi)
+    .filter(a => a.osservatorio_inviato_at || !inizioAuto || isoData(a.data_arrivo) >= inizioAuto)
     // Prenotazioni cancellate dopo la registrazione: non sono soggiorni
-    .filter(a => !a.prenotazione_id || perId.get(a.prenotazione_id)?.stato !== 'cancellata')
-    .filter(a => {
-      if (!opz.soloConTassa) return true;
-      const p = a.prenotazione_id ? perId.get(a.prenotazione_id) : undefined;
-      return (p?.tassa_soggiorno ?? 0) > 0;
-    });
+    .filter(a => !a.prenotazione_id || perId.get(a.prenotazione_id)?.stato !== 'cancellata');
 
   // Un soggiorno per prenotazione; gli ospiti inseriti a mano senza prenotazione sono soggiorni a sé
   const soggiorni = new Map<string, { p: Prenotazione | null; ospiti: Alloggiato[] }>();
@@ -229,95 +218,120 @@ export async function inviaOsservatorioStruttura(s: Struttura, opz: OpzioniInvio
     soggiorni.set(chiave, g);
   }
 
-  const sessioni = new Map<string, Sessione>(); // per codice struttura
-  const codiciUsati = new Map<string, OsservatorioCredentials>();
-  const sessione = async (c: OsservatorioCredentials) => {
-    let ses = sessioni.get(c.codice_struttura);
-    if (!ses) { ses = await login(c); sessioni.set(c.codice_struttura, ses); }
-    return ses;
-  };
+  const partenza = (a: Alloggiato) => aggiungiGiorni(isoData(a.data_arrivo), Math.max(1, a.permanenza));
+  interface Soggiorno { chiave: string; p: Prenotazione | null; ospiti: Alloggiato[]; creds: OsservatorioCredentials; arrivo: string; base: Pick<Esito, 'struttura' | 'prenotazione' | 'ospite'> }
+  const perCodice = new Map<string, { creds: OsservatorioCredentials; soggiorni: Soggiorno[] }>();
   // La chiusura giornaliera va mandata per ogni codice configurato, anche senza movimenti
   for (const c of [s.osservatorio_credentials, ...Object.values(s.osservatorio_camere)]) {
-    if (c?.utente && c.password && c.codice_struttura) codiciUsati.set(c.codice_struttura, c);
+    if (c?.utente && c.password && c.codice_struttura) perCodice.set(c.codice_struttura, { creds: c, soggiorni: [] });
   }
 
-  let trattati = 0;
-  try {
-    for (const [chiave, { p, ospiti }] of soggiorni) {
-      if (opz.limite && trattati >= opz.limite) break;
-      // Già comunicati per intero (arrivo e partenza) non contano per il limite
-      if (ospiti.every(a => a.osservatorio_inviato_at) && !ospiti.some(a => aggiungiGiorni(isoData(a.data_arrivo), Math.max(1, a.permanenza)) <= oggi)) continue;
-      trattati++;
-      const nome = p?.ospite_nome ?? ospiti.map(a => `${a.nome} ${a.cognome}`).join(', ');
-      const base = { struttura: s.nome, prenotazione: p?.id, ospite: nome };
-      const cameraId = p?.camera_id ?? null;
-      const creds = credenzialiOsservatorio(s, cameraId);
-      if (!creds) {
-        const errore = `credenziali Osservatorio non configurate${cameraId ? ` per la camera ${cameraId}` : ''} (Impostazioni → Strutture)`;
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisa(p, errore) });
-        continue;
-      }
-      const incompleti = ospiti.map(a => ({ a, e: datiOspite(a).errori })).filter(x => x.e.length);
-      if (incompleti.length) {
-        const errore = incompleti.map(x => `${x.a.nome} ${x.a.cognome}: ${x.e.join(', ')}`).join(' | ') + ' — correggi la scheda in Alloggiati';
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisa(p, errore) });
-        continue;
-      }
-
-      // Tipo alloggiato coerente con le schedine di Alloggiati Web (16 singolo, 18/20 gruppi stranieri)
-      const tipi = new Map(preparaBatchPerPortale(ospiti).map(a => [a.id, a.tipo]));
-      const stayId = `${creds.codice_struttura}_${chiave}`;
-      const camera = cameraId != null ? String(cameraId) : 'ND';
-      const partito = (a: Alloggiato) => aggiungiGiorni(isoData(a.data_arrivo), Math.max(1, a.permanenza)) <= oggi;
-      try {
-        const ses = await sessione(creds);
-        const nuovi = ospiti.filter(a => !a.osservatorio_inviato_at);
-        if (nuovi.length) {
-          // Primo invio del soggiorno → addfrompms; ospiti aggiunti a un soggiorno già comunicato → updatefrompms completo
-          const giaComunicato = ospiti.some(a => a.osservatorio_inviato_at);
-          const lista = ospiti.map(a => ({ a, tipo: tipi.get(a.id) ?? a.tipo, checkout: false }));
-          await invia(ses, giaComunicato ? 'stay/updatefrompms' : 'stay/addfrompms', xmlStay(stayId, creds.codice_struttura, camera, lista));
-          await marcaInviatiOsservatorio(nuovi.map(a => a.id), false);
-        }
-        const partiti = ospiti.filter(partito);
-        if (partiti.length) {
-          const lista = ospiti.map(a => ({ a, tipo: tipi.get(a.id) ?? a.tipo, checkout: partito(a) }));
-          await invia(ses, 'stay/updatefrompms', xmlStay(stayId, creds.codice_struttura, camera, lista));
-          await marcaInviatiOsservatorio(partiti.map(a => a.id), true);
-        }
-        if (nuovi.length || partiti.length) {
-          esiti.push({ ...base, esito: 'inviato', dettaglio: [nuovi.length && `${nuovi.length} arrivi`, partiti.length && `${partiti.length} partenze`].filter(Boolean).join(', ') });
-        }
-      } catch (e) {
-        const errore = e instanceof Error ? e.message : String(e);
-        esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisa(p, errore) });
-      }
+  for (const [chiave, { p, ospiti }] of soggiorni) {
+    const nome = p?.ospite_nome ?? ospiti.map(a => `${a.nome} ${a.cognome}`).join(', ');
+    const base = { struttura: s.nome, prenotazione: p?.id, ospite: nome };
+    const cameraId = p?.camera_id ?? null;
+    const creds = credenzialiOsservatorio(s, cameraId);
+    if (!creds) {
+      const errore = `credenziali Osservatorio non configurate${cameraId ? ` per la camera ${cameraId}` : ''} (Impostazioni → Strutture)`;
+      esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') });
+      continue;
     }
+    const incompleti = ospiti.map(a => ({ a, e: datiOspite(a).errori })).filter(x => x.e.length);
+    if (incompleti.length) {
+      const errore = incompleti.map(x => `${x.a.nome} ${x.a.cognome}: ${x.e.join(', ')}`).join(' | ') + ' — correggi la scheda in Alloggiati';
+      esiti.push({ ...base, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, p, errore, 'osservatorio') });
+      continue;
+    }
+    const gruppo = perCodice.get(creds.codice_struttura) ?? { creds, soggiorni: [] };
+    gruppo.soggiorni.push({ chiave, p, ospiti, creds, arrivo: ospiti.map(a => isoData(a.data_arrivo)).sort()[0], base });
+    perCodice.set(creds.codice_struttura, gruppo);
+  }
 
-    if (opz.chiusura === false) return esiti;
-
-    // Chiusura giornaliera (recupera i giorni mancati, al massimo una settimana)
-    for (const [codice, creds] of codiciUsati) {
+  const sessioni: Sessione[] = [];
+  try {
+    for (const [codice, { creds, soggiorni: lista }] of perCodice) {
       const ultima = await ultimaChiusura(codice);
-      let giorno = ultima ? aggiungiGiorni(ultima, 1) : oggi;
+      let aperto = ultima ? aggiungiGiorni(ultima, 1) : (inizioAuto && inizioAuto <= oggi ? inizioAuto : oggi);
       const minimo = aggiungiGiorni(oggi, -(GIORNI_RECUPERO_CHIUSURA - 1));
-      if (giorno < minimo) giorno = minimo;
+      if (aperto < minimo) aperto = minimo;
+      const ultimoDaChiudere = chiudiOggi ? oggi : aggiungiGiorni(oggi, -1);
+
+      let ses: Sessione;
       try {
-        const ses = await sessione(creds);
-        const chiusi: string[] = [];
-        for (; giorno <= oggi; giorno = aggiungiGiorni(giorno, 1)) {
+        ses = await login(creds);
+        sessioni.push(ses);
+      } catch (e) {
+        const errore = `accesso all'Osservatorio (${codice}): ${e instanceof Error ? e.message : String(e)}`;
+        esiti.push({ struttura: s.nome, ospite: codice, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, null, errore, 'osservatorio') });
+        continue;
+      }
+
+      /** Comunica arrivo (se ancora da fare) e partenza (se avvenuta entro `giorno`) di un soggiorno */
+      const comunica = async (g: Soggiorno, giorno: string, conArrivo: boolean) => {
+        const tipi = new Map(preparaBatchPerPortale(g.ospiti).map(a => [a.id, a.tipo]));
+        const stayId = `${codice}_${g.chiave}`;
+        const camera = g.p?.camera_id != null ? String(g.p.camera_id) : 'ND';
+        const partito = (a: Alloggiato) => partenza(a) <= giorno;
+        const nuovi = conArrivo ? g.ospiti.filter(a => !a.osservatorio_inviato_at) : [];
+        const partiti = g.ospiti.filter(a => partito(a) && (a.osservatorio_inviato_at || nuovi.includes(a)) && !a.osservatorio_checkout_at);
+        if (!nuovi.length && !partiti.length) return;
+        try {
+          if (nuovi.length) {
+            // Primo invio del soggiorno → addfrompms; ospiti aggiunti a un soggiorno già comunicato → updatefrompms completo
+            const giaComunicato = g.ospiti.some(a => a.osservatorio_inviato_at);
+            const dati = g.ospiti.map(a => ({ a, tipo: tipi.get(a.id) ?? a.tipo, checkout: false }));
+            await invia(ses, giaComunicato ? 'stay/updatefrompms' : 'stay/addfrompms', xmlStay(stayId, codice, camera, dati));
+            await marcaInviatiOsservatorio(nuovi.map(a => a.id), false);
+            const ora = new Date().toISOString();
+            for (const a of nuovi) a.osservatorio_inviato_at = ora;
+          }
+          if (partiti.length) {
+            const dati = g.ospiti.map(a => ({ a, tipo: tipi.get(a.id) ?? a.tipo, checkout: partito(a) }));
+            await invia(ses, 'stay/updatefrompms', xmlStay(stayId, codice, camera, dati));
+            await marcaInviatiOsservatorio(partiti.map(a => a.id), true);
+            const ora = new Date().toISOString();
+            for (const a of partiti) a.osservatorio_checkout_at = ora;
+          }
+          esiti.push({ ...g.base, esito: 'inviato', dettaglio: [nuovi.length && `${nuovi.length} arrivi`, partiti.length && `${partiti.length} partenze`].filter(Boolean).join(', ') });
+        } catch (e) {
+          const errore = e instanceof Error ? e.message : String(e);
+          esiti.push({ ...g.base, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, g.p, errore, 'osservatorio') });
+        }
+      };
+
+      // Arrivi di giornate già chiuse: il portale non li accetta più. Avviso solo per quelli della giornata appena
+      // chiusa (altrimenti si ripeterebbe ogni sera); le partenze dei soggiorni già comunicati partono comunque.
+      for (const g of lista) {
+        if (g.arrivo >= aperto) continue;
+        if (g.ospiti.some(a => !a.osservatorio_inviato_at)) {
+          const errore = `arrivo del ${g.arrivo.split('-').reverse().join('/')} in una giornata già chiusa sul portale: inseriscilo a mano su Turist@t`;
+          const avviso = g.arrivo >= aggiungiGiorni(aperto, -1) ? await avvisaStruttura(s, OPERAZIONE, g.p, errore, 'osservatorio') : undefined;
+          esiti.push({ ...g.base, esito: 'saltato', dettaglio: errore, avviso });
+        }
+        if (g.ospiti.some(a => a.osservatorio_inviato_at)) await comunica(g, aggiungiGiorni(aperto, -1), false);
+      }
+
+      // Giorno per giorno: arrivi, partenze, chiusura
+      for (let giorno = aperto; giorno <= oggi; giorno = aggiungiGiorni(giorno, 1)) {
+        for (const g of lista) {
+          if (g.arrivo === giorno) await comunica(g, giorno, true);
+          else if (g.arrivo < giorno) await comunica(g, giorno, false);
+        }
+        if (giorno > ultimoDaChiudere) break;
+        try {
           await invia(ses, 'entity/enddayfrompms', xmlFineGiornata(codice, giorno));
           await salvaChiusura(codice, giorno);
-          chiusi.push(giorno);
+          esiti.push({ struttura: s.nome, ospite: codice, esito: 'inviato', dettaglio: `chiusura ${giorno.split('-').reverse().join('/')}` });
+        } catch (e) {
+          // Senza chiusura la giornata dopo non si apre: ci si ferma qui e si riprova al prossimo invio
+          const errore = `chiusura giornaliera ${codice} del ${giorno.split('-').reverse().join('/')}: ${e instanceof Error ? e.message : String(e)}`;
+          esiti.push({ struttura: s.nome, ospite: codice, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, null, errore, 'osservatorio') });
+          break;
         }
-        esiti.push({ struttura: s.nome, ospite: codice, esito: chiusi.length ? 'inviato' : 'saltato', dettaglio: chiusi.length ? `chiusura ${chiusi.join(', ')}` : 'giornata già chiusa' });
-      } catch (e) {
-        const errore = `chiusura giornaliera ${codice}: ${e instanceof Error ? e.message : String(e)}`;
-        esiti.push({ struttura: s.nome, ospite: codice, esito: 'errore', dettaglio: errore, avviso: await avvisaStruttura(s, OPERAZIONE, null, errore, 'osservatorio') });
       }
     }
   } finally {
-    await Promise.all([...sessioni.values()].map(logout));
+    await Promise.all(sessioni.map(logout));
   }
   return esiti;
 }
