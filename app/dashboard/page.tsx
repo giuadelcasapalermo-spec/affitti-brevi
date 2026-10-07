@@ -415,17 +415,17 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
-          <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
-          <div>
-            <div className="text-sm text-gray-500">Uscite del periodo</div>
-            <div className="text-lg font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-green-100 rounded-full p-2"><TrendingUp size={20} className="text-green-600" /></div>
           <div>
             <div className="text-sm text-gray-500">Entrate effettive</div>
             <div className="text-lg font-bold text-green-700">+€{entrateEffettive.toFixed(2)}</div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
+          <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
+          <div>
+            <div className="text-sm text-gray-500">Uscite del periodo</div>
+            <div className="text-lg font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</div>
           </div>
         </div>
         <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
