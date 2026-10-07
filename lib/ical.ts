@@ -331,7 +331,10 @@ export async function sincronizzaCalendario(
     // Un UID già presente in locale ma marcato 'cancellata' va quindi riattivato e ripulito
     // dei dati del vecchio ospite: prima ogni sync lo trovava "già presente" e lo saltava
     // per sempre, così la prenotazione non compariva mai né in app né sul foglio.
-    const giaPresente = esistentiIcal.find((p) => p.ical_uid === ev.uid);
+    // Un blocco diviso (a mano o dalla riconciliazione) ha più prenotazioni con lo stesso UID:
+    // basta che una sia viva perché il blocco sia già presente
+    const conUid = esistentiIcal.filter((p) => p.ical_uid === ev.uid);
+    const giaPresente = conUid.find((p) => p.stato !== 'cancellata') ?? conUid[0];
     if (giaPresente) {
       if (giaPresente.stato === 'cancellata') {
         const precedente = [
@@ -462,8 +465,8 @@ export async function sincronizzaCalendario(
 // le copre resta comunque a coprire tutto il periodo, sovrapponendosi a loro.
 // Qui, per ogni prenotazione iCal, calcoliamo quanto del suo periodo è già coperto da
 // prenotazioni reali sulla stessa camera: se è coperto per intero la cancelliamo (è un
-// doppione), se resta scoperta solo la parte iniziale o finale la restringiamo a quella —
-// senza mai eliminare periodi non ancora confermati da nessuna fonte.
+// doppione), se resta scoperta una sola parte lo restringiamo a quella, se ne restano più
+// d'una lo dividiamo — senza mai eliminare periodi non ancora confermati da nessuna fonte.
 export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<number> {
   const prenotazioni = await leggiPrenotazioni(struttura_id);
   const reali = prenotazioni.filter((p) => p.fonte !== 'ical' && p.stato !== 'cancellata');
@@ -471,6 +474,22 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
 
   let modificate = 0;
   const daEliminareDelTutto = new Set<string>();
+  const nuoveParti: Prenotazione[] = [];
+
+  // Date di arrivo degli ospiti già registrati sui blocchi (AAAA-MM-GG; in tabella anche GG/MM/AAAA)
+  const alloggiatiPerPrenotazione = new Map<string, string[]>();
+  if (ghosts.length > 0) {
+    const righe = await sql`
+      SELECT prenotazione_id, data_arrivo FROM alloggiati WHERE prenotazione_id = ANY(${ghosts.map((g) => g.id)})
+    `;
+    for (const r of righe) {
+      const v = String(r.data_arrivo ?? '').trim();
+      const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      const d = m ? `${m[3]}-${m[2]}-${m[1]}` : v.slice(0, 10);
+      const id = r.prenotazione_id as string;
+      alloggiatiPerPrenotazione.set(id, [...(alloggiatiPerPrenotazione.get(id) ?? []), d]);
+    }
+  }
 
   for (const ghost of ghosts) {
     const sovrapposte = reali
@@ -528,13 +547,28 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
         ghost.check_out = e;
         modificate++;
       }
+    } else {
+      // Più parti scoperte: tipico con Airbnb e Booking sincronizzati tra loro. Booking riceve le
+      // prenotazioni Airbnb dal nostro feed e le ripubblica come "CLOSED - Not available", unite ai
+      // soggiorni Booking adiacenti in un unico blocco lungo (es. Booking 3→5, Airbnb 5→9, Booking
+      // 9→12 diventano un blocco 3→12). Le notti Airbnb sono già coperte, quindi ogni parte scoperta
+      // è un soggiorno Booking a sé: il blocco si divide, con lo stesso UID, in una prenotazione per parte.
+      // Il blocco originale (id e collegamento con gli alloggiati) resta sulla parte che contiene
+      // l'arrivo di un ospite già registrato, altrimenti sulla prima.
+      const arrivi = alloggiatiPerPrenotazione.get(ghost.id) ?? [];
+      const iTieni = Math.max(0, scoperti.findIndex(([s, e]) => arrivi.some((d) => d >= s && d < e)));
+      scoperti.forEach(([s, e], i) => {
+        if (i === iTieni) return;
+        nuoveParti.push({ ...ghost, id: randomUUID(), check_in: s, check_out: e, created_at: new Date().toISOString() });
+      });
+      [ghost.check_in, ghost.check_out] = scoperti[iTieni];
+      modificate++;
     }
-    // più di una parte scoperta: caso ambiguo, non tocchiamo il ghost.
   }
 
   if (modificate === 0 && daEliminareDelTutto.size === 0) return 0;
 
-  let daScrivere = prenotazioni;
+  let daScrivere = [...prenotazioni, ...nuoveParti];
   if (daEliminareDelTutto.size > 0) {
     const idsArray = Array.from(daEliminareDelTutto);
     const collegati = await sql`
@@ -542,7 +576,7 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     `;
     const idsCollegati = new Set(collegati.map((r) => r.prenotazione_id as string));
     for (const id of idsCollegati) daEliminareDelTutto.delete(id); // mantiene il link anagrafica
-    daScrivere = prenotazioni.filter((p) => !daEliminareDelTutto.has(p.id));
+    daScrivere = daScrivere.filter((p) => !daEliminareDelTutto.has(p.id));
   }
 
   await scriviPrenotazioni(daScrivere, struttura_id);
