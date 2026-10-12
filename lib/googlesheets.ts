@@ -413,7 +413,12 @@ async function arricchisciPrenotazioniDaSheets(
 ): Promise<{ modificate: number; saltate: string[] }> {
   const prenotazioni = await leggiPrenotazioni(struttura_id);
 
-  const attive = prenotazioni.filter(p => p.stato !== 'cancellata');
+  // A parità di camera e date vince la prenotazione reale (foglio/manuale) sul blocco iCal: i
+  // blocchi vengono prima, così nelle mappe sotto le reali li sovrascrivono. Altrimenti il rigo
+  // del foglio riempiva il blocco BK (nome, importo, telefono), che diventava un doppione identico.
+  const attive = prenotazioni
+    .filter(p => p.stato !== 'cancellata')
+    .sort((a, b) => Number(a.fonte !== 'ical' && a.fonte !== 'airbnb') - Number(b.fonte !== 'ical' && b.fonte !== 'airbnb'));
   // Indice esatto: camera|check_in|check_out → prenotazione
   const byKey = new Map<string, Prenotazione>(
     attive.map(p => [`${p.camera_id}|${p.check_in}|${p.check_out}`, p])

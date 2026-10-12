@@ -456,6 +456,55 @@ export async function sincronizzaCalendario(
   };
 }
 
+// ── Collegamenti di una prenotazione: anagrafica alloggiati, link di check-in, ricevuta imposta ──
+/** Id restituiti dalla query; vuoto se la tabella non esiste ancora (istanza nuova) */
+async function idsCollegati(query: Promise<Record<string, unknown>[]>): Promise<Set<string>> {
+  try {
+    return new Set((await query).map((r) => r.id as string));
+  } catch {
+    return new Set();
+  }
+}
+
+async function collegamenti(ids: string[]) {
+  return {
+    doc: await idsCollegati(sql`SELECT DISTINCT prenotazione_id AS id FROM alloggiati WHERE prenotazione_id = ANY(${ids})`),
+    link: await idsCollegati(sql`SELECT DISTINCT prenotazione_id AS id FROM link_alloggiati WHERE prenotazione_id = ANY(${ids})`),
+    ricevuta: await idsCollegati(sql`SELECT DISTINCT riferimento AS id FROM ricevute WHERE serie = 'tassa' AND riferimento = ANY(${ids})`),
+  };
+}
+
+async function haCollegamenti(id: string): Promise<boolean> {
+  const c = await collegamenti([id]);
+  return c.doc.has(id) || c.link.has(id) || c.ricevuta.has(id);
+}
+
+/** Sposta anagrafica, link di check-in, ricevuta dell'imposta e numero ospiti da un doppione
+ *  alla prenotazione reale. false (e nessuna modifica) se entrambe hanno già un'anagrafica o
+ *  una ricevuta: non si uniscono, va risolto a mano. */
+export async function trasferisciCollegamenti(daId: string, aId: string): Promise<boolean> {
+  const c = await collegamenti([daId, aId]);
+  if ((c.doc.has(daId) && c.doc.has(aId)) || (c.ricevuta.has(daId) && c.ricevuta.has(aId))) return false;
+  if (c.doc.has(daId)) await sql`UPDATE alloggiati SET prenotazione_id = ${aId} WHERE prenotazione_id = ${daId}`;
+  if (c.link.has(daId)) await sql`UPDATE link_alloggiati SET prenotazione_id = ${aId} WHERE prenotazione_id = ${daId}`;
+  if (c.ricevuta.has(daId)) await sql`UPDATE ricevute SET riferimento = ${aId} WHERE serie = 'tassa' AND riferimento = ${daId}`;
+  await sql`
+    UPDATE prenotazioni SET num_ospiti = (SELECT num_ospiti FROM prenotazioni WHERE id = ${daId})
+    WHERE id = ${aId} AND num_ospiti IS NULL
+  `;
+  return true;
+}
+
+/** Prenotazione reale (non da calendario) della stessa camera con lo stesso check-in: il gemello di un blocco BK */
+export async function gemelloReale(p: { id: string; struttura_id?: string | null; camera_id: number; check_in: string }): Promise<string | undefined> {
+  const rows = await sql`
+    SELECT id FROM prenotazioni
+    WHERE id <> ${p.id} AND camera_id = ${p.camera_id} AND check_in = ${p.check_in} AND stato <> 'cancellata'
+      AND fonte NOT IN ('ical', 'airbnb') AND struttura_id IS NOT DISTINCT FROM ${p.struttura_id ?? null}
+  `;
+  return rows.length === 1 ? (rows[0].id as string) : undefined;
+}
+
 // ── Riconcilia blocchi iCal con le prenotazioni reali (manuali/da sheet) ──────
 // Il feed iCal gratuito di Booking.com esporta finestre di indisponibilità contigue,
 // non singole prenotazioni: se due soggiorni sono consecutivi senza una notte libera
@@ -474,6 +523,8 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
 
   let modificate = 0;
   const daEliminareDelTutto = new Set<string>();
+  /** Doppione → prenotazione reale che lo copre e a cui passano documenti, link e ricevuta */
+  const destinazioni = new Map<string, Prenotazione>();
   const nuoveParti: Prenotazione[] = [];
 
   // Date di arrivo degli ospiti già registrati sui blocchi (AAAA-MM-GG; in tabella anche GG/MM/AAAA)
@@ -535,6 +586,8 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
       // visibile come "duplicato" nelle liste che mostrano anche le prenotazioni cancellate.
       ghost.stato = 'cancellata';
       daEliminareDelTutto.add(ghost.id);
+      const dest = sovrapposte.find((p) => p.check_in === ghost.check_in) ?? (sovrapposte.length === 1 ? sovrapposte[0] : undefined);
+      if (dest) destinazioni.set(ghost.id, dest);
       modificate++;
     } else if (scoperti.length === 1) {
       const [s, e] = scoperti[0];
@@ -570,13 +623,27 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
 
   let daScrivere = [...prenotazioni, ...nuoveParti];
   if (daEliminareDelTutto.size > 0) {
-    const idsArray = Array.from(daEliminareDelTutto);
-    const collegati = await sql`
-      SELECT DISTINCT prenotazione_id FROM alloggiati WHERE prenotazione_id = ANY(${idsArray})
-    `;
-    const idsCollegati = new Set(collegati.map((r) => r.prenotazione_id as string));
-    for (const id of idsCollegati) daEliminareDelTutto.delete(id); // mantiene il link anagrafica
+    // Se l'ospite ha già fatto il check-in online sul blocco iCal, documenti, link di check-in e
+    // ricevuta dell'imposta sono agganciati al doppione. Prima restava 'cancellata' per non
+    // perderli, ma alla sync dopo Booking ripubblicava lo stesso UID e il blocco veniva
+    // "riattivato" e riempito di nuovo dal foglio: un doppione che tornava a ogni allineamento.
+    // Ora tutto passa alla prenotazione reale che lo copre e il doppione si elimina.
+    for (const id of [...daEliminareDelTutto]) {
+      const dest = destinazioni.get(id);
+      const eliminabile = dest ? await trasferisciCollegamenti(id, dest.id) : !(await haCollegamenti(id));
+      if (!eliminabile) daEliminareDelTutto.delete(id); // resta 'cancellata', con i suoi collegamenti
+    }
     daScrivere = daScrivere.filter((p) => !daEliminareDelTutto.has(p.id));
+
+    // L'UID del doppione si ignora (con le date del feed, fissate alla prossima sync): senza,
+    // ogni allineamento lo reimportava, il foglio lo riempiva e solo la riconciliazione lo
+    // ritoglieva. Se Booking allarga il blocco a un soggiorno nuovo, l'UID torna da solo.
+    const vivi = new Set(daScrivere.filter((p) => p.stato !== 'cancellata').map((p) => p.ical_uid));
+    for (const p of ghosts) {
+      if (p.stato === 'cancellata' && p.ical_uid && !vivi.has(p.ical_uid)) {
+        await ignoraUidIcal(p.ical_uid, p.camera_id);
+      }
+    }
   }
 
   await scriviPrenotazioni(daScrivere, struttura_id);

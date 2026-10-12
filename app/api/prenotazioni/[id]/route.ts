@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/postgres';
 import { migraStruttura } from '@/lib/strutture';
-import { ignoraUidIcal, leggiImpostazioni } from '@/lib/ical';
+import { ignoraUidIcal, leggiImpostazioni, gemelloReale, trasferisciCollegamenti } from '@/lib/ical';
 import { aggiornaRigaSheetPerPrenotazione } from '@/lib/googlesheets';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -60,6 +60,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const [pren] = await sql`SELECT id, struttura_id, camera_id, check_in, fonte FROM prenotazioni WHERE id = ${id}`;
+  if (!pren) return NextResponse.json({ error: 'Non trovata' }, { status: 404 });
+  // Doppione BK di una prenotazione reale: check-in online, documenti e ricevuta dell'imposta
+  // fatti sul blocco passano alla prenotazione reale invece di restare orfani
+  if (pren.fonte === 'ical' || pren.fonte === 'airbnb') {
+    const gemello = await gemelloReale({ id, struttura_id: pren.struttura_id as string | null, camera_id: pren.camera_id as number, check_in: pren.check_in as string });
+    if (gemello) await trasferisciCollegamenti(id, gemello);
+  }
   const rows = await sql`DELETE FROM prenotazioni WHERE id = ${id} RETURNING id, camera_id, fonte, ical_uid`;
   if (rows.length === 0) return NextResponse.json({ error: 'Non trovata' }, { status: 404 });
   const deleted = rows[0];
