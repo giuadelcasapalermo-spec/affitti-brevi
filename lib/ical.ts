@@ -16,6 +16,7 @@ export async function leggiImpostazioni(): Promise<Impostazioni> {
     else if (row.tipo === 'sync' && row.chiave === 'ultimo_sync') imp.ultimo_sync = row.valore as string;
     else if (row.tipo === 'config' && row.chiave === 'google_sheets_abilitato') imp.google_sheets_abilitato = row.valore === 'true';
     else if (row.tipo === 'config' && row.chiave === 'google_sheet_id') imp.google_sheet_id = row.valore as string;
+    else if (row.tipo === 'sheet_anno' && !isNaN(id) && String(row.valore ?? '').trim()) (imp.google_sheets_anni ??= {})[id] = String(row.valore).trim();
     else if (row.tipo === 'config' && row.chiave === 'nome_app') imp.nome_app = row.valore as string;
     else if (row.tipo === 'config' && row.chiave === 'logo_url') imp.logo_url = row.valore as string;
     else if (row.tipo === 'config' && row.chiave === 'num_camere') imp.num_camere = Number(row.valore);
@@ -64,6 +65,17 @@ export async function scriviImpostazioni(imp: Impostazioni): Promise<void> {
       INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('config', 'google_sheet_id', ${imp.google_sheet_id})
       ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
     `;
+  }
+  if (imp.google_sheets_anni !== undefined) {
+    // Elenco completo: gli anni tolti dall'elenco vengono eliminati
+    const voci = Object.entries(imp.google_sheets_anni).filter(([, id]) => id?.trim());
+    await sql`DELETE FROM impostazioni WHERE tipo = 'sheet_anno' AND chiave <> ALL(${voci.map(([anno]) => anno)})`;
+    for (const [anno, id] of voci) {
+      await sql`
+        INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('sheet_anno', ${anno}, ${id.trim()})
+        ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+      `;
+    }
   }
   if (imp.nome_app !== undefined) {
     await sql`

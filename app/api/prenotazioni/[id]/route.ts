@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/postgres';
 import { migraStruttura } from '@/lib/strutture';
-import { ignoraUidIcal, leggiImpostazioni, gemelloReale, trasferisciCollegamenti } from '@/lib/ical';
-import { aggiornaRigaSheetPerPrenotazione } from '@/lib/googlesheets';
+import { ignoraUidIcal, gemelloReale, trasferisciCollegamenti } from '@/lib/ical';
+import { aggiornaRigaSheetPerPrenotazione, sheetsConfigurato } from '@/lib/googlesheets';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,8 +40,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   // l'utente modifica nome, telefono, importo o tassa dall'app. Se non c'è nessuna riga
   // corrispondente, aggiornaRigaSheetPerPrenotazione non fa nulla (nessun errore).
   try {
-    const imp = await leggiImpostazioni();
-    if (imp.google_sheet_id?.trim()) {
+    if (await sheetsConfigurato()) {
       await aggiornaRigaSheetPerPrenotazione({
         check_in: pren.check_in as string,
         camera_id: pren.camera_id as number,

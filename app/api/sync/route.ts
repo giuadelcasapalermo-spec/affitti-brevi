@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { sincronizzaTutti, leggiImpostazioni, riconciliaBlocchiIcal } from '@/lib/ical';
-import { arricchisciPrenotazioniDaSheetsAll, inserisciRicavoBookingNelFoglio } from '@/lib/googlesheets';
+import { sincronizzaTutti, riconciliaBlocchiIcal } from '@/lib/ical';
+import { arricchisciPrenotazioniDaSheetsAll, inserisciRicavoBookingNelFoglio, sheetsConfigurato as fogliConfigurati } from '@/lib/googlesheets';
 import { leggiPrenotazioni } from '@/lib/db';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
@@ -15,8 +15,7 @@ export async function POST() {
   const risultatiIcal = await sincronizzaTutti(struttura.ical_urls, struttura.id, struttura.ical_urls_airbnb);
 
   // 2. Google Sheets sync
-  const imp = await leggiImpostazioni();
-  const sheetsConfigurato = !!imp.google_sheet_id?.trim();
+  const sheetsConfigurato = await fogliConfigurati();
   let prenotazioniArricchite = 0;
   let righeSkippate: string[] = [];
   let sheetsErrore: string | null = null;

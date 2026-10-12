@@ -8,13 +8,91 @@ import { getStrutturaAttiva } from './strutture';
 import { leggiImpostazioni, riconciliaBlocchiIcal } from './ical';
 import { randomUUID } from 'crypto';
 
-// ID del foglio: da Impostazioni, altrimenti da GOOGLE_SHEET_ID (per istanza). Nessun default nel codice.
+// ── Fogli ──────────────────────────────────────────────────────────────────
+// Un foglio per anno (Impostazioni → Google Sheets), più il foglio principale (ID in Impostazioni
+// o GOOGLE_SHEET_ID, per istanza): quest'ultimo tiene i tab "Prima Nota App" e "Impostazioni" e i
+// tab mensili degli anni che non hanno un foglio proprio. Nessun default nel codice.
 
-async function getSpreadsheetId(): Promise<string> {
+const NON_CONFIGURATO = "Google Sheet non configurato: impostare l'ID in Impostazioni o GOOGLE_SHEET_ID";
+
+async function fogliConfigurati(): Promise<{ principale?: string; anni: Record<number, string> }> {
   const imp = await leggiImpostazioni();
-  const id = imp.google_sheet_id?.trim() || process.env.GOOGLE_SHEET_ID?.trim();
-  if (!id) throw new Error("Google Sheet non configurato: impostare l'ID in Impostazioni o GOOGLE_SHEET_ID");
+  return {
+    principale: imp.google_sheet_id?.trim() || process.env.GOOGLE_SHEET_ID?.trim() || undefined,
+    anni: imp.google_sheets_anni ?? {},
+  };
+}
+
+/** True se in Impostazioni c'è almeno un foglio (principale o annuale): la sola variabile
+ *  GOOGLE_SHEET_ID non attiva la sincronizzazione automatica, come prima dei fogli per anno */
+export async function sheetsConfigurato(): Promise<boolean> {
+  const imp = await leggiImpostazioni();
+  return !!imp.google_sheet_id?.trim() || Object.keys(imp.google_sheets_anni ?? {}).length > 0;
+}
+
+/** Foglio principale: quello configurato, altrimenti il foglio dell'anno in corso o dell'ultimo anno */
+async function getSpreadsheetId(): Promise<string> {
+  const { principale, anni } = await fogliConfigurati();
+  const anno = new Date().getFullYear();
+  const ultimo = Math.max(...Object.keys(anni).map(Number));
+  const id = principale ?? anni[anno] ?? anni[ultimo];
+  if (!id) throw new Error(NON_CONFIGURATO);
   return id;
+}
+
+/** Un tab mensile ("Aprile", "Aprile2025", "Aprile 2025") con il foglio che lo contiene */
+interface TabMese {
+  sid: string;
+  tab: string;
+  sheetId?: number;
+  anno: number;
+  /** 1-12 */
+  mese: number;
+}
+
+// Nel foglio principale un tab senza anno è dell'anno 2026 (convenzione del foglio unico originale,
+// dove gli anni precedenti hanno il suffisso: "Aprile2025"); in un foglio annuale è dell'anno del foglio.
+const ANNO_TAB_SENZA_SUFFISSO = 2026;
+
+function meseAnnoDaTab(tab: string, annoFoglio: number | null): { anno: number; mese: number } | null {
+  const m = tab.trim().match(/^(\p{L}+)\s*(\d{4})?$/u);
+  if (!m) return null;
+  const i = MESI_IT.findIndex(n => n.toLowerCase() === m[1].toLowerCase());
+  if (i === -1) return null;
+  return { anno: m[2] ? Number(m[2]) : (annoFoglio ?? ANNO_TAB_SENZA_SUFFISSO), mese: i + 1 };
+}
+
+/** Tutti i tab mensili dei fogli configurati. Ogni anno si legge da un solo foglio — il suo foglio
+ *  annuale se c'è, altrimenti il principale — così i tab rimasti nel foglio unico dopo la divisione
+ *  per anno non vengono letti due volte (e l'import non cancella le uscite di un mese per errore). */
+async function tabMensili(sheets: ReturnType<typeof google.sheets>): Promise<TabMese[]> {
+  const { principale, anni } = await fogliConfigurati();
+  const fogli: { sid: string; anno: number | null }[] = Object.entries(anni).map(([a, sid]) => ({ sid, anno: Number(a) }));
+  if (principale && !Object.values(anni).includes(principale)) fogli.push({ sid: principale, anno: null });
+  if (fogli.length === 0) throw new Error(NON_CONFIGURATO);
+
+  const tabs: TabMese[] = [];
+  for (const f of fogli) {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: f.sid, fields: 'sheets.properties(title,sheetId)' });
+    for (const s of meta.data.sheets ?? []) {
+      const tab = s.properties?.title ?? '';
+      const ma = meseAnnoDaTab(tab, f.anno);
+      if (!ma || (anni[ma.anno] ?? principale) !== f.sid) continue;
+      tabs.push({ sid: f.sid, tab, sheetId: s.properties?.sheetId ?? undefined, ...ma });
+    }
+  }
+  return tabs;
+}
+
+/** Tab mensile di una data ISO (es. "2026-04-13" → tab di aprile 2026), se esiste */
+function tabPerData(tabs: TabMese[], iso: string): TabMese | undefined {
+  const [anno, mese] = iso.split('-').map(Number);
+  return tabs.find(t => t.anno === anno && t.mese === mese);
+}
+
+function nomeMese(iso: string): string {
+  const [anno, mese] = iso.split('-');
+  return `${MESI_IT[Number(mese) - 1]} ${anno}`;
 }
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME ?? 'Prima Nota App';
 
@@ -48,16 +126,6 @@ const CATEGORIE_AMMESSE_TABS = new Set<string>(
   [...TIPO_AMMESSI_TABS].map(t => TIPO_TO_CAT[t] ?? 'Altro')
 );
 
-/** Converte nome tab → prefisso mese ISO (es. "Aprile" → "2026-04") */
-function monthPrefixForTab(tab: string): string | null {
-  for (let i = 0; i < MESI_IT.length; i++) {
-    const mm = String(i + 1).padStart(2, '0');
-    if (tab === MESI_IT[i])           return `2026-${mm}`;
-    if (tab === `${MESI_IT[i]}2025`)  return `2025-${mm}`;
-    if (tab === `${MESI_IT[i]}2024`)  return `2024-${mm}`;
-  }
-  return null;
-}
 const STANZA_ID: Record<string, number> = {
   'rossa': 1, 'camera 1': 1, '1': 1,
   'gialla': 2, 'camera 2': 2, '2': 2,
@@ -90,13 +158,6 @@ function parseSheetDate(val: string | number | undefined): string | null {
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
   return null;
-}
-
-/** Nome del tab mensile per una data ISO (es. "2026-04-13" → "Aprile") */
-function tabPerData(iso: string): string {
-  const [year, month] = iso.split('-');
-  const nome = MESI_IT[parseInt(month) - 1];
-  return year === '2026' ? nome : `${nome}${year}`;
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────
@@ -166,21 +227,20 @@ export async function exportToSheets(): Promise<void> {
 async function exportUsciteToTabs(
   sheets: ReturnType<typeof google.sheets>,
   uscite: Uscita[],
-  tabEsistenti: Set<string>,
-  sid: string,
+  tabs: TabMese[],
 ): Promise<number> {
-  const perTab = new Map<string, Uscita[]>();
+  const perTab = new Map<TabMese, Uscita[]>();
   for (const u of uscite) {
     if (!u.data) continue;
-    const tab = tabPerData(u.data);
-    if (!tabEsistenti.has(tab)) continue;
-    if (!perTab.has(tab)) perTab.set(tab, []);
-    perTab.get(tab)!.push(u);
+    const t = tabPerData(tabs, u.data);
+    if (!t) continue;
+    if (!perTab.has(t)) perTab.set(t, []);
+    perTab.get(t)!.push(u);
   }
 
   let processate = 0;
 
-  for (const [tab, usciteDelTab] of perTab) {
+  for (const [{ sid, tab }, usciteDelTab] of perTab) {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sid,
       range: `'${tab}'!A:P`,
@@ -259,8 +319,7 @@ async function exportUsciteToTabs(
 async function importUsciteOriginale(
   sheets: ReturnType<typeof google.sheets>,
   uscite: Uscita[],
-  tabEsistenti: Set<string>,
-  sid: string,
+  tabs: TabMese[],
 ): Promise<{ importate: number; aggiornate: number; rimosse: number }> {
   let importate = 0;
   let aggiornate = 0;
@@ -276,9 +335,7 @@ async function importUsciteOriginale(
   };
   let keyMap = buildKeyMap();
 
-  for (const tab of tabEsistenti) {
-    if (tab === SHEET_NAME) continue;
-
+  for (const { sid, tab, anno, mese } of tabs) {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sid,
       range: `'${tab}'!A:P`,
@@ -329,8 +386,8 @@ async function importUsciteOriginale(
 
     // Rimuovi dal DB le uscite del mese corrispondente a questo tab
     // che NON sono state trovate nello sheet (sync completo per mese)
-    const monthPrefix = monthPrefixForTab(tab);
-    if (monthPrefix) {
+    const monthPrefix = `${anno}-${String(mese).padStart(2, '0')}`;
+    {
       const idsRimuovere = new Set<string>();
       const vistiKey = new Set<string>(); // dedup: tieni solo il primo per chiave
       for (const u of uscite) {
@@ -356,17 +413,15 @@ async function importUsciteOriginale(
 
 // ── Export completo: Prima Nota App + tab mensili ─────────────────────────
 export async function syncToSheets(): Promise<void> {
-  const sid     = await getSpreadsheetId();
   const sheets  = await getSheetsClient();
-  const meta    = await sheets.spreadsheets.get({ spreadsheetId: sid });
-  const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
+  const tabs    = await tabMensili(sheets);
   const uscite  = await leggiUscite();
 
   // 1. Scrivi "Prima Nota App"
   await exportToSheets();
 
-  // 2. Aggiungi uscite dell'app nei tab mensili
-  await exportUsciteToTabs(sheets, uscite, tabEsistenti, sid);
+  // 2. Aggiungi uscite dell'app nei tab mensili (ciascuna nel foglio del suo anno)
+  await exportUsciteToTabs(sheets, uscite, tabs);
 }
 
 // ── Dedup prenotazioni iCal: rimuove Booking-duplicate di prenotazioni manuali ──
@@ -407,8 +462,7 @@ export async function dedupPrenotazioniIcal(): Promise<number> {
 //   - Se non trovata → inserisce nuovo record
 async function arricchisciPrenotazioniDaSheets(
   sheets: ReturnType<typeof google.sheets>,
-  tabEsistenti: Set<string>,
-  sid: string,
+  tabs: TabMese[],
   struttura_id?: string,
 ): Promise<{ modificate: number; saltate: string[] }> {
   const prenotazioni = await leggiPrenotazioni(struttura_id);
@@ -445,9 +499,7 @@ async function arricchisciPrenotazioniDaSheets(
   const saltate: string[] = [];
   const now = new Date().toISOString();
 
-  for (const tab of tabEsistenti) {
-    if (tab === SHEET_NAME) continue;
-
+  for (const { sid, tab } of tabs) {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sid,
       range: `'${tab}'!A:P`,
@@ -564,11 +616,8 @@ async function arricchisciPrenotazioniDaSheets(
 
 // ── Arricchisci prenotazioni iCal da sheet (wrapper pubblico) ────────────
 export async function arricchisciPrenotazioniDaSheetsAll(struttura_id?: string): Promise<{ modificate: number; saltate: string[] }> {
-  const sid    = await getSpreadsheetId();
   const sheets = await getSheetsClient();
-  const meta   = await sheets.spreadsheets.get({ spreadsheetId: sid });
-  const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
-  return arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid, struttura_id);
+  return arricchisciPrenotazioniDaSheets(sheets, await tabMensili(sheets), struttura_id);
 }
 
 // ── Nuova prenotazione Booking (da email) → riga nel tab mensile ─────────
@@ -591,15 +640,12 @@ export async function inserisciRicavoBookingNelFoglio(
   dati: NuovoRicavoBooking,
   opts: { dryRun?: boolean } = {},
 ): Promise<{ inserita: boolean; tab: string; riga?: number; motivo?: string }> {
-  const tab = tabPerData(dati.check_in);
-  const sid = await getSpreadsheetId();
   const sheets = await getSheetsClient();
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
-  const tabEsistenti = new Set(meta.data.sheets?.map((s) => s.properties?.title ?? '') ?? []);
-  if (!tabEsistenti.has(tab)) {
-    return { inserita: false, tab, motivo: `tab "${tab}" non esiste nel foglio` };
+  const t = tabPerData(await tabMensili(sheets), dati.check_in);
+  if (!t) {
+    return { inserita: false, tab: nomeMese(dati.check_in), motivo: `nessun tab per ${nomeMese(dati.check_in)} nei fogli configurati` };
   }
+  const { sid, tab, sheetId } = t;
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sid,
@@ -631,6 +677,8 @@ export async function inserisciRicavoBookingNelFoglio(
   // tab, dove ci sono righe di totali/riepilogo senza data in colonna J).
   let insertBeforeRow: number | null = null; // 1-based
   let lastDatedRow: number | null = null; // 1-based, ultima riga di ricavo con data valida
+  // Mese ancora vuoto: riga modello "Ricavo Booking" senza date, prima della sezione debiti/totali
+  let primoRicavoVuoto: number | null = null; // 1-based
   let duplicato = false;
   for (let i = hIdx + 1; i < rows.length; i++) {
     const row = rows[i];
@@ -638,7 +686,10 @@ export async function inserisciRicavoBookingNelFoglio(
     const isRicavo = tipo === 'affitto' || tipo.startsWith('ricavo') || tipo.includes('booking') || tipo.includes('airbnb') || tipo.includes('privato');
     if (!isRicavo) continue;
     const data = parseSheetDate(row[C.dataI] as string | number | undefined);
-    if (!data) continue;
+    if (!data) {
+      if (primoRicavoVuoto === null) primoRicavoVuoto = i + 1;
+      continue;
+    }
     lastDatedRow = i + 1;
     const stanzaRaw = String(row[C.stanza] ?? '').trim().toLowerCase();
     if (stanzaRaw === stanzaNome.toLowerCase() && data === dati.check_in) {
@@ -652,10 +703,11 @@ export async function inserisciRicavoBookingNelFoglio(
   if (duplicato) {
     return { inserita: false, tab, motivo: 'esiste già una riga con stessa camera e stesso check-in' };
   }
-  const rigaInserimento = insertBeforeRow ?? (lastDatedRow !== null ? lastDatedRow + 1 : rows.length + 1);
+  // Senza righe datate si inserisce sopra la riga modello (che ha la formattazione giusta e sta
+  // dentro i totali del mese), non in fondo al tab sotto "Debiti pregressi"
+  const rigaInserimento = insertBeforeRow ?? (lastDatedRow !== null ? lastDatedRow + 1 : primoRicavoVuoto ?? rows.length + 1);
   const insertIdx0 = rigaInserimento - 1; // 0-based, indice della riga PRIMA della quale inserire
 
-  const sheetId = meta.data.sheets?.find((s) => s.properties?.title === tab)?.properties?.sheetId;
   if (sheetId === undefined) return { inserita: false, tab, motivo: 'sheetId non trovato' };
 
   // Quando la nuova riga è cronologicamente l'ultima del blocco datato (insertBeforeRow ===
@@ -701,7 +753,8 @@ export async function inserisciRicavoBookingNelFoglio(
       requests: [{
         insertDimension: {
           range: { sheetId, dimension: 'ROWS', startIndex: insertIdx0, endIndex: insertIdx0 + 1 },
-          inheritFromBefore: insertIdx0 > hIdx + 1,
+          // Sopra la riga modello si eredita il suo formato (dalla riga dopo)
+          inheritFromBefore: lastDatedRow !== null && insertIdx0 > hIdx + 1,
         },
       }],
     },
@@ -762,13 +815,10 @@ export async function aggiornaRigaSheetPerPrenotazione(dati: {
   importo_lordo: number;
   tassa_soggiorno?: number;
 }): Promise<{ aggiornata: boolean; tab: string; riga?: number; motivo?: string }> {
-  const tab = tabPerData(dati.check_in);
-  const sid = await getSpreadsheetId();
   const sheets = await getSheetsClient();
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
-  const tabEsistenti = new Set(meta.data.sheets?.map((s) => s.properties?.title ?? '') ?? []);
-  if (!tabEsistenti.has(tab)) return { aggiornata: false, tab, motivo: `tab "${tab}" non esiste` };
+  const t = tabPerData(await tabMensili(sheets), dati.check_in);
+  if (!t) return { aggiornata: false, tab: nomeMese(dati.check_in), motivo: `nessun tab per ${nomeMese(dati.check_in)} nei fogli configurati` };
+  const { sid, tab } = t;
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sid,
@@ -824,10 +874,8 @@ export async function aggiornaRigaSheetPerPrenotazione(dati: {
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
 export async function importFromSheets(struttura_id?: string): Promise<{ importate: number; ignorate: number; rimosse: number; doppioniRimossi: number; prenotazioniArricchite: number }> {
-  const sid     = await getSpreadsheetId();
   const sheets  = await getSheetsClient();
-  const meta    = await sheets.spreadsheets.get({ spreadsheetId: sid });
-  const tabEsistenti = new Set(meta.data.sheets?.map(s => s.properties?.title ?? '') ?? []);
+  const tabs    = await tabMensili(sheets);
 
   const uscite = await leggiUscite();
   const now = new Date().toISOString();
@@ -866,6 +914,7 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
   }
 
   // 1. Legge il foglio "Prima Nota App" — importa SOLO uscite (le entrate vengono gestite dall'app)
+  const sid = await getSpreadsheetId();
   const sheetName = await ensureSheet(sheets, sid);
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: `'${sheetName}'!A:H` });
   for (const row of (res.data.values ?? []).slice(1).filter(r => r[0] && r[1] && r[2] && r[3])) {
@@ -888,7 +937,7 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
   }
 
   // 2. Legge tab mensili — importa uscite con data inizio
-  const { importate: nuoveImportate, aggiornate: nuoveAggiornate, rimosse: rimosse2 } = await importUsciteOriginale(sheets, uscite, tabEsistenti, sid);
+  const { importate: nuoveImportate, aggiornate: nuoveAggiornate, rimosse: rimosse2 } = await importUsciteOriginale(sheets, uscite, tabs);
   importate += nuoveImportate + nuoveAggiornate;
 
   await scriviUscite(uscite);
@@ -897,7 +946,7 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
   const doppioniRimossi = await dedupPrenotazioniIcal();
 
   // 4. Arricchisci prenotazioni iCal con nome ospite e importo dai tab mensili
-  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabEsistenti, sid, struttura_id);
+  const { modificate: prenotazioniArricchite } = await arricchisciPrenotazioniDaSheets(sheets, tabs, struttura_id);
 
   // 5. Restringe/cancella i blocchi iCal ormai coperti dalle prenotazioni reali appena arricchite
   await riconciliaBlocchiIcal(struttura_id);

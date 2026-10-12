@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import RubricaContatti from '@/components/RubricaContatti';
+import FogliAnnuali from '@/components/FogliAnnuali';
 import { SEGNAPOSTO_ISTRUZIONI, MODELLO_ISTRUZIONI_BASE, componiIstruzioni } from '@/lib/istruzioni';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
 
@@ -1694,6 +1695,8 @@ export default function ImpostazioniPage() {
                               className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Apri foglio →</a>
                           )}
                         </div>
+                        <FogliAnnuali key={JSON.stringify(imp.google_sheets_anni ?? {})} anni={imp.google_sheets_anni ?? {}}
+                          onSalvato={anni => setImp(prev => ({ ...prev, google_sheets_anni: anni }))} />
                         <button onClick={() => syncSheets('export')} disabled={syncingSheets}
                           className="flex items-center gap-1.5 bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-50"
                         >

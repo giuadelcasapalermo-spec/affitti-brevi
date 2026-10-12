@@ -12,6 +12,7 @@ export async function PUT(req: NextRequest) {
   if (body.nomi_camere !== undefined) imp.nomi_camere = body.nomi_camere;
   if (body.google_sheets_abilitato !== undefined) imp.google_sheets_abilitato = body.google_sheets_abilitato;
   if (body.google_sheet_id !== undefined) imp.google_sheet_id = body.google_sheet_id;
+  if (body.google_sheets_anni !== undefined) imp.google_sheets_anni = body.google_sheets_anni;
   if (body.nome_app !== undefined) imp.nome_app = body.nome_app;
   if (body.logo_url !== undefined) imp.logo_url = body.logo_url;
   if (body.num_camere !== undefined) imp.num_camere = Number(body.num_camere);

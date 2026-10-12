@@ -241,6 +241,8 @@ export interface Impostazioni {
   ultimo_sync?: string;
   google_sheets_abilitato?: boolean;
   google_sheet_id?: string;
+  /** Un foglio Google per anno (anno → ID): i tab mensili di quell'anno si leggono e scrivono lì */
+  google_sheets_anni?: Record<number, string>;
   nome_app?: string;
   logo_url?: string;
   checkin_email_days?: number;
