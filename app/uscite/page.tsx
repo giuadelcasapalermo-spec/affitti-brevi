@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Uscita, CATEGORIE_USCITA, CategoriaUscita,
   Entrata, CATEGORIE_ENTRATA, CategoriaEntrata,
-  ContoCorrente,
+  ContoCorrente, Ricevuta,
 } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
-import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search, Receipt } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
+import RicevutaPrivato from '@/components/RicevutaPrivato';
 import { useEtichette } from '@/hooks/useEtichette';
 
 /* ── colori ───────────────────────────────────────────── */
@@ -219,6 +220,8 @@ export default function PrimaNotaPage() {
   const [formAperto, setFormAperto] = useState<'entrata' | 'uscita' | null>(null);
   const [editingE, setEditingE] = useState<Entrata | null>(null);
   const [editingU, setEditingU] = useState<Uscita | null>(null);
+  const [ricevute, setRicevute] = useState<Map<string, Ricevuta>>(new Map());
+  const [ricevutaDi, setRicevutaDi] = useState<Entrata | null>(null);
   const [filtroDal, setFiltroDal] = useState(DEFAULT_DAL_PN);
   const [filtroAl,  setFiltroAl]  = useState(DEFAULT_AL_PN);
   const [filtriFiltriAperti, setFiltriFiltriAperti] = useState(false);
@@ -257,6 +260,9 @@ export default function PrimaNotaPage() {
       setUscite(u as Uscita[]);
       setLoading(false);
     });
+    fetch('/api/ricevute').then(r => r.json()).then((r: unknown) => {
+      if (Array.isArray(r)) setRicevute(new Map((r as Ricevuta[]).map(x => [x.entrata_id, x])));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -729,6 +735,16 @@ export default function PrimaNotaPage() {
         </div>
       )}
 
+      {ricevutaDi && (
+        <RicevutaPrivato
+          entrata={ricevutaDi}
+          ricevuta={ricevute.get(ricevutaDi.id)}
+          contiCorrenti={contiCorrenti}
+          onEmessa={r => setRicevute(prev => new Map(prev).set(r.entrata_id, r))}
+          onChiudi={() => setRicevutaDi(null)}
+        />
+      )}
+
       {/* Lista unificata — mobile */}
       <div className="sm:hidden bg-white rounded-lg shadow-sm divide-y divide-gray-100">
         {righe.length === 0 ? (
@@ -766,6 +782,10 @@ export default function PrimaNotaPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
+                    {isE && e.categoria === 'Privato' && (
+                      <button onClick={() => setRicevutaDi(e)} title={ricevute.has(e.id) ? `Ricevuta n. ${ricevute.get(e.id)!.numero}/${ricevute.get(e.id)!.anno}` : 'Emetti ricevuta'}
+                        className={ricevute.has(e.id) ? 'text-green-600' : 'text-gray-300 hover:text-green-600'}><Receipt size={13} /></button>
+                    )}
                     <button onClick={() => isE ? setEditingE(e) : setEditingU(u)} className="text-gray-300 hover:text-blue-600"><Pencil size={13} /></button>
                     <button onClick={() => isE ? eliminaEntrata(e.id) : eliminaUscita(u.id)} className="text-gray-300 hover:text-red-600"><Trash2 size={13} /></button>
                   </div>
@@ -832,6 +852,10 @@ export default function PrimaNotaPage() {
                     <td className={`px-4 py-3 text-right font-bold ${s >= 0 ? 'text-green-700' : 'text-red-700'}`}>{s >= 0 ? '+' : ''}€{s.toFixed(2)}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 justify-end">
+                        {isE && e.categoria === 'Privato' && (
+                          <button onClick={() => setRicevutaDi(e)} title={ricevute.has(e.id) ? `Ricevuta n. ${ricevute.get(e.id)!.numero}/${ricevute.get(e.id)!.anno}` : 'Emetti ricevuta'}
+                            className={ricevute.has(e.id) ? 'text-green-600' : 'text-gray-400 hover:text-green-600'}><Receipt size={15} /></button>
+                        )}
                         <button onClick={() => isE ? setEditingE(e) : setEditingU(u)} className="text-gray-400 hover:text-blue-600"><Pencil size={15} /></button>
                         <button onClick={() => isE ? eliminaEntrata(e.id) : eliminaUscita(u.id)} className="text-gray-400 hover:text-red-600"><Trash2 size={15} /></button>
                       </div>

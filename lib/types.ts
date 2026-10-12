@@ -306,3 +306,42 @@ export const CAPI_BIANCHERIA = [
 export type CapoBiancheria = typeof CAPI_BIANCHERIA[number]['key'];
 
 export type BiancheriaStanza = { data: string; camera_id: number; updated_at?: string } & Record<CapoBiancheria, number>;
+
+/** Dati del titolare stampati sulla ricevuta, fissati al momento dell'emissione */
+export interface EmittenteRicevuta {
+  nome: string;
+  codice_fiscale: string;
+  partita_iva: string;
+  indirizzo: string;
+  cin: string;
+  cir: string;
+  /** Nome e indirizzo della struttura dove si soggiorna (causale) */
+  struttura?: string;
+  struttura_indirizzo?: string;
+}
+
+/** Ricevuta non fiscale numerata per un'entrata "Privato" della Prima Nota */
+export interface Ricevuta {
+  id: string;
+  entrata_id: string;
+  anno: number;
+  numero: number;
+  data_emissione: string;   // yyyy-MM-dd
+  intestatario: string;
+  codice_fiscale: string;
+  indirizzo: string;
+  descrizione: string;
+  dal: string | null;
+  al: string | null;
+  importo: number;
+  /** Imposta di soggiorno riscossa per conto del Comune, sommata al totale */
+  tassa: number;
+  /** Marca da bollo da 2 € (obbligatoria sopra 77,47 € senza IVA) */
+  bollo: boolean;
+  /** Mezzo di pagamento stampato (es. Bonifico bancario) */
+  mezzo_pagamento: string;
+  emittente: EmittenteRicevuta;
+  created_at: string;
+}
+
+export const SOGLIA_BOLLO = 77.47;
