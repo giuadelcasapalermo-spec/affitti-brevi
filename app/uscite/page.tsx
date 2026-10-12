@@ -12,6 +12,7 @@ import { fData } from '@/lib/utils';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search, Receipt } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
 import RicevutaPrivato from '@/components/RicevutaPrivato';
+import RistampaRicevute from '@/components/RistampaRicevute';
 import { useEtichette } from '@/hooks/useEtichette';
 
 /* ── colori ───────────────────────────────────────────── */
@@ -222,6 +223,7 @@ export default function PrimaNotaPage() {
   const [editingU, setEditingU] = useState<Uscita | null>(null);
   const [ricevute, setRicevute] = useState<Map<string, Ricevuta>>(new Map());
   const [ricevutaDi, setRicevutaDi] = useState<Entrata | null>(null);
+  const [ristampaAperta, setRistampaAperta] = useState(false);
   const [filtroDal, setFiltroDal] = useState(DEFAULT_DAL_PN);
   const [filtroAl,  setFiltroAl]  = useState(DEFAULT_AL_PN);
   const [filtriFiltriAperti, setFiltriFiltriAperti] = useState(false);
@@ -260,8 +262,8 @@ export default function PrimaNotaPage() {
       setUscite(u as Uscita[]);
       setLoading(false);
     });
-    fetch('/api/ricevute').then(r => r.json()).then((r: unknown) => {
-      if (Array.isArray(r)) setRicevute(new Map((r as Ricevuta[]).map(x => [x.entrata_id, x])));
+    fetch('/api/ricevute?serie=privato').then(r => r.json()).then((r: unknown) => {
+      if (Array.isArray(r)) setRicevute(new Map((r as Ricevuta[]).map(x => [x.riferimento, x])));
     }).catch(() => {});
   }, []);
 
@@ -423,6 +425,12 @@ export default function PrimaNotaPage() {
           >
             <FileSpreadsheet size={15} className="text-green-600" />
             <span className="hidden sm:inline">Excel</span>
+          </button>
+          <button onClick={() => setRistampaAperta(true)} title="Ristampa ricevute del periodo"
+            className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
+          >
+            <Receipt size={15} className="text-green-600" />
+            <span className="hidden sm:inline">Ricevute</span>
           </button>
           <button onClick={() => window.print()} title="Stampa / Salva PDF"
             className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
@@ -735,12 +743,14 @@ export default function PrimaNotaPage() {
         </div>
       )}
 
+      {ristampaAperta && <RistampaRicevute serieIniziale="privato" onChiudi={() => setRistampaAperta(false)} />}
+
       {ricevutaDi && (
         <RicevutaPrivato
           entrata={ricevutaDi}
           ricevuta={ricevute.get(ricevutaDi.id)}
           contiCorrenti={contiCorrenti}
-          onEmessa={r => setRicevute(prev => new Map(prev).set(r.entrata_id, r))}
+          onEmessa={r => setRicevute(prev => new Map(prev).set(r.riferimento, r))}
           onChiudi={() => setRicevutaDi(null)}
         />
       )}

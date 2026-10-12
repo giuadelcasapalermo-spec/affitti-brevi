@@ -9,9 +9,10 @@ import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
-  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight, BarChart3,
+  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight, BarChart3, BookUser,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
+import RubricaContatti from '@/components/RubricaContatti';
 import { SEGNAPOSTO_ISTRUZIONI, MODELLO_ISTRUZIONI_BASE, componiIstruzioni } from '@/lib/istruzioni';
 import { PALETTE, COLOR_MAP, DEFAULT_COLOR_BY_ID, getCameraStyle, CameraColor } from '@/lib/camera-colors';
 
@@ -27,7 +28,7 @@ interface ICalSyncResult {
   gmail?: { importate: number; aggiornate: number; cancellate: number; dettagli: string[] };
 }
 
-type MainTab = 'strutture' | 'camere' | 'account' | 'app' | 'sistema';
+type MainTab = 'strutture' | 'camere' | 'rubrica' | 'account' | 'app' | 'sistema';
 type SubTab = 'camere' | 'ical' | 'prezzi' | 'checkin' | 'codici' | 'alloggiati' | 'osservatorio';
 type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
 
@@ -639,6 +640,7 @@ export default function ImpostazioniPage() {
   const TAB = [
     { id: 'strutture', label: 'Strutture', icon: Building2, color: 'slate'  },
     { id: 'camere',    label: et.Camere,   icon: PenLine,   color: 'purple' },
+    { id: 'rubrica',   label: 'Rubrica',   icon: BookUser,  color: 'rose'   },
     { id: 'account',   label: 'Account',   icon: Shield,    color: 'indigo' },
     { id: 'app',       label: 'App',       icon: Palette,   color: 'teal'   },
     { id: 'sistema',   label: 'Sistema',   icon: Settings2, color: 'orange' },
@@ -649,6 +651,7 @@ export default function ImpostazioniPage() {
     purple: 'border-purple-600 text-purple-700 bg-purple-50',
     blue:   'border-blue-600   text-blue-700   bg-blue-50',
     indigo: 'border-indigo-600 text-indigo-700 bg-indigo-50',
+    rose:   'border-rose-600   text-rose-700   bg-rose-50',
     teal:   'border-teal-600   text-teal-700   bg-teal-50',
     orange: 'border-orange-500 text-orange-700 bg-orange-50',
   };
@@ -1949,6 +1952,13 @@ export default function ImpostazioniPage() {
       })()}
 
       {/* ── ACCOUNT ─────────────────────────────────────────────────── */}
+      {/* ── RUBRICA ───────────────────────────────────────────────────── */}
+      {sezione === 'rubrica' && (
+        strutturaAttiva
+          ? <RubricaContatti strutturaId={strutturaAttiva.id} nomeStruttura={strutturaAttiva.nome} />
+          : <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-400 text-sm">Nessuna struttura selezionata.</div>
+      )}
+
       {sezione === 'account' && (
         <div className="bg-white rounded-lg shadow-sm p-5">
           <div className="flex items-center gap-2 mb-1">

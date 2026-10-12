@@ -320,10 +320,20 @@ export interface EmittenteRicevuta {
   struttura_indirizzo?: string;
 }
 
-/** Ricevuta non fiscale numerata per un'entrata "Privato" della Prima Nota */
+/** Serie di numerazione: ogni serie ha la sua numerazione progressiva per anno */
+export type SerieRicevuta = 'privato' | 'tassa';
+
+export const SERIE_RICEVUTA: Record<SerieRicevuta, string> = {
+  privato: 'Pagamenti privati',
+  tassa: 'Imposta di soggiorno',
+};
+
+/** Ricevuta non fiscale numerata: entrata "Privato" della Prima Nota (serie privato) o tassa di soggiorno di una prenotazione (serie tassa) */
 export interface Ricevuta {
   id: string;
-  entrata_id: string;
+  serie: SerieRicevuta;
+  /** id dell'entrata (serie privato) o della prenotazione (serie tassa) */
+  riferimento: string;
   anno: number;
   numero: number;
   data_emissione: string;   // yyyy-MM-dd
@@ -340,8 +350,39 @@ export interface Ricevuta {
   bollo: boolean;
   /** Mezzo di pagamento stampato (es. Bonifico bancario) */
   mezzo_pagamento: string;
+  /** Righe etichetta/valore stampate sotto la causale (serie tassa: notti, ospiti, esenti) */
+  dettagli: [string, string][] | null;
   emittente: EmittenteRicevuta;
   created_at: string;
 }
 
 export const SOGLIA_BOLLO = 77.47;
+
+export const CATEGORIE_CONTATTO = [
+  'Idraulico',
+  'Elettricista',
+  'Pulizie',
+  'Lavanderia',
+  'Manutenzione',
+  'Fabbro',
+  'Caldaia / Climatizzatori',
+  'Internet / TV',
+  'Commercialista',
+  'Altro',
+] as const;
+
+export type CategoriaContatto = typeof CATEGORIE_CONTATTO[number];
+
+/** Voce della rubrica fornitori/tecnici di una struttura */
+export interface Contatto {
+  id: string;
+  struttura_id: string;
+  categoria: CategoriaContatto;
+  nome: string;
+  azienda: string;
+  cellulare: string;
+  telefono: string;
+  email: string;
+  note: string;
+  created_at: string;
+}

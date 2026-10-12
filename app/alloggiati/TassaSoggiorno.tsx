@@ -5,8 +5,10 @@ import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Download, CheckCircle2, Clock, Loader2, X, Receipt, Pencil, FileText } from 'lucide-react';
 import { useCamere } from '@/hooks/useCamere';
-import { useStruttura } from '@/hooks/useStruttura';
 import { useEtichette } from '@/hooks/useEtichette';
+import { Ricevuta } from '@/lib/types';
+import { scaricaRicevutaPdf } from '@/lib/ricevuta-pdf';
+import RistampaRicevute from '@/components/RistampaRicevute';
 
 const TRIMESTRI = ['Q1 Gen–Mar', 'Q2 Apr–Giu', 'Q3 Lug–Set', 'Q4 Ott–Dic'];
 const MESI = [
@@ -58,7 +60,6 @@ function trimestreCorrente(): number {
 export default function TassaSoggiorno() {
   const camere = useCamere();
   const et = useEtichette();
-  const { struttura } = useStruttura();
   const [anno, setAnno] = useState(new Date().getFullYear());
   const [trim, setTrim] = useState(trimestreCorrente());
   const [mese, setMese] = useState(new Date().getMonth() + 1);
@@ -75,6 +76,14 @@ export default function TassaSoggiorno() {
   const [editingEsentiId, setEditingEsentiId] = useState<string | null>(null);
   const [editingEsentiVal, setEditingEsentiVal] = useState('');
   const [errore, setErrore] = useState<string | null>(null);
+  const [ricevuteTassa, setRicevuteTassa] = useState<Map<string, Ricevuta>>(new Map());
+  const [ristampaAperta, setRistampaAperta] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/ricevute?serie=tassa').then(r => r.json()).then((r: unknown) => {
+      if (Array.isArray(r)) setRicevuteTassa(new Map((r as Ricevuta[]).map(x => [x.riferimento, x])));
+    }).catch(() => {});
+  }, []);
 
   const carica = useCallback(async (a: number, t: number, m: number, tipo: Periodo) => {
     setLoading(true);
@@ -162,68 +171,45 @@ export default function TassaSoggiorno() {
   }
 
   async function generaRicevuta(p: Prenotazione) {
-    const { jsPDF } = await import('jspdf');
-    const doc = new jsPDF();
-
-    const nomeStruttura = struttura?.nome || 'Struttura ricettiva';
-    const indirizzo = struttura?.indirizzo || '';
-
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(nomeStruttura, 20, 20);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    if (indirizzo) doc.text(indirizzo, 20, 27);
-
-    doc.setDrawColor(200);
-    doc.line(20, 33, 190, 33);
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Ricevuta imposta di soggiorno', 20, 44);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Data emissione: ${format(new Date(), 'd MMMM yyyy', { locale: it })}`, 20, 52);
-
-    const righe: [string, string][] = [
-      ['Ospite', p.ospite_nome],
-      ['Camera', nomeCamera(p.camera_id)],
-      ['Check-in', format(parseISO(p.check_in), 'd MMMM yyyy', { locale: it })],
-      ['Check-out', format(parseISO(p.check_out), 'd MMMM yyyy', { locale: it })],
+    if (!(p.tassa_riscossa > 0)) { alert('Nessuna tassa riscossa per questo soggiorno.'); return; }
+    const esistente = ricevuteTassa.get(p.id);
+    // Già emessa con lo stesso importo: ristampa identica
+    if (esistente && Math.abs(esistente.importo - p.tassa_riscossa) < 0.005) {
+      await scaricaRicevutaPdf(esistente);
+      return;
+    }
+    if (esistente && !confirm(
+      `La ricevuta n. ${esistente.numero}/${esistente.anno} riporta €${esistente.importo.toFixed(2)}, ora la tassa è €${p.tassa_riscossa.toFixed(2)}.\n\n` +
+      'OK = aggiorna la ricevuta (stesso numero)\nAnnulla = ristampa quella emessa')) {
+      await scaricaRicevutaPdf(esistente);
+      return;
+    }
+    const dettagli: [string, string][] = [
+      [et.Camera, nomeCamera(p.camera_id)],
       ['Notti di soggiorno', String(p.notti)],
       [`Notti imponibili (max ${dati?.max_notti ?? 4})`, String(p.notti_tassabili)],
       ['Ospiti totali', p.n_ospiti === null ? 'documenti non caricati' : String(p.n_ospiti)],
       ['di cui adulti', p.adulti === null ? '-' : String(p.adulti)],
       ['di cui esenti', p.minori > 0 ? `${p.esenti} (${p.minori} minori di 10 anni)` : String(p.esenti)],
     ];
-
-    let y = 65;
-    doc.setFontSize(11);
-    for (const [label, val] of righe) {
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${label}:`, 20, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(val, 90, y);
-      y += 8;
-    }
-
-    y += 4;
-    doc.setDrawColor(200);
-    doc.line(20, y, 190, y);
-    y += 12;
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Importo riscosso:', 20, y);
-    doc.text(`€ ${p.tassa_riscossa.toFixed(2)}`, 150, y);
-
-    y += 16;
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Imposta di soggiorno riscossa per conto del Comune ai sensi del regolamento comunale vigente.', 20, y);
-
-    doc.save(`ricevuta-tassa-soggiorno_${p.ospite_nome.replace(/\s+/g, '-')}_${p.check_in}.pdf`);
+    const res = await fetch('/api/ricevute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serie: 'tassa',
+        prenotazione_id: p.id,
+        data_emissione: esistente?.data_emissione ?? format(new Date(), 'yyyy-MM-dd'),
+        intestatario: p.ospite_nome,
+        dal: p.check_in.slice(0, 10),
+        al: p.check_out.slice(0, 10),
+        importo: p.tassa_riscossa,
+        dettagli,
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) { alert(d.error || 'Emissione non riuscita'); return; }
+    setRicevuteTassa(prev => new Map(prev).set(p.id, d as Ricevuta));
+    await scaricaRicevutaPdf(d as Ricevuta);
   }
 
   const dichiarata = !!dati?.dichiarazione;
@@ -241,6 +227,15 @@ export default function TassaSoggiorno() {
             <ChevronRight size={16} />
           </button>
         </div>
+        <div className="flex gap-2">
+        <button
+          onClick={() => setRistampaAperta(true)}
+          title="Ristampa ricevute del periodo"
+          className="flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 rounded text-sm hover:bg-gray-50"
+        >
+          <Receipt size={14} />
+          <span className="hidden sm:inline">Ricevute</span>
+        </button>
         <button
           onClick={esportaCsv}
           disabled={!dati || dati.prenotazioni.length === 0}
@@ -249,7 +244,9 @@ export default function TassaSoggiorno() {
           <Download size={14} />
           <span className="hidden sm:inline">Esporta CSV</span>
         </button>
+        </div>
       </div>
+      {ristampaAperta && <RistampaRicevute serieIniziale="tassa" onChiudi={() => setRistampaAperta(false)} />}
 
       {/* Periodo: trimestre / mese */}
       <div className="flex items-center gap-2">
@@ -554,10 +551,15 @@ export default function TassaSoggiorno() {
                         <td className="px-4 py-2 text-right">
                           <button
                             onClick={() => generaRicevuta(p)}
-                            title="Genera ricevuta PDF"
-                            className="inline-flex items-center gap-1 text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded px-1.5 py-0.5"
+                            title={ricevuteTassa.has(p.id)
+                              ? `Ricevuta n. ${ricevuteTassa.get(p.id)!.numero}/${ricevuteTassa.get(p.id)!.anno}`
+                              : 'Emetti ricevuta PDF'}
+                            className={`inline-flex items-center gap-1 border rounded px-1.5 py-0.5 ${ricevuteTassa.has(p.id)
+                              ? 'text-green-700 border-green-300 bg-green-50'
+                              : 'text-gray-400 hover:text-blue-600 border-gray-200 hover:border-blue-300'}`}
                           >
                             <FileText size={12} />
+                            {ricevuteTassa.has(p.id) && <span className="text-[10px]">{ricevuteTassa.get(p.id)!.numero}</span>}
                           </button>
                         </td>
                       </tr>

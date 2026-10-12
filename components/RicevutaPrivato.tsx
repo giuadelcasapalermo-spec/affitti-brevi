@@ -13,7 +13,6 @@ type Campi = {
   descrizione: string;
   dal: string;
   al: string;
-  tassa: string;
   bollo: boolean;
   mezzo_pagamento: string;
 };
@@ -46,7 +45,6 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
     descrizione: ricevuta.descrizione,
     dal: ricevuta.dal ?? '',
     al: ricevuta.al ?? '',
-    tassa: ricevuta.tassa > 0 ? String(ricevuta.tassa) : '',
     bollo: ricevuta.bollo,
     mezzo_pagamento: ricevuta.mezzo_pagamento,
   } : {
@@ -57,7 +55,6 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
     descrizione: 'Pernottamento',
     dal: '',
     al: '',
-    tassa: '',
     bollo: entrata.importo > SOGLIA_BOLLO,
     mezzo_pagamento: MEZZO_DA_CONTO[contiCorrenti.find(c => c.nome === entrata.fonte_pagamento)?.tipo ?? 'contanti'],
   });
@@ -79,7 +76,6 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
         intestatario: prev.intestatario || p.ospite_nome,
         dal: prev.dal || p.check_in.slice(0, 10),
         al: prev.al || p.check_out.slice(0, 10),
-        tassa: prev.tassa || (Number(p.tassa_soggiorno) > 0 ? String(p.tassa_soggiorno) : ''),
       }));
     }).catch(() => {});
   }, [entrata, ricevuta]);
@@ -92,12 +88,12 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
       const res = await fetch('/api/ricevute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...f, entrata_id: entrata.id, tassa: Number(f.tassa) || 0 }),
+        body: JSON.stringify({ ...f, serie: 'privato', entrata_id: entrata.id }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Emissione non riuscita');
       onEmessa(d as Ricevuta);
-      await scaricaRicevutaPdf(d as Ricevuta, entrata.fonte_pagamento);
+      await scaricaRicevutaPdf(d as Ricevuta);
     } catch (e) {
       setErrore(e instanceof Error ? e.message : String(e));
     } finally {
@@ -105,7 +101,7 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
     }
   }
 
-  const totale = entrata.importo + (Number(f.tassa) || 0);
+  const totale = entrata.importo;
   const input = 'w-full border rounded px-3 py-2 text-sm';
 
   return (
@@ -123,7 +119,7 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
         <div className="text-xs text-gray-500">
           Incasso del {entrata.data.split('-').reverse().join('/')} · {entrata.descrizione} · <b>€{entrata.importo.toFixed(2)}</b>
           {suggerita && <div className="mt-1 text-green-700">Dati presi dalla prenotazione: {suggerita}</div>}
-          {!ricevuta && <div className="mt-1">Il numero viene assegnato all&apos;emissione (progressivo per anno).</div>}
+          {!ricevuta && <div className="mt-1">Il numero viene assegnato all&apos;emissione (progressivo per anno, serie Pagamenti privati; l&apos;imposta di soggiorno ha la sua serie).</div>}
         </div>
 
         <div>
@@ -166,18 +162,13 @@ export default function RicevutaPrivato({ entrata, ricevuta, contiCorrenti, onEm
             <input type="date" className={input} value={f.al} onChange={e => set('al', e.target.value)} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 items-end">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Tassa di soggiorno (€)</label>
-            <input type="number" min="0" step="0.01" className={input} value={f.tassa} onChange={e => set('tassa', e.target.value)} placeholder="0,00" />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 pb-2">
-            <input type="checkbox" checked={f.bollo} onChange={e => set('bollo', e.target.checked)} />
-            Marca da bollo 2 €
-          </label>
-        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={f.bollo} onChange={e => set('bollo', e.target.checked)} />
+          Marca da bollo 2 €
+          <span className="text-[11px] text-gray-400">(obbligatoria sopra €{SOGLIA_BOLLO.toFixed(2).replace('.', ',')})</span>
+        </label>
         <p className="text-[11px] text-gray-400">
-          La tassa si aggiunge al totale come voce a parte. La marca da bollo va applicata sopra €{SOGLIA_BOLLO.toFixed(2).replace('.', ',')}.
+          L&apos;imposta di soggiorno non va qui: la sua ricevuta si emette da Alloggiati → Tassa di soggiorno, con numerazione separata.
         </p>
 
         {errore && <div className="text-sm text-red-600">{errore}</div>}
