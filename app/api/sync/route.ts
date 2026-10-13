@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sincronizzaTutti, riconciliaBlocchiIcal } from '@/lib/ical';
-import { arricchisciPrenotazioniDaSheetsAll, inserisciRicavoBookingNelFoglio, sheetsConfigurato as fogliConfigurati } from '@/lib/googlesheets';
+import { arricchisciPrenotazioniDaSheetsAll, depuraCancellateBooking, inserisciRicavoBookingNelFoglio, sheetsConfigurato as fogliConfigurati } from '@/lib/googlesheets';
 import { leggiPrenotazioni } from '@/lib/db';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva } from '@/lib/strutture';
@@ -19,8 +19,15 @@ export async function POST() {
   let prenotazioniArricchite = 0;
   let righeSkippate: string[] = [];
   let sheetsErrore: string | null = null;
+  let cancellateBooking: string[] = [];
+  let avvisiCancellate: string[] = [];
   if (sheetsConfigurato) {
     try {
+      // Prima dell'arricchimento: le prenotazioni cancellate su Booking escono dal foglio e
+      // dall'app, così non rinascono dal foglio e non nascondono quelle nuove sulle stesse date
+      const dep = await depuraCancellateBooking(risultatiIcal, struttura.id);
+      cancellateBooking = dep.eliminate;
+      avvisiCancellate = dep.avvisi;
       const res = await arricchisciPrenotazioniDaSheetsAll(struttura.id);
       prenotazioniArricchite = res.modificate;
       righeSkippate = res.saltate;
@@ -74,5 +81,5 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ ok: true, risultati: risultatiIcal, prenotazioniArricchite, righeSkippate, sheetsErrore, sheetsConfigurato, blocchiRiconciliati, righeScheletroCreate, righeScheletroErrori });
+  return NextResponse.json({ ok: true, risultati: risultatiIcal, prenotazioniArricchite, righeSkippate: [...avvisiCancellate, ...righeSkippate], cancellateBooking, sheetsErrore, sheetsConfigurato, blocchiRiconciliati, righeScheletroCreate, righeScheletroErrori });
 }

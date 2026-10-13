@@ -209,6 +209,9 @@ export interface SyncResult {
   /** Prenotazioni che erano 'cancellata' e il cui UID e' ricomparso nel feed: come le nuove,
    *  hanno bisogno di una riga sul foglio e di essere completate a mano. */
   riattivate?: Prenotazione[];
+  /** Periodi occupati nel feed Booking ([inizio, fine) AAAA-MM-GG), solo se il feed è stato letto:
+   *  servono a riconoscere le prenotazioni del foglio cancellate su Booking */
+  periodi?: [string, string][];
 }
 
 // ── UID iCal da ignorare (blocchi/prenotazioni fantasma eliminate manualmente) ──
@@ -465,6 +468,9 @@ export async function sincronizzaCalendario(
     rimosse,
     nuove: daAggiungere,
     riattivate,
+    periodi: testo.includes('BEGIN:VCALENDAR')
+      ? eventiRemoti.map((e): [string, string] => [format(e.start, 'yyyy-MM-dd'), format(e.end, 'yyyy-MM-dd')])
+      : undefined,
   };
 }
 
@@ -486,7 +492,7 @@ async function collegamenti(ids: string[]) {
   };
 }
 
-async function haCollegamenti(id: string): Promise<boolean> {
+export async function haCollegamenti(id: string): Promise<boolean> {
   const c = await collegamenti([id]);
   return c.doc.has(id) || c.link.has(id) || c.ricevuta.has(id);
 }

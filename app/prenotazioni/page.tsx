@@ -131,15 +131,17 @@ function PrenotazioniInner() {
       const sheetsOff = !json.sheetsConfigurato;
       const sheetsErr = json.sheetsErrore;
       const skippate: string[] = json.righeSkippate ?? [];
+      const cancellate: string[] = json.cancellateBooking ?? [];
       let msg = `iCal: +${totIcal}`;
       if (sheetsOff)  msg += ' · Sheet: non configurato';
       else if (sheetsErr) msg += ` · Sheet errore: ${sheetsErr}`;
       else {
         msg += ` · Sheet: ${arricchite} aggiornate`;
+        if (cancellate.length > 0) msg += ` · ${cancellate.length} cancellate su Booking tolte`;
         if (skippate.length > 0) msg += ` · ${skippate.length} righe saltate`;
       }
       setSyncMsg(msg);
-      setRigheSkippate(skippate);
+      setRigheSkippate([...cancellate.map(c => `Cancellata su Booking, tolta dal foglio e dall'app: ${c}`), ...skippate]);
       carica();
     } catch {
       setSyncOk(false);
@@ -376,7 +378,7 @@ function PrenotazioniInner() {
       {righeSkippate.length > 0 && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-sm text-amber-800">
           <div className="flex-1">
-            <p className="font-medium mb-1">{righeSkippate.length} righe dello sheet non arricchite:</p>
+            <p className="font-medium mb-1">Avvisi dallo sheet ({righeSkippate.length}):</p>
             <ul className="list-disc list-inside space-y-0.5 text-xs text-amber-700">
               {righeSkippate.map((riga, i) => <li key={i}>{riga}</li>)}
             </ul>

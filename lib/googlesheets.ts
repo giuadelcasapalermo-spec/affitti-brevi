@@ -5,7 +5,8 @@ import { leggiEntrate, scriviEntrate } from './entrate';
 import { leggiUscite, scriviUscite } from './uscite';
 import { leggiPrenotazioni, scriviPrenotazioni } from './db';
 import { getStrutturaAttiva } from './strutture';
-import { leggiImpostazioni, riconciliaBlocchiIcal } from './ical';
+import { leggiImpostazioni, riconciliaBlocchiIcal, haCollegamenti, type SyncResult } from './ical';
+import sql from './postgres';
 import { randomUUID } from 'crypto';
 
 // ── Fogli ──────────────────────────────────────────────────────────────────
@@ -888,6 +889,88 @@ export async function aggiornaRigaSheetPerPrenotazione(dati: {
   });
 
   return { aggiornata: true, tab, riga: r };
+}
+
+/** Elimina dal tab mensile del check-in la riga "Ricavo Booking" di camera e check-in indicati.
+ *  Se le righe corrispondenti sono più d'una non tocca nulla. */
+async function eliminaRigaBookingDalFoglio(
+  sheets: ReturnType<typeof google.sheets>,
+  tabs: TabMese[],
+  dati: { check_in: string; camera_id: number },
+): Promise<{ esito: 'eliminata' | 'assente' | 'ambigua'; tab: string; riga?: number }> {
+  const t = tabPerData(tabs, dati.check_in);
+  if (!t) return { esito: 'assente', tab: nomeMese(dati.check_in) };
+  const { sid, tab, sheetId } = t;
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: `'${tab}'!A:O`, valueRenderOption: 'UNFORMATTED_VALUE' });
+  const rows = (res.data.values ?? []) as (string | number)[][];
+  const hIdx = rows.findIndex((r) => String(r[0] ?? '').trim() === 'Tipologia');
+  if (hIdx === -1 || sheetId === undefined) return { esito: 'ambigua', tab };
+  const headerRow = rows[hIdx] as (string | number)[];
+  const telefonoIdx = headerRow.findIndex((c) => ['cellulare', 'email'].includes(String(c ?? '').toLowerCase().trim()));
+  const shift = telefonoIdx >= 0 && telefonoIdx <= 2 ? 1 : 0;
+  if (headerRow.length <= 12 + shift || shift !== 1) return { esito: 'ambigua', tab };
+  const C = { dataI: 8 + shift, stanza: 11 + shift };
+  const stanzaNome = (STANZA_NOME[dati.camera_id] ?? '').toLowerCase();
+
+  const candidate: number[] = []; // indici 0-based
+  for (let i = hIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!String(row[0] ?? '').toLowerCase().includes('booking')) continue;
+    if (parseSheetDate(row[C.dataI] as string | number | undefined) !== dati.check_in) continue;
+    if (String(row[C.stanza] ?? '').trim().toLowerCase() !== stanzaNome) continue;
+    candidate.push(i);
+  }
+  if (candidate.length === 0) return { esito: 'assente', tab };
+  if (candidate.length > 1) return { esito: 'ambigua', tab };
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sid,
+    requestBody: { requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: candidate[0], endIndex: candidate[0] + 1 } } }] },
+  });
+  return { esito: 'eliminata', tab, riga: candidate[0] + 1 };
+}
+
+// ── Prenotazioni Booking cancellate: via dal foglio e dall'app ──────────────
+// Una prenotazione cancellata su Booking resta sul foglio (e quindi nell'app, come prenotazione
+// 'sheet'): occupa le sue date e la riconciliazione scambia per doppione la prenotazione nuova
+// che Booking pubblica al suo posto (es. Michal Zavadil 14→17/11 cancellata, Yannick Forte
+// 14→15/11 nascosta). Se il feed Booking della camera, letto correttamente, non ha più nessun
+// periodo occupato che contenga l'intero soggiorno, la prenotazione è cancellata: si toglie la
+// riga dal foglio e la prenotazione dall'app. Solo soggiorni futuri, solo righe "Ricavo Booking",
+// mai prenotazioni con documenti, link di check-in o ricevuta (quelle si segnalano).
+export async function depuraCancellateBooking(
+  risultati: SyncResult[],
+  struttura_id: string,
+): Promise<{ eliminate: string[]; avvisi: string[] }> {
+  const eliminate: string[] = [];
+  const avvisi: string[] = [];
+  const oggi = new Date().toISOString().slice(0, 10);
+  const feed = risultati.filter((r) => r.canale !== 'airbnb' && !r.errore && r.periodi);
+  if (feed.length === 0) return { eliminate, avvisi };
+
+  const prenotazioni = await leggiPrenotazioni(struttura_id);
+  const cancellate = feed.flatMap((r) => prenotazioni.filter((p) =>
+    p.camera_id === r.camera_id && p.fonte === 'sheet' && p.stato !== 'cancellata' && p.check_in >= oggi
+    && (p.note ?? '').toLowerCase().includes('booking')
+    && !r.periodi!.some(([s, e]) => s <= p.check_in && e >= p.check_out)));
+  if (cancellate.length === 0) return { eliminate, avvisi };
+
+  const sheets = await getSheetsClient();
+  const tabs = await tabMensili(sheets);
+  for (const p of cancellate) {
+    const chi = `${p.ospite_nome || 'senza nome'} camera ${p.camera_id} ${p.check_in}→${p.check_out}`;
+    if (await haCollegamenti(p.id)) {
+      avvisi.push(`${chi}: non più su Booking ma ha documenti o link di check-in, da controllare a mano`);
+      continue;
+    }
+    const r = await eliminaRigaBookingDalFoglio(sheets, tabs, p);
+    if (r.esito === 'ambigua') {
+      avvisi.push(`${chi}: non più su Booking, riga del foglio (${r.tab}) non individuabile con certezza`);
+      continue;
+    }
+    await sql`DELETE FROM prenotazioni WHERE id = ${p.id}`;
+    eliminate.push(`${chi}${r.esito === 'eliminata' ? ` (tolta da ${r.tab} riga ${r.riga})` : ''}`);
+  }
+  return { eliminate, avvisi };
 }
 
 // ── Import completo: Prima Nota App + tab mensili → App (solo uscite) ────
