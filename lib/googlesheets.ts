@@ -536,6 +536,10 @@ async function arricchisciPrenotazioniDaSheets(
 
       const checkIn  = parseSheetDate(row[C.dataI] as string|number|undefined);
       if (!checkIn) {
+        // Riga del modello mensile ancora da compilare (solo "Ricavo Booking", es. foglio dell'anno
+        // prossimo): niente da arricchire e niente da segnalare
+        const vuota = [C.desc, C.ent, C.dataF, C.stanza].every(c => String(row[c] ?? '').trim() === '');
+        if (vuota) continue;
         saltate.push(`${tab} riga ${i+1}: tipo="${tipoRaw}" checkIn nullo (raw=${JSON.stringify(row[C.dataI])})`);
         continue;
       }
