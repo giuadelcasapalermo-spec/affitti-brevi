@@ -578,8 +578,17 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     }
   }
 
+  // Un blocco iCal anonimo è coperto anche dai blocchi iCal già completati (con nome, documenti):
+  // Booking ripubblica i periodi con UID nuovi (es. soggiorno in corso con inizio oggi) e il blocco
+  // nuovo si sovrapponeva a quello vecchio completato (Bianca 13/10: "Ospite Booking.com" 14→17
+  // sopra Michał Napieralski 14→17 con 2 documenti)
+  const completati = ghosts.filter((p) => p.ospite_nome !== 'Ospite Booking.com');
+
   for (const ghost of ghosts) {
-    const sovrapposte = reali
+    const coprenti = ghost.ospite_nome === 'Ospite Booking.com'
+      ? [...reali, ...completati.filter((p) => p.stato !== 'cancellata')]
+      : reali;
+    const sovrapposte = coprenti
       .filter(
         (p) =>
           p.camera_id === ghost.camera_id &&
