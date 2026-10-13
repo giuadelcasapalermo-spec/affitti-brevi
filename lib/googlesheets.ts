@@ -933,9 +933,9 @@ async function eliminaRigaBookingDalFoglio(
 // Una prenotazione cancellata su Booking resta sul foglio (e quindi nell'app, come prenotazione
 // 'sheet'): occupa le sue date e la riconciliazione scambia per doppione la prenotazione nuova
 // che Booking pubblica al suo posto (es. Michal Zavadil 14→17/11 cancellata, Yannick Forte
-// 14→15/11 nascosta). Se il feed Booking della camera, letto correttamente, non ha più nessun
-// periodo occupato che contenga l'intero soggiorno, la prenotazione è cancellata: si toglie la
-// riga dal foglio e la prenotazione dall'app. Solo soggiorni futuri, solo righe "Ricavo Booking",
+// 14→15/11 nascosta). Se il feed Booking della camera, letto correttamente, non ha più nessuna
+// notte del soggiorno occupata, la prenotazione è cancellata: si toglie la riga dal foglio e la
+// prenotazione dall'app. Se ne mancano solo alcune si segnala e basta. Solo soggiorni futuri, solo righe "Ricavo Booking",
 // mai prenotazioni con documenti, link di check-in o ricevuta (quelle si segnalano).
 export async function depuraCancellateBooking(
   risultati: SyncResult[],
@@ -948,10 +948,22 @@ export async function depuraCancellateBooking(
   if (feed.length === 0) return { eliminate, avvisi };
 
   const prenotazioni = await leggiPrenotazioni(struttura_id);
-  const cancellate = feed.flatMap((r) => prenotazioni.filter((p) =>
-    p.camera_id === r.camera_id && p.fonte === 'sheet' && p.stato !== 'cancellata' && p.check_in >= oggi
-    && (p.note ?? '').toLowerCase().includes('booking')
-    && !r.periodi!.some(([s, e]) => s <= p.check_in && e >= p.check_out)));
+  const cancellate: Prenotazione[] = [];
+  for (const r of feed) {
+    for (const p of prenotazioni) {
+      if (p.camera_id !== r.camera_id || p.fonte !== 'sheet' || p.stato === 'cancellata' || p.check_in < oggi) continue;
+      if (!(p.note ?? '').toLowerCase().includes('booking')) continue;
+      if (r.periodi!.some(([s, e]) => s <= p.check_in && e >= p.check_out)) continue; // tutto coperto
+      // Il feed non è affidabile notte per notte (Esther Lopez 30/10→1/11 confermata, nel feed solo
+      // 31/10→1/11): si elimina solo se Booking non ha più NESSUNA notte del soggiorno, altrimenti
+      // si segnala soltanto
+      if (r.periodi!.some(([s, e]) => s < p.check_out && e > p.check_in)) {
+        avvisi.push(`${p.ospite_nome || 'senza nome'} camera ${p.camera_id} ${p.check_in}→${p.check_out}: Booking non dichiara occupate tutte le notti, controlla se è stata cancellata o modificata`);
+      } else {
+        cancellate.push(p);
+      }
+    }
+  }
   if (cancellate.length === 0) return { eliminate, avvisi };
 
   const sheets = await getSheetsClient();
