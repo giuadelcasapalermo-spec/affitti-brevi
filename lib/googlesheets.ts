@@ -10,8 +10,9 @@ import { randomUUID } from 'crypto';
 
 // ── Fogli ──────────────────────────────────────────────────────────────────
 // Un foglio per anno (Impostazioni → Google Sheets), più il foglio principale (ID in Impostazioni
-// o GOOGLE_SHEET_ID, per istanza): quest'ultimo tiene i tab "Prima Nota App" e "Impostazioni" e i
-// tab mensili degli anni che non hanno un foglio proprio. Nessun default nel codice.
+// o GOOGLE_SHEET_ID, per istanza). Tab mensili e "Prima Nota App" si scrivono nel foglio dell'anno
+// (data del check-in / del movimento); il principale tiene "Impostazioni" e gli anni senza foglio
+// proprio. Nessun default nel codice.
 
 const NON_CONFIGURATO = "Google Sheet non configurato: impostare l'ID in Impostazioni o GOOGLE_SHEET_ID";
 
@@ -202,25 +203,38 @@ function uscitaToRow(u: Uscita): string[] {
 }
 
 // ── App → Google Sheets (tab "Prima Nota App") ────────────────────────────
+/** Fogli che tengono il tab "Prima Nota App": uno per anno, più il principale */
+async function fogliPrimaNota(): Promise<string[]> {
+  const { principale, anni } = await fogliConfigurati();
+  return [...new Set([...Object.values(anni), ...(principale ? [principale] : [])])];
+}
+
+/** Scrive "Prima Nota App" in ogni foglio con i soli movimenti del suo anno (anno della data del
+ *  movimento: per i ricavi è il giorno del check-in), nel foglio annuale o, se l'anno non ne ha
+ *  uno, nel principale. Gli anni senza nessun foglio si saltano. */
 export async function exportToSheets(): Promise<void> {
-  const sid       = await getSpreadsheetId();
+  const { principale, anni } = await fogliConfigurati();
   const sheets    = await getSheetsClient();
-  const sheetName = await ensureSheet(sheets, sid);
-  const range     = `'${sheetName}'!A:H`;
   const entrate   = await leggiEntrate();
   const uscite    = await leggiUscite();
-  const righe = [
-    HEADER,
-    ...[...entrate.map(entrataToRow), ...uscite.map(uscitaToRow)]
-      .sort((a, b) => b[2].localeCompare(a[2])),
-  ];
-  await sheets.spreadsheets.values.clear({ spreadsheetId: sid, range });
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sid,
-    range: `'${sheetName}'!A1`,
-    valueInputOption: 'RAW',
-    requestBody: { values: righe },
-  });
+  const perFoglio = new Map<string, string[][]>((await fogliPrimaNota()).map(sid => [sid, []]));
+  if (perFoglio.size === 0) throw new Error(NON_CONFIGURATO);
+  for (const r of [...entrate.map(entrataToRow), ...uscite.map(uscitaToRow)]) {
+    const sid = anni[Number(r[2].slice(0, 4))] ?? principale;
+    if (sid) perFoglio.get(sid)!.push(r);
+  }
+
+  for (const [sid, righe] of perFoglio) {
+    const sheetName = await ensureSheet(sheets, sid);
+    const range     = `'${sheetName}'!A:H`;
+    await sheets.spreadsheets.values.clear({ spreadsheetId: sid, range });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sid,
+      range: `'${sheetName}'!A1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [HEADER, ...righe.sort((a, b) => b[2].localeCompare(a[2]))] },
+    });
+  }
 }
 
 // ── App → tab mensili (uscite nuove) ──────────────────────────────────────
@@ -917,11 +931,14 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
     keyMap.set(`${uscite[i].data}|${uscite[i].categoria}`, i);
   }
 
-  // 1. Legge il foglio "Prima Nota App" — importa SOLO uscite (le entrate vengono gestite dall'app)
-  const sid = await getSpreadsheetId();
-  const sheetName = await ensureSheet(sheets, sid);
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: `'${sheetName}'!A:H` });
-  for (const row of (res.data.values ?? []).slice(1).filter(r => r[0] && r[1] && r[2] && r[3])) {
+  // 1. Legge "Prima Nota App" di ogni foglio (uno per anno) — importa SOLO uscite (le entrate vengono gestite dall'app)
+  const righePrimaNota: string[][] = [];
+  for (const sid of await fogliPrimaNota()) {
+    const sheetName = await ensureSheet(sheets, sid);
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: sid, range: `'${sheetName}'!A:H` });
+    righePrimaNota.push(...(res.data.values ?? []).slice(1));
+  }
+  for (const row of righePrimaNota.filter(r => r[0] && r[1] && r[2] && r[3])) {
     const [id, tipo, data, descrizione, categoria, importoStr, cameraIdStr, note] = row;
     if (tipo !== 'uscita') { ignorate++; continue; }
     const importo   = parseFloat(importoStr) || 0;
