@@ -1676,25 +1676,8 @@ export default function ImpostazioniPage() {
                     <p className="text-xs text-gray-400 mb-2">{imp.google_sheets_abilitato ? 'Integrazione attiva.' : 'Integrazione disabilitata.'}</p>
                     {imp.google_sheets_abilitato && (
                       <>
-                        <div className="mb-2">
-                          <div className="flex gap-2">
-                            <input type="text" placeholder="URL o ID Foglio Google" defaultValue={imp.google_sheet_id ?? ''} id="sheet-url-input"
-                              className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                            />
-                            <button onClick={async () => {
-                              const raw = (document.getElementById('sheet-url-input') as HTMLInputElement).value.trim();
-                              const match = raw.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) ?? raw.match(/^([a-zA-Z0-9_-]{20,})$/);
-                              const sheetId = match?.[1] ?? raw;
-                              if (!sheetId) return;
-                              await fetch('/api/impostazioni', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ google_sheet_id: sheetId }) });
-                              setImp(prev => ({ ...prev, google_sheet_id: sheetId }));
-                            }} className="bg-emerald-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-emerald-700">Salva</button>
-                          </div>
-                          {imp.google_sheet_id && (
-                            <a href={`https://docs.google.com/spreadsheets/d/${imp.google_sheet_id}/edit`} target="_blank" rel="noopener noreferrer"
-                              className="text-xs text-emerald-600 hover:underline mt-1 inline-block">Apri foglio →</a>
-                          )}
-                        </div>
+                        {/* Il foglio principale non si imposta più qui: bastano i fogli per anno
+                            (senza principale, "Prima Nota App" e "Impostazioni" stanno nel foglio dell'anno in corso) */}
                         <FogliAnnuali key={JSON.stringify(imp.google_sheets_anni ?? {})} anni={imp.google_sheets_anni ?? {}}
                           onSalvato={anni => setImp(prev => ({ ...prev, google_sheets_anni: anni }))} />
                         <button onClick={() => syncSheets('export')} disabled={syncingSheets}
