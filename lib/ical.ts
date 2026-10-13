@@ -398,8 +398,12 @@ export async function sincronizzaCalendario(
       continue;
     }
 
+    // Il feed taglia i giorni passati: un soggiorno in corso "inizia" oggi, e Booking gli cambia
+    // anche l'UID (Roberta Costantini Blue 11→14 il 13/10 è ricomparsa come 13→14 con UID nuovo).
+    // Per un evento che inizia oggi la prenotazione con lo stesso check-out iniziata prima è la stessa.
     const rinominata = orfane.find(
-      (p) => !orfaneRiassegnate.has(p.id) && p.check_in === checkIn && p.check_out === checkOut
+      (p) => !orfaneRiassegnate.has(p.id) && p.check_out === checkOut
+        && (p.check_in === checkIn || (checkIn === oggi && p.check_in <= oggi))
     );
     if (rinominata) {
       orfaneRiassegnate.add(rinominata.id);
@@ -415,6 +419,20 @@ export async function sincronizzaCalendario(
       continue;
     }
 
+    // Evento che inizia oggi: le notti già coperte da un soggiorno in corso (o che inizia oggi),
+    // di qualunque fonte, sono di quel soggiorno. Si importa solo il resto, se c'è (Gialla 13/10:
+    // blocco 13→19 = Jlenia Avellino 11→14 + soggiorni successivi → resta 14→19, che la
+    // riconciliazione riduce alle notti scoperte).
+    let inizio = checkIn;
+    if (checkIn === oggi) {
+      for (const p of prenotazioni) {
+        if (p.camera_id === cameraId && p.stato !== 'cancellata' && p.check_in <= oggi && p.check_out > inizio) {
+          inizio = p.check_out;
+        }
+      }
+      if (inizio >= checkOut) continue;
+    }
+
     daAggiungere.push({
       id: randomUUID(),
       struttura_id: strutturaId,
@@ -422,7 +440,7 @@ export async function sincronizzaCalendario(
       ospite_nome: ospiteNome,
       ospite_telefono: '',
       ospite_email: '',
-      check_in: checkIn,
+      check_in: inizio,
       check_out: checkOut,
       importo_totale: 0,
       stato: 'confermata',
