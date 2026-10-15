@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generaTesto } from '@/lib/gemini';
+import { pulisciNumeroDocumento } from '@/lib/numero-documento';
 import { nomePaeseACodice, aggettivoCittadinanzaACodice, normalizzaNome } from '@/lib/codici-alloggiati';
 import { nomeACodiceComune } from '@/lib/comuni-italiani';
 
@@ -14,7 +15,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
   "sesso": "<M o F — se il documento mostra K o W converti in F, altrimenti M>",
   "data_nascita": "<YYYY-MM-DD — converti qualsiasi formato di data>",
   "tipo_documento": "<PP per passaporto, CI per carta d'identità elettronica italiana, ID per carta d'identità o permesso di soggiorno di un cittadino straniero, DL per patente di guida>",
-  "numero_documento": "<numero/serie del documento, senza spazi>",
+  "numero_documento": "<numero/serie del documento, solo lettere e cifre: senza spazi, trattini, punti o altri simboli>",
   "paese_nascita": "<SEMPRE e SOLO in italiano, MAI in inglese, es. ITALIA, POLONIA, BRASILE, MACEDONIA DEL NORD, REGNO UNITO>",
   "cittadinanza_testo": "<nazionalità SEMPRE e SOLO in italiano, MAI in inglese, es. ITALIANA, POLACCA, BRASILIANA, MACEDONE>",
   "luogo_nascita_testo": "<città/luogo di nascita se leggibile, altrimenti stringa vuota>",
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     if (!jsonMatch) throw new Error('Risposta non contiene JSON valido');
     const json = JSON.parse(jsonMatch[0]);
     // Converti nomi paese/nazionalità in codici AlloggiatiWeb
+    json.numero_documento = pulisciNumeroDocumento(json.numero_documento);
     json.codice_stato_nascita  = nomePaeseACodice(json.paese_nascita ?? '');
     json.codice_cittadinanza   = aggettivoCittadinanzaACodice(json.cittadinanza_testo ?? '')
                                  || nomePaeseACodice(json.paese_nascita ?? '');

@@ -1,6 +1,7 @@
 import { Alloggiato } from './types';
 import { nomePaeseACodice, nomePaeseACodiciCittadinanza, aggettivoCittadinanzaACodice, codiceStatoNascita } from './codici-alloggiati';
 import { nomeACodiceComune, COMUNI } from './comuni-italiani';
+import { pulisciNumeroDocumento } from './numero-documento';
 
 // Re-export CRUD dal modulo leggero: le rotte che fanno solo DB import da lì direttamente.
 export { leggiAlloggiati, creaAlloggiato, aggiornaAlloggiato, eliminaAlloggiato } from './alloggiati-db';
@@ -203,7 +204,7 @@ export function generaFileAlloggiati(alloggiati: Alloggiato[]): string {
     const comuneNascita = pad(c.luogoNascita, 9);
     const provinciaNascita = pad(c.provinciaNascita, 2);
     const tipoDocumento = tipoDocumentoSanitizzato(a.tipo_documento);
-    const numeroDocumento = pad(a.numero_documento.toUpperCase(), 20);
+    const numeroDocumento = pad(pulisciNumeroDocumento(a.numero_documento), 20);
 
     // Luogo rilascio: codice ISTAT comune (italiani) o codice paese (stranieri/nati all'estero)
     const luogoRilascioClean = (a.luogo_rilascio ?? '').trim().replace(/\s*\([A-Z]{1,3}\)\s*$/i, '').trim();
@@ -249,7 +250,7 @@ export function validaBatch(alloggiati: Alloggiato[]): ErroreValidazione[] {
         errori.push(`Tipo documento non riconosciuto: "${a.tipo_documento}" — usa PP, CI, ID, PASSE, IDELE o IDENT`);
       }
     }
-    if (!a.numero_documento.trim()) errori.push('Numero documento mancante');
+    if (!pulisciNumeroDocumento(a.numero_documento)) errori.push('Numero documento mancante');
 
     const statoCode = codicePaeseSanitizzato(a.stato_nascita);
     const isBornAbroad = statoCode && statoCode !== '100000100';

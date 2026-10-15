@@ -5,6 +5,7 @@
 import sql from './postgres';
 import { randomUUID } from 'crypto';
 import { Alloggiato } from './types';
+import { pulisciNumeroDocumento } from './numero-documento';
 
 let _ready = false;
 
@@ -83,6 +84,7 @@ export async function creaAlloggiato(data: Omit<Alloggiato, 'id' | 'created_at'>
   await ensureAlloggiatiTable();
   const record: Alloggiato = {
     ...data,
+    numero_documento: pulisciNumeroDocumento(data.numero_documento),
     id: randomUUID(),
     created_at: new Date().toISOString(),
   };
@@ -109,6 +111,7 @@ export async function aggiornaAlloggiato(id: string, data: Partial<Omit<Alloggia
   if (rows.length === 0) return null;
   const existing = rowToAlloggiato(rows[0]);
   const updated: Alloggiato = { ...existing, ...data };
+  updated.numero_documento = pulisciNumeroDocumento(updated.numero_documento);
   await sql`
     UPDATE alloggiati SET
       struttura_id = ${updated.struttura_id ?? null},
