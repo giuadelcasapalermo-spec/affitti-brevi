@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generaTesto } from '@/lib/gemini';
 import { nomePaeseACodice, aggettivoCittadinanzaACodice, normalizzaNome } from '@/lib/codici-alloggiati';
 import { nomeACodiceComune } from '@/lib/comuni-italiani';
 
@@ -39,13 +39,10 @@ export async function POST(req: NextRequest) {
   const mimeType = (file.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp';
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await model.generateContent([
+    const rawText = await generaTesto([
       { inlineData: { mimeType, data: base64 } },
       PROMPT,
     ]);
-    const rawText = result.response.text().trim();
     // Estrai il blocco JSON dalla risposta (gestisce ```json ... ``` e testo libero prima/dopo)
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Risposta non contiene JSON valido');

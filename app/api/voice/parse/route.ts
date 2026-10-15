@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generaTesto } from '@/lib/gemini';
 
 const oggi = () => new Date().toISOString().split('T')[0];
 
@@ -102,10 +102,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim().replace(/^```json\s*/i, '').replace(/```$/,'');
+    const text = (await generaTesto(prompt)).replace(/^```json\s*/i, '').replace(/```$/,'');
     const json = JSON.parse(text);
     return NextResponse.json(json);
   } catch (err) {
