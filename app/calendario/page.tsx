@@ -732,105 +732,53 @@ export default function CalendarioPage() {
                 ))}
               </div>
 
-              {/* Settimane */}
-              {settimane.map((settimana, si) => {
-                // ── Calcola le pill per questa settimana ──
-                const pills: Array<{
-                  pren: Prenotazione;
-                  colStart: number; // 1-based CSS grid
-                  colSpan: number;
-                  isStart: boolean; // check-in è in questa settimana
-                  isEnd: boolean;   // check-out è in questa settimana
-                }> = [];
-                const visti = new Set<string>();
-
-                settimana.forEach(day => {
-                  if (!day) return;
-                  prenotazioni.forEach(p => {
-                    if (p.camera_id !== camera.id || p.stato === 'cancellata' || visti.has(p.id)) return;
-                    const ci = parseISO(p.check_in);
-                    const co = parseISO(p.check_out);
-                    // ci <= day < co  (check-out NON colorato)
-                    if (isBefore(day, ci) || !isBefore(day, co)) return;
-                    visti.add(p.id);
-
-                    let first = -1, last = -1;
-                    settimana.forEach((d, i) => {
-                      if (!d) return;
-                      if (!isBefore(d, ci) && isBefore(d, co)) {
-                        if (first === -1) first = i;
-                        last = i;
-                      }
-                    });
-                    if (first === -1) return;
-
-                    pills.push({
-                      pren: p,
-                      colStart: first + 1,
-                      colSpan: last - first + 1,
-                      isStart: isSameDay(settimana[first]!, ci),
-                      // la pill finisce se l'ultimo giorno colorato è l'ultima notte (check_out - 1)
-                      isEnd: isSameDay(addDays(settimana[last]!, 1), co),
-                    });
-                  });
-                });
-
-                return (
-                  <div key={si}>
-                    {/* Riga pillole prenotazione */}
-                    <div className="grid grid-cols-7 h-3 pointer-events-none" aria-hidden="true">
-                      {pills.map(({ pren, colStart, colSpan, isStart, isEnd }) => (
+              {/* Settimane: banda colorata dietro ai numeri. Il giorno di check-in è colorato
+                  dalla metà a destra, quello di check-out dalla sinistra fino a metà */}
+              {settimane.map((settimana, si) => (
+                <div key={si} className="grid grid-cols-7">
+                  {settimana.map((day, di) => {
+                    if (!day) return <div key={di} className="h-7" />;
+                    const notte = getDayInfo(day, camera.id).pren;
+                    const partenza = prenotazioni.find(p =>
+                      p.camera_id === camera.id && p.stato !== 'cancellata' && isSameDay(day, parseISO(p.check_out)));
+                    const isCheckIn  = !!notte && isSameDay(day, parseISO(notte.check_in));
+                    // metà sinistra: notte precedente (soggiorno in corso o partenza); metà destra: notte che inizia oggi
+                    const sinistra = notte && !isCheckIn ? notte : partenza;
+                    const pieno = !!notte && !isCheckIn;
+                    const isToday    = isSameDay(day, today);
+                    const isSelected = isSameDay(day, giornoSelezionato);
+                    const titolo = [partenza && `Partenza: ${partenza.ospite_nome}`, notte && (isCheckIn ? `Arrivo: ${notte.ospite_nome}` : notte.ospite_nome)]
+                      .filter(Boolean).join(' · ') || 'Doppio click per nuova prenotazione';
+                    return (
+                      <div
+                        key={di}
+                        title={titolo}
+                        onClick={() => setGiornoSelezionato(day)}
+                        onDoubleClick={() => setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
+                        className="relative h-7 flex items-center justify-center cursor-pointer select-none group"
+                      >
+                        {pieno ? (
+                          <div className={`absolute inset-x-0 inset-y-1 ${stile.bar}`} />
+                        ) : (
+                          <>
+                            {sinistra && <div className={`absolute left-0 right-1/2 inset-y-1 mr-0.5 rounded-r-full ${stile.bar}`} />}
+                            {notte && <div className={`absolute left-1/2 right-0 inset-y-1 ml-0.5 rounded-l-full ${stile.bar}`} />}
+                          </>
+                        )}
                         <div
-                          key={pren.id}
-                          title={pren.ospite_nome}
-                          className={`h-2.5 self-center overflow-hidden flex items-center text-[7px] font-semibold text-white
-                            ${stile.pieno}
-                            ${isStart && isEnd  ? 'mx-0.5 rounded-full' : ''}
-                            ${isStart && !isEnd ? 'ml-0.5 rounded-l-full' : ''}
-                            ${!isStart && isEnd ? 'mr-0.5 rounded-r-full' : ''}
+                          className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-colors
+                            ${pieno ? 'text-white font-semibold' : sinistra || notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff,0_0_4px_#fff]' : 'text-gray-700 font-medium group-hover:bg-black/5'}
+                            ${isToday    ? 'ring-2 ring-offset-1 ring-blue-400' : ''}
+                            ${isSelected ? 'outline outline-2 outline-offset-1 outline-gray-500' : ''}
                           `}
-                          style={{ gridColumnStart: colStart, gridColumnEnd: colStart + colSpan }}
                         >
-                          {isStart && (
-                            <span className="ml-1 truncate leading-none">
-                              {pren.ospite_nome.split(' ')[0]}
-                            </span>
-                          )}
+                          {format(day, 'd')}
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Riga numeri giorni */}
-                    <div className="grid grid-cols-7">
-                      {settimana.map((day, di) => {
-                        if (!day) return <div key={di} className="h-6" />;
-                        const { pren } = getDayInfo(day, camera.id);
-                        const isToday    = isSameDay(day, today);
-                        const isSelected = isSameDay(day, giornoSelezionato);
-                        return (
-                          <div key={di} className="flex items-center justify-center">
-                            <div
-                              title={pren ? pren.ospite_nome : 'Doppio click per nuova prenotazione'}
-                              onClick={() => setGiornoSelezionato(day)}
-                              onDoubleClick={() => setNuovaPrenotazione({
-                                cameraId: camera.id,
-                                checkIn: format(day, 'yyyy-MM-dd'),
-                              })}
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-medium transition-colors cursor-pointer
-                                text-gray-700 hover:bg-black/5
-                                ${isToday    ? 'ring-2 ring-offset-1 ring-blue-400' : ''}
-                                ${isSelected ? 'outline outline-2 outline-offset-1 outline-gray-500' : ''}
-                              `}
-                            >
-                              {format(day, 'd')}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
             {/* Lista del giorno: dopo cam 4 e 5 → occupa la cella sotto cam 3 */}
             {idx === 4 && (
@@ -843,6 +791,13 @@ export default function CalendarioPage() {
         })}
       </div>
 
+      )}
+
+      {/* Lista del giorno sotto la griglia su desktop quando la cella accanto alla quinta camera non esiste */}
+      {!vistaEffettiva && camere.length < 5 && (
+        <div className="hidden md:block bg-white rounded-lg shadow-sm p-4">
+          {listaGiornoJSX}
+        </div>
       )}
 
       {/* Lista prenotazioni del giorno — solo mobile, solo vista estesa */}
