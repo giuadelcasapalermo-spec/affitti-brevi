@@ -248,6 +248,33 @@ export default function CalendarioPage() {
     };
   }
 
+  // Banda colorata del giorno: il check-in colora dalla metà a destra, il check-out dalla sinistra fino a metà
+  function bandaGiorno(day: Date, cameraId: number) {
+    const notte = getDayInfo(day, cameraId).pren;
+    const partenza = prenotazioni.find(p =>
+      p.camera_id === cameraId && p.stato !== 'cancellata' && isSameDay(day, parseISO(p.check_out))) ?? null;
+    const isCheckIn = !!notte && isSameDay(day, parseISO(notte.check_in));
+    return {
+      notte,
+      partenza,
+      isCheckIn,
+      // metà sinistra: notte precedente (soggiorno in corso o partenza); metà destra: notte che inizia oggi
+      sinistra: notte && !isCheckIn ? notte : partenza,
+      pieno: !!notte && !isCheckIn,
+    };
+  }
+
+  function bandaJSX(b: ReturnType<typeof bandaGiorno>, bar: string, altezza: string) {
+    const pos = `absolute top-1/2 -translate-y-1/2 ${altezza} ${bar}`;
+    if (b.pieno) return <div className={`${pos} inset-x-0`} />;
+    return (
+      <>
+        {b.sinistra && <div className={`${pos} left-0 right-1/2 mr-0.5 rounded-r-full`} />}
+        {b.notte && <div className={`${pos} left-1/2 right-0 ml-0.5 rounded-l-full`} />}
+      </>
+    );
+  }
+
   const entrateDelMese = prenotazioni
     .filter((p) => {
       const d = parseISO(p.check_in);
@@ -668,18 +695,22 @@ export default function CalendarioPage() {
                   <div key={si} className="grid grid-cols-7">
                     {settimana.map((day, di) => {
                       if (!day) return <div key={di} className="h-[18px]" />;
-                      const { occupied } = getDayInfo(day, camera.id);
+                      const banda = bandaGiorno(day, camera.id);
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
                       return (
-                        <div key={di} className="flex items-center justify-center py-[1px]">
+                        <div
+                          key={di}
+                          onClick={() => setGiornoSelezionato(day)}
+                          onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
+                          className="relative flex items-center justify-center py-[1px] cursor-pointer select-none group"
+                        >
+                          {bandaJSX(banda, stile.bar, 'h-2.5')}
                           <div
-                            onClick={() => setGiornoSelezionato(day)}
-                            onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
-                            className={`w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-medium cursor-pointer select-none
-                              ${occupied ? `${stile.pieno}` : 'text-gray-600 hover:bg-black/5'}
+                            className={`relative w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px]
+                              ${banda.pieno ? 'text-white font-semibold' : banda.sinistra || banda.notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff]' : 'text-gray-600 font-medium group-hover:bg-black/5'}
                               ${isToday    ? 'ring-1 ring-blue-400 ring-offset-0' : ''}
-                              ${isSelected && !occupied ? 'outline outline-1 outline-gray-400' : ''}
+                              ${isSelected ? 'outline outline-1 outline-gray-400' : ''}
                             `}
                           >
                             {format(day, 'd')}
@@ -738,13 +769,8 @@ export default function CalendarioPage() {
                 <div key={si} className="grid grid-cols-7">
                   {settimana.map((day, di) => {
                     if (!day) return <div key={di} className="h-7" />;
-                    const notte = getDayInfo(day, camera.id).pren;
-                    const partenza = prenotazioni.find(p =>
-                      p.camera_id === camera.id && p.stato !== 'cancellata' && isSameDay(day, parseISO(p.check_out)));
-                    const isCheckIn  = !!notte && isSameDay(day, parseISO(notte.check_in));
-                    // metà sinistra: notte precedente (soggiorno in corso o partenza); metà destra: notte che inizia oggi
-                    const sinistra = notte && !isCheckIn ? notte : partenza;
-                    const pieno = !!notte && !isCheckIn;
+                    const banda = bandaGiorno(day, camera.id);
+                    const { notte, partenza, isCheckIn, sinistra, pieno } = banda;
                     const isToday    = isSameDay(day, today);
                     const isSelected = isSameDay(day, giornoSelezionato);
                     const titolo = [partenza && `Partenza: ${partenza.ospite_nome}`, notte && (isCheckIn ? `Arrivo: ${notte.ospite_nome}` : notte.ospite_nome)]
@@ -757,14 +783,7 @@ export default function CalendarioPage() {
                         onDoubleClick={() => setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
                         className="relative h-7 flex items-center justify-center cursor-pointer select-none group"
                       >
-                        {pieno ? (
-                          <div className={`absolute inset-x-0 inset-y-1 ${stile.bar}`} />
-                        ) : (
-                          <>
-                            {sinistra && <div className={`absolute left-0 right-1/2 inset-y-1 mr-0.5 rounded-r-full ${stile.bar}`} />}
-                            {notte && <div className={`absolute left-1/2 right-0 inset-y-1 ml-0.5 rounded-l-full ${stile.bar}`} />}
-                          </>
-                        )}
+                        {bandaJSX(banda, stile.bar, 'h-3.5')}
                         <div
                           className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-colors
                             ${pieno ? 'text-white font-semibold' : sinistra || notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff,0_0_4px_#fff]' : 'text-gray-700 font-medium group-hover:bg-black/5'}
