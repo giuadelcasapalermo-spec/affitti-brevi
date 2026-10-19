@@ -13,6 +13,8 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useEtichette } from '@/hooks/useEtichette';
+import { useStruttura } from '@/hooks/useStruttura';
+import { questuraConfigurata } from '@/lib/invii-configurati';
 
 type CheckinStatus = {
   linkInviato: boolean;
@@ -75,6 +77,7 @@ function PrenotazioniInner() {
   const searchParams = useSearchParams();
   const camere = useCamere();
   const et = useEtichette();
+  const { struttura } = useStruttura();
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
   const [loading, setLoading] = useState(true);
   const [mostraForm, setMostraForm] = useState(searchParams.get('nuova') === '1');
@@ -341,7 +344,7 @@ function PrenotazioniInner() {
   const filtroModificato = filtroDal !== DEFAULT_DAL || filtroAl !== DEFAULT_AL;
   const filtroExtraAttivo = filtroStato !== 'tutti' || filtroCamera !== 'tutte' || filtroOspite !== '';
 
-  function checkinBadge(prenId: string, email: string) {
+  function checkinBadge(prenId: string, email: string, cameraId: number) {
     const s = checkinStatus[prenId];
     if (!s && !email) return null;
     if (s?.alloggiatiCount > 0) {
@@ -354,7 +357,7 @@ function PrenotazioniInner() {
               title={`Schedine inviate ad Alloggiati Web il ${fDataOraBreve(s.questuraUltimoInvio)}`}>
               <Check size={9} /> Questura {fDataOraBreve(s.questuraUltimoInvio)}
             </span>
-          ) : (
+          ) : questuraConfigurata(struttura, cameraId) && (
             <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">
               Questura {inviati > 0 ? `${inviati}/${s.alloggiatiCount}` : 'da inviare'}
             </span>
@@ -736,7 +739,7 @@ function PrenotazioniInner() {
                           <span className="truncate text-blue-600 text-xs">{p.ospite_email}</span>
                         </div>
                       )}
-                      {checkinBadge(p.id, p.ospite_email)}
+                      {checkinBadge(p.id, p.ospite_email, p.camera_id)}
                       {p.ospite_telefono && (
                         <>
                           <button
@@ -1003,7 +1006,7 @@ function PrenotazioniInner() {
                     </td>
                     <td className="px-2 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {checkinBadge(p.id, p.ospite_email)}
+                        {checkinBadge(p.id, p.ospite_email, p.camera_id)}
                         {p.ospite_telefono && (
                           <>
                             <button

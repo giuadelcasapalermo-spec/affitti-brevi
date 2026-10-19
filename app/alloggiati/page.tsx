@@ -13,6 +13,7 @@ import { PAESI, CODICE_ITALIA } from '@/lib/codici-alloggiati';
 import { COMUNI } from '@/lib/comuni-italiani';
 import { useEtichette } from '@/hooks/useEtichette';
 import { useStruttura } from '@/hooks/useStruttura';
+import { questuraConfigurata, osservatorioConfigurato } from '@/lib/invii-configurati';
 
 const oggi = new Date().toISOString().split('T')[0];
 
@@ -54,7 +55,12 @@ export default function AlloggiatiPage() {
   const camere = useCamere();
   const et = useEtichette();
   const { struttura } = useStruttura();
-  const turistatAttivo = !!(struttura?.osservatorio_credentials?.codice_struttura || Object.keys(struttura?.osservatorio_camere ?? {}).length);
+  // I badge "da inviare" compaiono solo dove l'invio è configurato (struttura o camera)
+  const inviiCamera = (cameraId?: number | null) => ({
+    questura: questuraConfigurata(struttura, cameraId),
+    turistat: osservatorioConfigurato(struttura, cameraId),
+  });
+  const questuraAttiva = questuraConfigurata(struttura);
   const [data, setData] = useState(oggi);
   const [alloggiati, setAlloggiati] = useState<Alloggiato[]>([]);
   const [prenotazioni, setPrenotazioni] = useState<Prenotazione[]>([]);
@@ -499,7 +505,7 @@ export default function AlloggiatiPage() {
           <div className="text-2xl font-bold text-gray-800">{numPrenotazioniCollegate}</div>
           <div className="text-xs text-gray-400">prenotazioni collegate</div>
         </div>
-        {alloggiati.length > 0 && (
+        {alloggiati.length > 0 && questuraAttiva && (
           <div className="border-l border-gray-100 pl-6">
             <div className="text-2xl font-bold">
               <span className="text-green-700">{alloggiati.filter(a => a.inviato_portale_at).length}</span>
@@ -730,7 +736,7 @@ export default function AlloggiatiPage() {
                         style={style}
                         onEdit={() => apriModal(pren.id, a)}
                         onDelete={() => elimina(a.id)}
-                        turistat={turistatAttivo}
+                        {...inviiCamera(pren.camera_id)}
                       />
                     ))
                   )}
@@ -759,7 +765,7 @@ export default function AlloggiatiPage() {
                     style={getCameraStyle(0)}
                     onEdit={() => apriModal(null, a)}
                     onDelete={() => elimina(a.id)}
-                    turistat={turistatAttivo}
+                    {...inviiCamera()}
                   />
                 ))}
               </div>
@@ -779,7 +785,7 @@ export default function AlloggiatiPage() {
                     style={getCameraStyle(0)}
                     onEdit={() => apriModal(null, a)}
                     onDelete={() => elimina(a.id)}
-                    turistat={turistatAttivo}
+                    {...inviiCamera()}
                   />
                 ))}
               </div>
@@ -1020,12 +1026,15 @@ function RigaAlloggiato({
   style,
   onEdit,
   onDelete,
+  questura = false,
   turistat = false,
 }: {
   a: Alloggiato;
   style: ReturnType<typeof getCameraStyle>;
   onEdit: () => void;
   onDelete: () => void;
+  /** Mostra lo stato di invio ad Alloggiati Web (credenziali configurate) */
+  questura?: boolean;
   /** Mostra anche lo stato di invio all'Osservatorio Turistico */
   turistat?: boolean;
 }) {
@@ -1045,7 +1054,7 @@ function RigaAlloggiato({
               title={`Inviata ad Alloggiati Web il ${fDataOra(a.inviato_portale_at)}`}>
               ✓ Questura {fDataOra(a.inviato_portale_at)}
             </span>
-          ) : (
+          ) : questura && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap bg-amber-50 text-amber-700 border border-amber-200">
               Questura: da inviare
             </span>
