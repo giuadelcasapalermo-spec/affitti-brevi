@@ -205,6 +205,32 @@ export default function Dashboard() {
     .filter(c => c.totale > 0)
     .sort((a, b) => b.totale - a.totale);
 
+  // Versione web: tutte le categorie, anche a zero, in ordine fisso (alfabetico) per confrontare periodi diversi
+  const uscitePerCatTutte = (CATEGORIE_USCITA as readonly string[]).map(cat => ({
+    categoria: cat,
+    totale: uscitePeriodo.filter(u => u.categoria === cat).reduce((s, u) => s + u.importo, 0),
+  }));
+
+  // Andamento mensile delle uscite per categoria nei mesi del periodo (max 36)
+  const mesiPeriodo: string[] = [];
+  {
+    let [y, m] = filtroDal.slice(0, 7).split('-').map(Number);
+    const [y2, m2] = filtroAl.slice(0, 7).split('-').map(Number);
+    while ((y < y2 || (y === y2 && m <= m2)) && mesiPeriodo.length < 36) {
+      mesiPeriodo.push(`${y}-${String(m).padStart(2, '0')}`);
+      if (m === 12) { y++; m = 1; } else m++;
+    }
+  }
+  const andamentoUscite = (CATEGORIE_USCITA as readonly string[]).map(cat => {
+    const mesi = mesiPeriodo.map(mm => uscitePeriodo
+      .filter(u => u.categoria === cat && u.data.startsWith(mm))
+      .reduce((s, u) => s + u.importo, 0));
+    return { categoria: cat, mesi, totale: mesi.reduce((a, b) => a + b, 0), max: Math.max(0, ...mesi) };
+  });
+  const totaliMese = mesiPeriodo.map((_, i) => andamentoUscite.reduce((s, c) => s + c.mesi[i], 0));
+  const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  const etichettaMese = (mm: string) => `${MESI_BREVI[Number(mm.slice(5)) - 1]} ${mm.slice(2, 4)}`;
+
   const maxUscitaCat  = Math.max(1, ...uscitePerCat.map(c => c.totale));
   const maxEntrataCat = Math.max(1, ...entratePerCat.map(c => c.totale));
   // La tassa di soggiorno è una partita di giro (incassata dagli ospiti e versata al Comune):
@@ -832,7 +858,9 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-400 italic">Nessuna uscita nel periodo</p>
               ) : (
                 <div className="space-y-3">
-                  {uscitePerCat.map(({ categoria, totale }) => {
+                  {[{ lista: uscitePerCat, classe: 'sm:hidden' }, { lista: uscitePerCatTutte, classe: 'hidden sm:block' }].map(({ lista, classe }) => (
+                  <div key={classe} className={`${classe} space-y-3`}>
+                  {lista.map(({ categoria, totale }) => {
                     const giro = categoria === TASSA;
                     const pctUscite = baseUscitePct > 0 ? (totale / baseUscitePct) * 100 : 0;
                     const pctEntrate = baseEntratePct > 0 ? (totale / baseEntratePct) * 100 : 0;
@@ -857,12 +885,76 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
+                  </div>
+                  ))}
                   <div className="border-t pt-2 flex justify-between text-xs text-gray-500">
                     <span>Totale</span>
                     <span className="font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</span>
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Andamento mensile uscite per categoria (solo web) */}
+          <div className="hidden sm:block bg-white rounded-lg shadow-sm p-5">
+            <h3 className="font-semibold text-gray-700 mb-1 text-sm flex items-center gap-2">
+              <BarChart2 size={15} className="text-red-600" />
+              Andamento uscite per categoria
+            </h3>
+            <p className="text-[11px] text-gray-400 mb-3">Importi per mese del periodo. Le barre di ogni riga sono in scala sul mese più alto di quella categoria.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs tabular-nums">
+                <thead>
+                  <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wide text-gray-400">
+                    <th className="text-left font-medium py-2 pr-3 sticky left-0 bg-white">Categoria</th>
+                    <th className="text-left font-medium py-2 pr-3">Andamento</th>
+                    {mesiPeriodo.map(mm => <th key={mm} className="text-right font-medium py-2 px-2 whitespace-nowrap">{etichettaMese(mm)}</th>)}
+                    <th className="text-right font-medium py-2 pl-2">Totale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {andamentoUscite.map(({ categoria, mesi, totale, max }) => {
+                    const col = COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro'];
+                    return (
+                      <tr key={categoria} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-1.5 pr-3 whitespace-nowrap sticky left-0 bg-white">
+                          <span className="inline-flex items-center gap-1.5 font-medium text-gray-700">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${col.bar}`} />
+                            {categoria}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-3">
+                          <div className="flex items-end gap-0.5 h-6" style={{ minWidth: `${Math.max(48, mesiPeriodo.length * 8)}px` }}>
+                            {mesi.map((v, i) => (
+                              <div key={i} className="flex-1 h-full flex items-end" title={`${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
+                                <div className={`w-full rounded-t-sm ${v > 0 ? col.bar : 'bg-gray-100'}`}
+                                  style={{ height: v > 0 && max > 0 ? `${Math.max(8, (v / max) * 100)}%` : '2px' }} />
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        {mesi.map((v, i) => (
+                          <td key={i} className={`py-1.5 px-2 text-right whitespace-nowrap ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}>
+                            {v > 0 ? `€${v.toFixed(2)}` : '—'}
+                          </td>
+                        ))}
+                        <td className={`py-1.5 pl-2 text-right whitespace-nowrap font-semibold ${totale > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                          {totale > 0 ? `€${totale.toFixed(2)}` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
+                    <td className="py-2 pr-3 text-gray-600 sticky left-0 bg-gray-50">Totale</td>
+                    <td />
+                    {totaliMese.map((v, i) => <td key={i} className="py-2 px-2 text-right whitespace-nowrap text-red-600">€{v.toFixed(2)}</td>)}
+                    <td className="py-2 pl-2 text-right whitespace-nowrap font-bold text-red-600">€{totaliMese.reduce((a, b) => a + b, 0).toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
 
