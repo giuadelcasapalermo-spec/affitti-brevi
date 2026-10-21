@@ -222,6 +222,11 @@ export default function Dashboard() {
     return { categoria: cat, mesi, totale: mesi.reduce((a, b) => a + b, 0), max: Math.max(0, ...mesi) };
   });
   const totaliMese = mesiPeriodo.map((_, i) => andamentoUscite.reduce((s, c) => s + c.mesi[i], 0));
+  const totaleAndamento = totaliMese.reduce((a, b) => a + b, 0);
+  const maxTotaleMese = Math.max(0, ...totaliMese);
+  // Nella tabella solo le categorie con spese nel periodo, per incidenza
+  const andamentoVisibile = andamentoUscite.filter(c => c.totale > 0).sort((a, b) => b.totale - a.totale);
+  const euro0 = (v: number) => `€${Math.round(v).toLocaleString('it-IT')}`;
   const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
   const etichettaMese = (mm: string) => `${MESI_BREVI[Number(mm.slice(5)) - 1]} ${mm.slice(2, 4)}`;
 
@@ -896,58 +901,72 @@ export default function Dashboard() {
 
           {/* Andamento mensile uscite per categoria (solo web) */}
           <div className="hidden sm:block bg-white rounded-lg shadow-sm p-5">
-            <h3 className="font-semibold text-gray-700 mb-1 text-sm flex items-center gap-2">
-              <BarChart2 size={15} className="text-red-600" />
-              Andamento uscite per categoria
-            </h3>
-            <p className="text-[11px] text-gray-400 mb-3">Importi per mese del periodo. Le barre di ogni categoria sono in scala sul suo mese più alto.</p>
+            <div className="flex items-baseline justify-between gap-4 mb-4">
+              <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
+                <BarChart2 size={15} className="text-red-600" />
+                Andamento uscite per categoria
+              </h3>
+              <span className="text-[11px] text-gray-400 text-right">
+                {andamentoVisibile.length} categorie con spese · barre in scala sul mese più alto di ogni categoria
+              </span>
+            </div>
+            {andamentoVisibile.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">Nessuna uscita nel periodo</p>
+            ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs tabular-nums">
+              <table className="w-full text-xs tabular-nums border-separate border-spacing-0">
                 <thead>
-                  <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wide text-gray-400">
-                    <th className="text-left font-medium py-2 pr-3 sticky left-0 bg-white">Categoria</th>
-                    {mesiPeriodo.map(mm => <th key={mm} className="text-right font-medium py-2 px-2 whitespace-nowrap">{etichettaMese(mm)}</th>)}
-                    <th className="text-right font-medium py-2 pl-2">Totale</th>
+                  <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                    <th className="text-left font-medium pb-2 pr-4 sticky left-0 bg-white">Categoria</th>
+                    {mesiPeriodo.map(mm => <th key={mm} className="text-right font-medium pb-2 px-2 whitespace-nowrap">{etichettaMese(mm)}</th>)}
+                    <th className="text-right font-medium pb-2 pl-4 border-l border-gray-100">Totale</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {andamentoUscite.map(({ categoria, mesi, totale, max }) => {
+                  {andamentoVisibile.map(({ categoria, mesi, totale, max }) => {
                     const col = COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro'];
                     return (
-                      <tr key={categoria} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-1.5 pr-3 whitespace-nowrap sticky left-0 bg-white">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-gray-700">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${col.bar}`} />
+                      <tr key={categoria} className="group">
+                        <td className="py-1.5 pr-4 border-t border-gray-100 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50">
+                          <span className="inline-flex items-center gap-2 font-medium text-gray-700">
+                            <span className={`w-2.5 h-2.5 rounded-sm shrink-0 ${col.bar}`} />
                             {categoria}
                           </span>
                         </td>
                         {mesi.map((v, i) => (
-                          <td key={i} className="py-1.5 px-2 align-bottom" title={`${categoria}, ${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
-                            <div className={`text-right whitespace-nowrap leading-tight ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}>
-                              {v > 0 ? `€${v.toFixed(2)}` : '—'}
-                            </div>
-                            <div className="h-5 mt-0.5 flex items-end justify-end">
-                              <div className={`w-full max-w-[3.5rem] rounded-t-sm ${v > 0 ? col.bar : 'bg-gray-100'}`}
-                                style={{ height: v > 0 && max > 0 ? `${Math.max(10, (v / max) * 100)}%` : '2px' }} />
+                          <td key={i} className="py-1.5 px-2 border-t border-gray-100 group-hover:bg-gray-50 min-w-[4.5rem]"
+                            title={`${categoria}, ${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
+                            <div className={`text-right whitespace-nowrap ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}>{v > 0 ? euro0(v) : '–'}</div>
+                            <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden flex justify-end">
+                              <div className={`h-full rounded-full ${col.bar}`} style={{ width: v > 0 && max > 0 ? `${Math.max(6, (v / max) * 100)}%` : '0%' }} />
                             </div>
                           </td>
                         ))}
-                        <td className={`py-1.5 pl-2 text-right whitespace-nowrap font-semibold align-middle ${totale > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
-                          {totale > 0 ? `€${totale.toFixed(2)}` : '—'}
+                        <td className="py-1.5 pl-4 border-t border-l border-gray-100 text-right whitespace-nowrap group-hover:bg-gray-50">
+                          <div className="font-semibold text-gray-800">{euro0(totale)}</div>
+                          <div className="text-[10px] text-gray-400">{totaleAndamento > 0 ? ((totale / totaleAndamento) * 100).toFixed(0) : 0}%</div>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
-                    <td className="py-2 pr-3 text-gray-600 sticky left-0 bg-gray-50">Totale</td>
-                    {totaliMese.map((v, i) => <td key={i} className="py-2 px-2 text-right whitespace-nowrap text-red-600">€{v.toFixed(2)}</td>)}
-                    <td className="py-2 pl-2 text-right whitespace-nowrap font-bold text-red-600">€{totaliMese.reduce((a, b) => a + b, 0).toFixed(2)}</td>
+                  <tr className="font-semibold">
+                    <td className="pt-2.5 pr-4 border-t-2 border-gray-200 text-gray-600 whitespace-nowrap sticky left-0 bg-white">Totale mese</td>
+                    {totaliMese.map((v, i) => (
+                      <td key={i} className="pt-2.5 px-2 border-t-2 border-gray-200" title={`${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
+                        <div className="text-right whitespace-nowrap text-gray-800">{euro0(v)}</div>
+                        <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden flex justify-end">
+                              <div className="h-full rounded-full bg-gray-400" style={{ width: maxTotaleMese > 0 ? `${(v / maxTotaleMese) * 100}%` : '0%' }} />
+                            </div>
+                      </td>
+                    ))}
+                    <td className="pt-2.5 pl-4 border-t-2 border-l border-gray-200 text-right whitespace-nowrap font-bold text-red-600">{euro0(totaleAndamento)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+            )}
           </div>
 
           {/* Movimenti del periodo */}
