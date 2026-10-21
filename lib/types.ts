@@ -170,19 +170,19 @@ export interface Prenotazione {
 }
 
 export const CATEGORIE_USCITA = [
-  'Pulizie',
-  'Lavanderia',
-  'Utenze',
-  'Manutenzione',
-  'Forniture',
+  'Affitto',
   'Arredamento',
   'Commissioni',
-  'Tassa di soggiorno',
-  'Pubblicità',
-  'Affitto',
-  'IMU',
-  'TARI',
   'Condominio',
+  'Forniture',
+  'IMU',
+  'Lavanderia',
+  'Manutenzione',
+  'Pubblicità',
+  'Pulizie',
+  'TARI',
+  'Tassa di soggiorno',
+  'Utenze',
   'Altro',
 ] as const;
 
@@ -201,8 +201,8 @@ export interface Uscita {
 }
 
 export const CATEGORIE_ENTRATA = [
-  'Booking.com',
   'Airbnb',
+  'Booking.com',
   'Privato',
   'Tassa di soggiorno',
   'Altro',
