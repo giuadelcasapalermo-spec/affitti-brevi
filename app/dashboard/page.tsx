@@ -205,12 +205,6 @@ export default function Dashboard() {
     .filter(c => c.totale > 0)
     .sort((a, b) => b.totale - a.totale);
 
-  // Versione web: tutte le categorie, anche a zero, in ordine fisso (alfabetico) per confrontare periodi diversi
-  const uscitePerCatTutte = (CATEGORIE_USCITA as readonly string[]).map(cat => ({
-    categoria: cat,
-    totale: uscitePeriodo.filter(u => u.categoria === cat).reduce((s, u) => s + u.importo, 0),
-  }));
-
   // Andamento mensile delle uscite per categoria nei mesi del periodo (max 36)
   const mesiPeriodo: string[] = [];
   {
@@ -866,9 +860,7 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-400 italic">Nessuna uscita nel periodo</p>
               ) : (
                 <div className="space-y-3">
-                  {[{ lista: uscitePerCat, classe: 'sm:hidden' }, { lista: uscitePerCatTutte, classe: 'hidden sm:block' }].map(({ lista, classe }) => (
-                  <div key={classe} className={`${classe} space-y-3`}>
-                  {lista.map(({ categoria, totale }) => {
+                  {uscitePerCat.map(({ categoria, totale }) => {
                     const giro = categoria === TASSA;
                     const pctUscite = baseUscitePct > 0 ? (totale / baseUscitePct) * 100 : 0;
                     const pctEntrate = baseEntratePct > 0 ? (totale / baseEntratePct) * 100 : 0;
@@ -893,8 +885,6 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
-                  </div>
-                  ))}
                   <div className="border-t pt-2 flex justify-between text-xs text-gray-500">
                     <span>Totale</span>
                     <span className="font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</span>
