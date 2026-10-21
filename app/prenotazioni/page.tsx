@@ -6,7 +6,7 @@ import { useCamere } from '@/hooks/useCamere';
 import { differenceInDays, parseISO, format, startOfMonth, endOfMonth, addMonths, isToday, isTomorrow } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { fData } from '@/lib/utils';
-import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Mail, MessageCircle, Loader2, Scissors } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Euro, BookOpen, Landmark, Check, Moon, User, CalendarRange, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Mail, MessageCircle, Loader2, Scissors, FileCheck, ShieldCheck, Clock, Hourglass, Send } from 'lucide-react';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import InvioMassivoWhatsApp from '@/components/InvioMassivoWhatsApp';
 import { useSearchParams } from 'next/navigation';
@@ -372,6 +372,35 @@ function PrenotazioniInner() {
       return <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium whitespace-nowrap">Email da inviare</span>;
     }
     return null;
+  }
+
+  // Tabella desktop, colonna Registrazione: in alto lo stato (etichette piene), sotto le azioni (pulsanti con bordo)
+  const CHIP = 'inline-flex items-center gap-1 h-5 px-1.5 rounded-md text-[10px] font-semibold whitespace-nowrap ring-1 ring-inset';
+  const AZIONE = 'inline-flex items-center gap-1 h-5 px-1.5 rounded-md text-[10px] font-medium whitespace-nowrap border transition-colors disabled:opacity-60';
+  function statoRegistrazione(prenId: string, email: string, cameraId: number) {
+    const s = checkinStatus[prenId];
+    if (s?.alloggiatiCount > 0) {
+      const inviati = s.questuraInviati ?? 0;
+      return (
+        <>
+          <span className={`${CHIP} bg-green-50 text-green-700 ring-green-200`} title="Documenti ricevuti">
+            <FileCheck size={11} /> {s.alloggiatiCount} doc.
+          </span>
+          {inviati >= s.alloggiatiCount ? (
+            <span className={`${CHIP} bg-emerald-50 text-emerald-700 ring-emerald-200`} title={`Schedine inviate ad Alloggiati Web il ${fDataOraBreve(s.questuraUltimoInvio)}`}>
+              <ShieldCheck size={11} /> Questura {fDataOraBreve(s.questuraUltimoInvio).slice(0, 5)}
+            </span>
+          ) : questuraConfigurata(struttura, cameraId) && (
+            <span className={`${CHIP} bg-amber-50 text-amber-700 ring-amber-200`} title="Schedine da inviare ad Alloggiati Web">
+              <Clock size={11} /> Questura {inviati > 0 ? `${inviati}/${s.alloggiatiCount}` : 'da inviare'}
+            </span>
+          )}
+        </>
+      );
+    }
+    if (s?.linkInviato) return <span className={`${CHIP} bg-amber-50 text-amber-700 ring-amber-200`} title="Link inviato, l'ospite non ha ancora caricato i documenti"><Hourglass size={11} /> In attesa documenti</span>;
+    if (email) return <span className={`${CHIP} bg-gray-50 text-gray-500 ring-gray-200`}>Email da inviare</span>;
+    return <span className="text-[10px] text-gray-300">Nessun documento</span>;
   }
 
   if (loading) return <div className="text-gray-400 py-10 text-center">Caricamento...</div>;
@@ -822,7 +851,7 @@ function PrenotazioniInner() {
                 <th className="text-right px-2 py-3 font-medium text-gray-600">Ospiti</th>
                 <th className="text-right px-2 py-3 font-medium text-gray-600">Importo</th>
                 <th className="text-right px-2 py-3 font-medium text-gray-600">T.d.S.</th>
-                <th className="text-center px-2 py-3 font-medium text-gray-600">Registrazione</th>
+                <th className="text-left px-2 py-3 font-medium text-gray-600">Registrazione</th>
                 <th className="px-1 py-3 w-16"></th>
               </tr>
             </thead>
@@ -1004,44 +1033,46 @@ function PrenotazioniInner() {
                         ? <span className="text-amber-600 font-medium">€{p.tassa_soggiorno.toFixed(2)}</span>
                         : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="px-2 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {checkinBadge(p.id, p.ospite_email, p.camera_id)}
+                    <td className="px-2 py-2.5">
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {statoRegistrazione(p.id, p.ospite_email, p.camera_id)}
+                        </div>
                         {p.ospite_telefono && (
-                          <>
+                          <div className="flex items-center gap-1">
                             <button
                               onClick={() => inviaLinkWhatsApp(p.id, p.ospite_telefono)}
                               disabled={invioWA[p.id] === 'loading'}
-                              title="Invia link registrazione documenti"
-                              className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                              title="Invia su WhatsApp il link per caricare i documenti"
+                              className={`${AZIONE} ${
                                 invioWA[p.id] === 'ok' ? 'border-green-300 text-green-700 bg-green-50'
-                                : invioWA[p.id] === 'error' ? 'border-red-300 text-red-600'
-                                : 'border-green-300 text-green-700 bg-white hover:bg-green-50'
+                                : invioWA[p.id] === 'error' ? 'border-red-300 text-red-600 bg-white'
+                                : 'border-gray-200 text-gray-600 bg-white hover:border-green-300 hover:text-green-700 hover:bg-green-50'
                               }`}
                             >
-                              {invioWA[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
-                              : invioWA[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
-                              : invioWA[p.id] === 'error' ? '✗'
-                              : <><MessageCircle size={10} /> Doc</>}
+                              {invioWA[p.id] === 'loading' ? <Loader2 size={11} className="animate-spin" />
+                              : invioWA[p.id] === 'ok' ? <Check size={11} />
+                              : <MessageCircle size={11} />}
+                              {invioWA[p.id] === 'error' ? 'Errore' : 'Link doc.'}
                             </button>
                             <button
                               onClick={() => inviaIstruzioni(p.id, p.ospite_telefono)}
                               disabled={invioIstr[p.id] === 'loading'}
-                              title={checkinStatus[p.id]?.istruzioniInviateAt ? `Istruzioni già inviate il ${fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt)}: tocca per reinviarle` : 'Invia istruzioni check-in'}
-                              className={`flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                                invioIstr[p.id] === 'ok' ? 'border-blue-300 text-blue-700 bg-blue-50'
-                                : invioIstr[p.id] === 'error' ? 'border-red-300 text-red-600'
-                                : checkinStatus[p.id]?.istruzioniInviateAt ? 'border-blue-400 text-blue-800 bg-blue-50'
-                                : 'border-blue-300 text-blue-700 bg-white hover:bg-blue-50'
+                              title={checkinStatus[p.id]?.istruzioniInviateAt ? `Istruzioni check-in inviate il ${fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt)}: clicca per reinviarle` : 'Invia su WhatsApp le istruzioni per il check-in'}
+                              className={`${AZIONE} ${
+                                invioIstr[p.id] === 'error' ? 'border-red-300 text-red-600 bg-white'
+                                : invioIstr[p.id] === 'ok' || checkinStatus[p.id]?.istruzioniInviateAt ? 'border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                                : 'border-gray-200 text-gray-600 bg-white hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50'
                               }`}
                             >
-                              {invioIstr[p.id] === 'loading' ? <Loader2 size={10} className="animate-spin" />
-                              : invioIstr[p.id] === 'ok' ? <><MessageCircle size={10} /> ✓</>
-                              : invioIstr[p.id] === 'error' ? '✗'
-                              : checkinStatus[p.id]?.istruzioniInviateAt ? <><Check size={10} /> Check-in {fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt).slice(0, 5)}</>
-                            : <><MessageCircle size={10} /> Check-in</>}
+                              {invioIstr[p.id] === 'loading' ? <Loader2 size={11} className="animate-spin" />
+                              : invioIstr[p.id] === 'ok' || checkinStatus[p.id]?.istruzioniInviateAt ? <Check size={11} />
+                              : <Send size={11} />}
+                              {invioIstr[p.id] === 'error' ? 'Errore'
+                              : checkinStatus[p.id]?.istruzioniInviateAt ? `Istruzioni ${fDataOraBreve(checkinStatus[p.id]?.istruzioniInviateAt).slice(0, 5)}`
+                              : 'Istruzioni'}
                             </button>
-                          </>
+                          </div>
                         )}
                       </div>
                     </td>
