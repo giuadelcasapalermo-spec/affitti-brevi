@@ -401,15 +401,24 @@ export async function sincronizzaCalendario(
     // Il feed taglia i giorni passati: un soggiorno in corso "inizia" oggi, e Booking gli cambia
     // anche l'UID (Roberta Costantini Blue 11→14 il 13/10 è ricomparsa come 13→14 con UID nuovo).
     // Per un evento che inizia oggi la prenotazione con lo stesso check-out iniziata prima è la stessa.
-    const rinominata = orfane.find(
-      (p) => !orfaneRiassegnate.has(p.id) && p.check_out === checkOut
-        && (p.check_in === checkIn || (checkIn === oggi && p.check_in <= oggi))
-    );
+    // Valgono anche le prenotazioni già cancellate dal sync il cui UID è finito tra gli ignorati:
+    // Booking cambia l'UID anche ai soggiorni futuri, a volte più volte (Monkey house 16→18/10:
+    // Francesca Debbi con 3 documenti cancellata e sostituita da due blocchi "Ospite Booking.com").
+    // Si preferisce la prenotazione viva, poi quella con il nome dell'ospite.
+    const stesseDate = (p: Prenotazione) => p.check_out === checkOut
+      && (p.check_in === checkIn || (checkIn === oggi && p.check_in <= oggi));
+    const candidate = [
+      ...orfane,
+      ...esistentiIcal.filter((p) => p.stato === 'cancellata' && uidIgnorati.has(p.ical_uid ?? '') && !remoteUids.has(p.ical_uid ?? '')),
+    ].filter((p) => !orfaneRiassegnate.has(p.id) && stesseDate(p));
+    const punteggio = (p: Prenotazione) => (p.stato !== 'cancellata' ? 2 : 0) + (p.ospite_nome !== 'Ospite Booking.com' ? 1 : 0);
+    const rinominata = candidate.sort((a, b) => punteggio(b) - punteggio(a))[0];
     if (rinominata) {
       orfaneRiassegnate.add(rinominata.id);
       const riassegnata: Prenotazione = {
         ...rinominata,
-        ospite_nome: ospiteNome,
+        // il feed Booking non ha i nomi: non si perde quello già completato
+        ospite_nome: ospiteNome === 'Ospite Booking.com' ? rinominata.ospite_nome : ospiteNome,
         ical_uid: ev.uid,
         stato: rinominata.stato === 'cancellata' ? 'confermata' : rinominata.stato,
       };
