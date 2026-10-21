@@ -370,6 +370,39 @@ export async function sincronizzaCalendario(
         };
         daAggiornare.set(giaPresente.id, riattivata);
         riattivate.push(riattivata);
+      } else {
+        // Booking allarga il blocco a un soggiorno attaccato tenendo lo stesso UID (Bianca 21/10:
+        // Pavla Tichá 27→29 + Lisa Bruckner 29→31 = blocco 27→31 con l'UID di Tichá): le notti
+        // del blocco non coperte da nessuna prenotazione viva della camera sono un soggiorno nuovo
+        const occupate = prenotazioni
+          .filter((p) => p.camera_id === cameraId && p.stato !== 'cancellata' && p.check_in < checkOut && p.check_out > checkIn)
+          .sort((a, b) => a.check_in.localeCompare(b.check_in));
+        let cursore = checkIn;
+        const scoperte: [string, string][] = [];
+        for (const p of occupate) {
+          if (p.check_in > cursore) scoperte.push([cursore, p.check_in]);
+          if (p.check_out > cursore) cursore = p.check_out;
+        }
+        if (cursore < checkOut) scoperte.push([cursore, checkOut]);
+        for (const [s, e] of scoperte) {
+          if (s < oggi) continue; // il feed taglia i giorni passati
+          daAggiungere.push({
+            id: randomUUID(),
+            struttura_id: strutturaId,
+            camera_id: cameraId,
+            ospite_nome: ospiteNome,
+            ospite_telefono: '',
+            ospite_email: '',
+            check_in: s,
+            check_out: e,
+            importo_totale: 0,
+            stato: 'confermata',
+            note: 'Importata da Booking.com (iCal)',
+            created_at: new Date().toISOString(),
+            fonte: 'ical',
+            ical_uid: ev.uid,
+          });
+        }
       }
       continue;
     }
