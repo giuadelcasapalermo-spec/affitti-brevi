@@ -30,6 +30,20 @@ const piuGiorni = (d, n) => {
   return t.toISOString().slice(0, 10);
 };
 
+const parole = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .split(/[^a-z]+/).filter((w) => w.length >= 3);
+function distanza(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  }
+  return d[a.length][b.length];
+}
+/** Una parola del nome in prenotazione uguale (o quasi, refusi del foglio) a una degli ospiti */
+const stessoOspite = (nome, ospiti) => parole(nome).some((a) => parole(ospiti).some((b) =>
+  a === b || (a.length >= 5 && b.length >= 5 && distanza(a, b) <= 1)));
+
 const orfani = await sql`
   SELECT a.prenotazione_id, a.struttura_id, a.data_arrivo, MAX(a.permanenza)::int AS permanenza,
          string_agg(a.cognome || ' ' || a.nome, ', ') AS ospiti
@@ -43,12 +57,16 @@ const restano = [];
 for (const o of orfani) {
   const arrivo = isoData(o.data_arrivo);
   const partenza = piuGiorni(arrivo, Math.max(1, o.permanenza));
-  const candidate = (await sql`
+  const libere = (await sql`
     SELECT id, camera_id, ospite_nome, check_in, check_out, fonte FROM prenotazioni
     WHERE stato <> 'cancellata' AND struttura_id IS NOT DISTINCT FROM ${o.struttura_id}
       AND check_in = ${arrivo} AND check_out = ${partenza}`).filter((p) => !conDoc.has(p.id));
+  // Stesse date non bastano (più camere arrivano lo stesso giorno): serve anche il nome
+  const candidate = libere.filter((p) => stessoOspite(p.ospite_nome, o.ospiti));
   if (candidate.length !== 1) {
-    restano.push(`  ${arrivo}→${partenza} ${o.ospiti} — ${candidate.length === 0 ? 'nessuna prenotazione libera' : `${candidate.length} possibili: ${candidate.map((c) => `camera ${c.camera_id} ${c.ospite_nome}`).join(', ')}`}`);
+    const elenco = libere.length === 0 ? 'nessuna prenotazione libera con queste date'
+      : `${candidate.length === 0 ? 'nessun nome corrispondente' : 'più nomi corrispondenti'} tra: ${libere.map((c) => `camera ${c.camera_id} ${c.ospite_nome}`).join(', ')}`;
+    restano.push(`  ${arrivo}→${partenza} ${o.ospiti} — ${elenco}`);
     continue;
   }
   const [p] = candidate;
@@ -65,7 +83,7 @@ if (restano.length) console.log(`Da vedere a mano (${restano.length}):\n${restan
 
 const vecchie = await sql`
   SELECT id, data::text AS data, categoria, descrizione, importo FROM uscite
-  WHERE data < '2024-01-01' OR data > (CURRENT_DATE + INTERVAL '2 years') ORDER BY data`;
+  WHERE data::text < '2024-01-01' OR data::text > ${`${new Date().getFullYear() + 2}-12-31`} ORDER BY data`;
 console.log(`\nUscite con data fuori periodo: ${vecchie.length}`);
 vecchie.forEach((u) => console.log(`  ${u.data}  ${Number(u.importo).toFixed(2)} €  ${u.categoria}  ${u.descrizione}  (id ${u.id})`));
 
