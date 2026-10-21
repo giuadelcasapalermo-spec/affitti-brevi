@@ -378,12 +378,12 @@ export default function Dashboard() {
           <div className="text-base font-bold text-gray-800">{totalOspiti}</div>
         </div>
         <div className="text-center pt-2">
-          <div className="text-[11px] text-gray-400">Uscite</div>
-          <div className="text-base font-bold text-red-600">-€{usciteDelPeriodo.toFixed(0)}</div>
-        </div>
-        <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Entrate</div>
           <div className="text-base font-bold text-green-700">+€{entrateEffettive.toFixed(0)}</div>
+        </div>
+        <div className="text-center pt-2">
+          <div className="text-[11px] text-gray-400">Uscite</div>
+          <div className="text-base font-bold text-red-600">-€{usciteDelPeriodo.toFixed(0)}</div>
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Saldo</div>
