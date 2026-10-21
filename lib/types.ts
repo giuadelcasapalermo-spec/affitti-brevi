@@ -170,19 +170,22 @@ export interface Prenotazione {
 }
 
 export const CATEGORIE_USCITA = [
+  'Acqua',
   'Affitto',
   'Arredamento',
   'Commissioni',
   'Condominio',
   'Forniture',
+  'Gas',
   'IMU',
+  'Internet',
   'Lavanderia',
+  'Luce',
   'Manutenzione',
   'Pubblicità',
   'Pulizie',
   'TARI',
   'Tassa di soggiorno',
-  'Utenze',
   'Altro',
 ] as const;
 

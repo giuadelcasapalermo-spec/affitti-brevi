@@ -1,5 +1,6 @@
 import { Uscita } from './types';
 import sql from './postgres';
+import { categoriaUtenza } from './categorie';
 
 let _colReady = false;
 async function ensureCol(): Promise<void> {
@@ -7,6 +8,12 @@ async function ensureCol(): Promise<void> {
   await sql`ALTER TABLE uscite ADD COLUMN IF NOT EXISTS fonte_pagamento TEXT NOT NULL DEFAULT 'Contanti'`;
   // Categoria 'Tasse' rinominata 'Tassa di soggiorno' (21/10/2026)
   await sql`UPDATE uscite SET categoria = 'Tassa di soggiorno' WHERE categoria = 'Tasse'`;
+  // Categoria 'Utenze' divisa in Luce, Gas, Acqua, Internet (e TARI, Condominio) dalla descrizione (21/10/2026)
+  const utenze = await sql`SELECT id, descrizione, note FROM uscite WHERE categoria = 'Utenze'`;
+  for (const u of utenze) {
+    const cat = categoriaUtenza(String(u.descrizione ?? ''), String(u.note ?? '')) ?? 'Altro';
+    await sql`UPDATE uscite SET categoria = ${cat} WHERE id = ${u.id}`;
+  }
   _colReady = true;
 }
 

@@ -41,7 +41,7 @@ Rispondi SOLO con JSON valido, nessun testo aggiuntivo:
   if (tipo === 'uscita') {
     return `Sei un assistente per una struttura di affitti brevi. Analizza il testo dettato ed estrai i dati per una nuova uscita/spesa.
 
-Categorie disponibili: Pulizie, Lavanderia, Utenze, Manutenzione, Forniture, Arredamento, Commissioni, Tassa di soggiorno, Pubblicità, Affitto, IMU, TARI, Condominio, Altro
+Categorie disponibili: Acqua, Affitto, Arredamento, Commissioni, Condominio, Forniture, Gas, IMU, Internet, Lavanderia, Luce, Manutenzione, Pubblicità, Pulizie, TARI, Tassa di soggiorno, Altro
 Camere disponibili: ${listaCamere || 'nessuna'} (usa null per spese generali)
 Oggi: ${oggi()}
 Anno corrente: ${anno}

@@ -19,7 +19,10 @@ import { useEtichette } from '@/hooks/useEtichette';
 const COL_USCITA: Record<CategoriaUscita, string> = {
   Pulizie:      'bg-blue-100 text-blue-700',
   Lavanderia:   'bg-teal-100 text-teal-700',
-  Utenze:       'bg-yellow-100 text-yellow-700',
+  Luce:         'bg-yellow-100 text-yellow-700',
+  Gas:          'bg-amber-100 text-amber-800',
+  Acqua:        'bg-sky-100 text-sky-700',
+  Internet:     'bg-fuchsia-100 text-fuchsia-700',
   Manutenzione: 'bg-orange-100 text-orange-700',
   Forniture:    'bg-green-100 text-green-700',
   Arredamento:  'bg-cyan-100 text-cyan-700',

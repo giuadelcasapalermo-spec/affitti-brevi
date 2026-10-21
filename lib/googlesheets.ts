@@ -5,6 +5,7 @@ import { leggiEntrate, scriviEntrate } from './entrate';
 import { leggiUscite, scriviUscite } from './uscite';
 import { leggiPrenotazioni, scriviPrenotazioni } from './db';
 import { getStrutturaAttiva } from './strutture';
+import { categoriaUtenza, CATEGORIE_UTENZE } from './categorie';
 import { leggiImpostazioni, riconciliaBlocchiIcal, haCollegamenti, type SyncResult } from './ical';
 import sql from './postgres';
 import { randomUUID } from 'crypto';
@@ -105,12 +106,13 @@ const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 
 const CAT_TO_TIPO: Record<string, string> = {
-  Arredamento: 'Arredamento', Utenze: 'Utenze', Manutenzione: 'Manutenzione',
+  Arredamento: 'Arredamento', Manutenzione: 'Manutenzione',
+  Luce: 'Utenze', Gas: 'Utenze', Acqua: 'Utenze', Internet: 'Utenze',
   Forniture: 'Acquisti varie', Pulizie: 'Pulizie', Affitto: 'Affitto',
-  'Tassa di soggiorno': 'Tasse', IMU: 'IMU', TARI: 'TARI', Condominio: 'Condominio', Commissioni: 'Commissioni', Pubblicità: 'Pubblicità', Altro: 'Spese varie',
+  'Tassa di soggiorno': 'Tasse', IMU: 'IMU', TARI: 'Utenze', Condominio: 'Utenze', Commissioni: 'Commissioni', Pubblicità: 'Pubblicità', Altro: 'Spese varie',
 };
 const TIPO_TO_CAT: Record<string, Uscita['categoria']> = {
-  arredamento: 'Arredamento', utenze: 'Utenze', manutenzione: 'Manutenzione',
+  arredamento: 'Arredamento', manutenzione: 'Manutenzione', // utenze: categoriaUtenza(descrizione)
   'acquisti varie': 'Forniture', 'spese varie': 'Forniture', pulizie: 'Pulizie',
   affitto: 'Affitto', tasse: 'Tassa di soggiorno', imu: 'IMU', tari: 'TARI', condominio: 'Condominio', commissioni: 'Commissioni', 'pubblicità': 'Pubblicità',
 };
@@ -124,9 +126,16 @@ const TIPO_AMMESSI_TABS = new Set([
 ]);
 
 // Categorie corrispondenti ai tipi ammessi (per la pulizia del DB)
-const CATEGORIE_AMMESSE_TABS = new Set<string>(
-  [...TIPO_AMMESSI_TABS].map(t => TIPO_TO_CAT[t] ?? 'Altro')
-);
+const CATEGORIE_AMMESSE_TABS = new Set<string>([
+  ...[...TIPO_AMMESSI_TABS].filter(t => t !== 'utenze').map(t => TIPO_TO_CAT[t] ?? 'Altro'),
+  ...CATEGORIE_UTENZE,
+]);
+
+/** Categoria di una riga dei tab mensili: il tipo "Utenze" si divide in base alla descrizione */
+function categoriaDaTipo(tipo: string, descrizione: string, note = ''): Uscita['categoria'] {
+  if (tipo === 'utenze') return categoriaUtenza(descrizione, note) ?? 'Altro';
+  return TIPO_TO_CAT[tipo] ?? 'Altro';
+}
 
 const STANZA_ID: Record<string, number> = {
   'rossa': 1, 'camera 1': 1, '1': 1,
@@ -277,14 +286,16 @@ async function exportUsciteToTabs(
       if (!dataVal || !tipo) continue;
       const data = parseSheetDate(dataVal as string|number|undefined);
       if (!data) continue;
-      keyToRow.set(`${data}|${tipo}`, i + 1);
+      // Più utenze nello stesso giorno (luce e gas) hanno lo stesso tipo: si distinguono per categoria
+      const sub = tipo === 'utenze' ? `|${categoriaDaTipo(tipo, String(row[1] ?? ''))}` : '';
+      keyToRow.set(`${data}|${tipo}${sub}`, i + 1);
     }
 
     const nuoveRighe: (string|number)[][] = [];
 
     for (const u of usciteDelTab) {
       const tipoStr = CAT_TO_TIPO[u.categoria] ?? 'Spese varie';
-      const key = `${u.data}|${tipoStr.toLowerCase()}`;
+      const key = `${u.data}|${tipoStr.toLowerCase()}${tipoStr === 'Utenze' ? `|${u.categoria}` : ''}`;
       const rowIdx = keyToRow.get(key);
 
       if (rowIdx !== undefined) {
@@ -380,7 +391,7 @@ async function importUsciteOriginale(
       const data   = parseSheetDate(row[C.dataI] as string|number|undefined);
       if (!data || uscita <= 0 || !desc) continue;
 
-      const cat = TIPO_TO_CAT[tipo] ?? 'Altro';
+      const cat = categoriaDaTipo(tipo, desc, String(row[C.note] ?? ''));
       const k   = `${data}|${cat}`;
       trovatiNelTab.add(k);
 
@@ -1038,7 +1049,9 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
     if (tipo !== 'uscita') { ignorate++; continue; }
     const importo   = parseFloat(importoStr) || 0;
     const camera_id = cameraIdStr ? parseInt(cameraIdStr) || undefined : undefined;
-    const nomeCat = categoria === 'Tasse' ? 'Tassa di soggiorno' : categoria; // nome precedente
+    // nomi precedenti: 'Tasse' e 'Utenze' (divisa in base alla descrizione)
+    const nomeCat = categoria === 'Tasse' ? 'Tassa di soggiorno'
+      : categoria === 'Utenze' ? (categoriaUtenza(descrizione, note ?? '') ?? 'Altro') : categoria;
     const cat = CATEGORIE_USCITA.includes(nomeCat as never) ? nomeCat as Uscita['categoria'] : 'Altro';
     const k = `${data}|${cat}`;
     const existingIdx = keyMap.get(k);

@@ -19,7 +19,10 @@ import { useEtichette } from '@/hooks/useEtichette';
 const COLORI_CAT_USCITA: Record<string, { bar: string; hex: string }> = {
   'Pulizie':      { bar: 'bg-sky-500',     hex: '#0ea5e9' },
   'Lavanderia':   { bar: 'bg-cyan-500',    hex: '#06b6d4' },
-  'Utenze':       { bar: 'bg-yellow-500',  hex: '#eab308' },
+  'Luce':         { bar: 'bg-yellow-500',  hex: '#eab308' },
+  'Gas':          { bar: 'bg-amber-600',   hex: '#d97706' },
+  'Acqua':        { bar: 'bg-blue-400',    hex: '#60a5fa' },
+  'Internet':     { bar: 'bg-fuchsia-500', hex: '#d946ef' },
   'Manutenzione': { bar: 'bg-orange-500',  hex: '#f97316' },
   'Forniture':    { bar: 'bg-emerald-500', hex: '#10b981' },
   'Arredamento':  { bar: 'bg-violet-500',  hex: '#8b5cf6' },
