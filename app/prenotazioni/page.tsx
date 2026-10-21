@@ -822,7 +822,7 @@ function PrenotazioniInner() {
                 <th className="text-right px-2 py-3 font-medium text-gray-600">Ospiti</th>
                 <th className="text-right px-2 py-3 font-medium text-gray-600">Importo</th>
                 <th className="text-right px-2 py-3 font-medium text-gray-600">T.d.S.</th>
-                <th className="text-center px-2 py-3 font-medium text-gray-600">Check-in</th>
+                <th className="text-center px-2 py-3 font-medium text-gray-600">Registrazione</th>
                 <th className="px-1 py-3 w-16"></th>
               </tr>
             </thead>
