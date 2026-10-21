@@ -910,13 +910,12 @@ export default function Dashboard() {
               <BarChart2 size={15} className="text-red-600" />
               Andamento uscite per categoria
             </h3>
-            <p className="text-[11px] text-gray-400 mb-3">Importi per mese del periodo. Le barre di ogni riga sono in scala sul mese più alto di quella categoria.</p>
+            <p className="text-[11px] text-gray-400 mb-3">Importi per mese del periodo. Le barre di ogni categoria sono in scala sul suo mese più alto.</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs tabular-nums">
                 <thead>
                   <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wide text-gray-400">
                     <th className="text-left font-medium py-2 pr-3 sticky left-0 bg-white">Categoria</th>
-                    <th className="text-left font-medium py-2 pr-3">Andamento</th>
                     {mesiPeriodo.map(mm => <th key={mm} className="text-right font-medium py-2 px-2 whitespace-nowrap">{etichettaMese(mm)}</th>)}
                     <th className="text-right font-medium py-2 pl-2">Totale</th>
                   </tr>
@@ -932,22 +931,18 @@ export default function Dashboard() {
                             {categoria}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-3">
-                          <div className="flex items-end gap-0.5 h-6" style={{ minWidth: `${Math.max(48, mesiPeriodo.length * 8)}px` }}>
-                            {mesi.map((v, i) => (
-                              <div key={i} className="flex-1 h-full flex items-end" title={`${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
-                                <div className={`w-full rounded-t-sm ${v > 0 ? col.bar : 'bg-gray-100'}`}
-                                  style={{ height: v > 0 && max > 0 ? `${Math.max(8, (v / max) * 100)}%` : '2px' }} />
-                              </div>
-                            ))}
-                          </div>
-                        </td>
                         {mesi.map((v, i) => (
-                          <td key={i} className={`py-1.5 px-2 text-right whitespace-nowrap ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}>
-                            {v > 0 ? `€${v.toFixed(2)}` : '—'}
+                          <td key={i} className="py-1.5 px-2 align-bottom" title={`${categoria}, ${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
+                            <div className={`text-right whitespace-nowrap leading-tight ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}>
+                              {v > 0 ? `€${v.toFixed(2)}` : '—'}
+                            </div>
+                            <div className="h-5 mt-0.5 flex items-end justify-end">
+                              <div className={`w-full max-w-[3.5rem] rounded-t-sm ${v > 0 ? col.bar : 'bg-gray-100'}`}
+                                style={{ height: v > 0 && max > 0 ? `${Math.max(10, (v / max) * 100)}%` : '2px' }} />
+                            </div>
                           </td>
                         ))}
-                        <td className={`py-1.5 pl-2 text-right whitespace-nowrap font-semibold ${totale > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                        <td className={`py-1.5 pl-2 text-right whitespace-nowrap font-semibold align-middle ${totale > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
                           {totale > 0 ? `€${totale.toFixed(2)}` : '—'}
                         </td>
                       </tr>
@@ -957,7 +952,6 @@ export default function Dashboard() {
                 <tfoot>
                   <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
                     <td className="py-2 pr-3 text-gray-600 sticky left-0 bg-gray-50">Totale</td>
-                    <td />
                     {totaliMese.map((v, i) => <td key={i} className="py-2 px-2 text-right whitespace-nowrap text-red-600">€{v.toFixed(2)}</td>)}
                     <td className="py-2 pl-2 text-right whitespace-nowrap font-bold text-red-600">€{totaliMese.reduce((a, b) => a + b, 0).toFixed(2)}</td>
                   </tr>
