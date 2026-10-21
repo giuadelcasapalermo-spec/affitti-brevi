@@ -830,12 +830,12 @@ export default function PrimaNotaPage() {
               <tr>
                 <th className="text-left pl-4 py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-24">Data</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px]">Descrizione</th>
-                <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-36">Categoria</th>
+                <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-32">Categoria</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-28 hidden lg:table-cell">Modalità</th>
-                <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[6.5rem]">Entrata</th>
-                <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[6.5rem]">Uscita</th>
-                <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-28">Saldo</th>
-                <th className="pr-3 w-[4.5rem]"></th>
+                <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[5.25rem]">Entrata</th>
+                <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[5.25rem]">Uscita</th>
+                <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[5.75rem]">Saldo</th>
+                <th className="pr-3 w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -863,9 +863,9 @@ export default function PrimaNotaPage() {
                         <span className="truncate">{r.rec.fonte_pagamento || 'Contanti'}</span>
                       </span>
                     </td>
-                    <td className="pr-3 py-2 text-right font-semibold text-green-700 whitespace-nowrap tabular-nums">{isE ? `+€${r.rec.importo.toFixed(2)}` : ''}</td>
-                    <td className="pr-3 py-2 text-right font-semibold text-red-600 whitespace-nowrap tabular-nums">{!isE ? `−€${r.rec.importo.toFixed(2)}` : ''}</td>
-                    <td className={`pr-3 py-2 text-right font-bold whitespace-nowrap tabular-nums ${s >= 0 ? 'text-green-700' : 'text-red-700'}`}>{s >= 0 ? '+' : '−'}€{Math.abs(s).toFixed(2)}</td>
+                    <td className="pr-3 py-2 text-right text-xs font-semibold text-green-700 whitespace-nowrap tabular-nums">{isE ? `+€${r.rec.importo.toFixed(2)}` : ''}</td>
+                    <td className="pr-3 py-2 text-right text-xs font-semibold text-red-600 whitespace-nowrap tabular-nums">{!isE ? `−€${r.rec.importo.toFixed(2)}` : ''}</td>
+                    <td className={`pr-3 py-2 text-right text-xs font-bold whitespace-nowrap tabular-nums ${s >= 0 ? 'text-green-700' : 'text-red-700'}`}>{s >= 0 ? '+' : '−'}€{Math.abs(s).toFixed(2)}</td>
                     <td className="pr-3 py-2">
                       <div className="flex gap-2 justify-end">
                         {isE && e.categoria === 'Privato' && (
@@ -884,9 +884,9 @@ export default function PrimaNotaPage() {
               <tr>
                 <td colSpan={3} className="pl-4 pr-3 py-2.5 text-gray-600 lg:hidden">Totale mese</td>
                 <td colSpan={4} className="pl-4 pr-3 py-2.5 text-gray-600 hidden lg:table-cell">Totale mese</td>
-                <td className="pr-3 py-2.5 text-right text-green-700 whitespace-nowrap tabular-nums">+€{totEntrate.toFixed(2)}</td>
-                <td className="pr-3 py-2.5 text-right text-red-600 whitespace-nowrap tabular-nums">−€{totUscite.toFixed(2)}</td>
-                <td className={`pr-3 py-2.5 text-right font-bold whitespace-nowrap tabular-nums ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>{saldo >= 0 ? '+' : '−'}€{Math.abs(saldo).toFixed(2)}</td>
+                <td className="pr-3 py-2.5 text-right text-xs text-green-700 whitespace-nowrap tabular-nums">+€{totEntrate.toFixed(2)}</td>
+                <td className="pr-3 py-2.5 text-right text-xs text-red-600 whitespace-nowrap tabular-nums">−€{totUscite.toFixed(2)}</td>
+                <td className={`pr-3 py-2.5 text-right text-xs font-bold whitespace-nowrap tabular-nums ${saldo >= 0 ? 'text-green-700' : 'text-red-700'}`}>{saldo >= 0 ? '+' : '−'}€{Math.abs(saldo).toFixed(2)}</td>
                 <td />
               </tr>
             </tfoot>
