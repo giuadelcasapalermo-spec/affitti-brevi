@@ -207,6 +207,11 @@ export default function Dashboard() {
 
   const maxUscitaCat  = Math.max(1, ...uscitePerCat.map(c => c.totale));
   const maxEntrataCat = Math.max(1, ...entratePerCat.map(c => c.totale));
+  // La tassa di soggiorno è una partita di giro (incassata dagli ospiti e versata al Comune):
+  // resta nei totali ma non entra in percentuali e incidenza
+  const TASSA = 'Tassa di soggiorno';
+  const baseEntratePct = entratePeriodo.filter(e => e.categoria !== TASSA).reduce((s, e) => s + e.importo, 0);
+  const baseUscitePct = uscitePeriodo.filter(u => u.categoria !== TASSA).reduce((s, u) => s + u.importo, 0);
   const saldoPN = entratePeriodo.reduce((s, e) => s + e.importo, 0) - uscitePeriodo.reduce((s, u) => s + u.importo, 0);
   const saldo = entrateEffettive - usciteDelPeriodo;
   const incidenzaUscite = entrateEffettive > 0 ? (usciteDelPeriodo / entrateEffettive) * 100 : 0;
@@ -771,11 +776,9 @@ export default function Dashboard() {
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="text-xs text-gray-500 mb-1">Incidenza uscite</div>
               <div className="text-xl font-bold text-amber-700">
-                {entratePeriodo.reduce((s,e) => s+e.importo, 0) > 0
-                  ? ((uscitePeriodo.reduce((s,u) => s+u.importo, 0) / entratePeriodo.reduce((s,e) => s+e.importo, 0)) * 100).toFixed(1)
-                  : '0.0'}%
+                {baseEntratePct > 0 ? ((baseUscitePct / baseEntratePct) * 100).toFixed(1) : '0.0'}%
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">delle entrate</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">delle entrate, senza tassa di soggiorno</div>
             </div>
           </div>
 
@@ -793,7 +796,8 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {entratePerCat.map(({ categoria, totale }) => {
-                    const pct = entrateEffettive > 0 ? (totale / entrateEffettive) * 100 : 0;
+                    const giro = categoria === TASSA;
+                    const pct = baseEntratePct > 0 ? (totale / baseEntratePct) * 100 : 0;
                     const col = COLORI_CAT_ENTRATA[categoria] ?? COLORI_CAT_ENTRATA['Altro'];
                     return (
                       <div key={categoria}>
@@ -801,7 +805,7 @@ export default function Dashboard() {
                           <span className="text-xs font-medium text-gray-700">{categoria}</span>
                           <div className="flex items-center gap-3 text-xs">
                             <span className="font-semibold text-gray-800">€{totale.toFixed(2)}</span>
-                            <span className="text-gray-400 w-10 text-right">{pct.toFixed(0)}%</span>
+                            <span className="text-gray-400 w-10 text-right" title={giro ? 'Partita di giro: esclusa dalle percentuali' : undefined}>{giro ? 'giro' : `${pct.toFixed(0)}%`}</span>
                           </div>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -829,8 +833,9 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {uscitePerCat.map(({ categoria, totale }) => {
-                    const pctUscite = usciteDelPeriodo > 0 ? (totale / usciteDelPeriodo) * 100 : 0;
-                    const pctEntrate = entrateEffettive > 0 ? (totale / entrateEffettive) * 100 : 0;
+                    const giro = categoria === TASSA;
+                    const pctUscite = baseUscitePct > 0 ? (totale / baseUscitePct) * 100 : 0;
+                    const pctEntrate = baseEntratePct > 0 ? (totale / baseEntratePct) * 100 : 0;
                     const col = COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro'];
                     return (
                       <div key={categoria}>
@@ -838,10 +843,10 @@ export default function Dashboard() {
                           <span className="text-xs font-medium text-gray-700">{categoria}</span>
                           <div className="flex items-center gap-2 text-xs">
                             <span className="font-semibold text-gray-800">€{totale.toFixed(2)}</span>
-                            <span className="text-gray-400 w-9 text-right">{pctUscite.toFixed(0)}%</span>
-                            {entrateEffettive > 0 && (
+                            <span className="text-gray-400 w-9 text-right" title={giro ? 'Partita di giro: esclusa dalle percentuali' : undefined}>{giro ? 'giro' : `${pctUscite.toFixed(0)}%`}</span>
+                            {baseEntratePct > 0 && (
                               <span className="text-amber-600 w-16 text-right text-[10px] tabular-nums">
-                                {pctEntrate.toFixed(1)}% su ent.
+                                {giro ? '' : `${pctEntrate.toFixed(1)}% su ent.`}
                               </span>
                             )}
                           </div>
