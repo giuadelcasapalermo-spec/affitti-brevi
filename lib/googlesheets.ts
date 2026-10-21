@@ -107,12 +107,12 @@ const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
 const CAT_TO_TIPO: Record<string, string> = {
   Arredamento: 'Arredamento', Utenze: 'Utenze', Manutenzione: 'Manutenzione',
   Forniture: 'Acquisti varie', Pulizie: 'Pulizie', Affitto: 'Affitto',
-  Tasse: 'Tasse', Commissioni: 'Commissioni', Pubblicità: 'Pubblicità', Altro: 'Spese varie',
+  'Tassa di soggiorno': 'Tasse', IMU: 'IMU', TARI: 'TARI', Condominio: 'Condominio', Commissioni: 'Commissioni', Pubblicità: 'Pubblicità', Altro: 'Spese varie',
 };
 const TIPO_TO_CAT: Record<string, Uscita['categoria']> = {
   arredamento: 'Arredamento', utenze: 'Utenze', manutenzione: 'Manutenzione',
   'acquisti varie': 'Forniture', 'spese varie': 'Forniture', pulizie: 'Pulizie',
-  affitto: 'Affitto', tasse: 'Tasse', commissioni: 'Commissioni', 'pubblicità': 'Pubblicità',
+  affitto: 'Affitto', tasse: 'Tassa di soggiorno', imu: 'IMU', tari: 'TARI', condominio: 'Condominio', commissioni: 'Commissioni', 'pubblicità': 'Pubblicità',
 };
 
 // Tipi ammessi dall'import dei tab mensili: solo spese operative ricorrenti.
@@ -1038,7 +1038,8 @@ export async function importFromSheets(struttura_id?: string): Promise<{ importa
     if (tipo !== 'uscita') { ignorate++; continue; }
     const importo   = parseFloat(importoStr) || 0;
     const camera_id = cameraIdStr ? parseInt(cameraIdStr) || undefined : undefined;
-    const cat = CATEGORIE_USCITA.includes(categoria as never) ? categoria as Uscita['categoria'] : 'Altro';
+    const nomeCat = categoria === 'Tasse' ? 'Tassa di soggiorno' : categoria; // nome precedente
+    const cat = CATEGORIE_USCITA.includes(nomeCat as never) ? nomeCat as Uscita['categoria'] : 'Altro';
     const k = `${data}|${cat}`;
     const existingIdx = keyMap.get(k);
     if (existingIdx !== undefined) {

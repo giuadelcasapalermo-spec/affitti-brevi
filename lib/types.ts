@@ -177,9 +177,12 @@ export const CATEGORIE_USCITA = [
   'Forniture',
   'Arredamento',
   'Commissioni',
-  'Tasse',
+  'Tassa di soggiorno',
   'Pubblicità',
   'Affitto',
+  'IMU',
+  'TARI',
+  'Condominio',
   'Altro',
 ] as const;
 
@@ -201,7 +204,7 @@ export const CATEGORIE_ENTRATA = [
   'Booking.com',
   'Airbnb',
   'Privato',
-  'Tasse',
+  'Tassa di soggiorno',
   'Altro',
 ] as const;
 

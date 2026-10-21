@@ -5,6 +5,8 @@ let _colReady = false;
 async function ensureCol(): Promise<void> {
   if (_colReady) return;
   await sql`ALTER TABLE uscite ADD COLUMN IF NOT EXISTS fonte_pagamento TEXT NOT NULL DEFAULT 'Contanti'`;
+  // Categoria 'Tasse' rinominata 'Tassa di soggiorno' (21/10/2026)
+  await sql`UPDATE uscite SET categoria = 'Tassa di soggiorno' WHERE categoria = 'Tasse'`;
   _colReady = true;
 }
 

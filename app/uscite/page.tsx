@@ -26,14 +26,17 @@ const COL_USCITA: Record<CategoriaUscita, string> = {
   Commissioni:  'bg-purple-100 text-purple-700',
   Pubblicità:   'bg-pink-100 text-pink-700',
   Affitto:      'bg-indigo-100 text-indigo-700',
-  Tasse:        'bg-red-100 text-red-700',
+  'Tassa di soggiorno': 'bg-red-100 text-red-700',
+  IMU:          'bg-rose-100 text-rose-700',
+  TARI:         'bg-lime-100 text-lime-700',
+  Condominio:   'bg-stone-100 text-stone-700',
   Altro:        'bg-gray-100 text-gray-600',
 };
 const COL_ENTRATA: Record<CategoriaEntrata, string> = {
   'Booking.com': 'bg-blue-100 text-blue-700',
   'Airbnb':      'bg-red-100 text-red-700',
   'Privato':     'bg-green-100 text-green-700',
-  'Tasse':       'bg-amber-100 text-amber-700',
+  'Tassa di soggiorno': 'bg-amber-100 text-amber-700',
   'Altro':       'bg-gray-100 text-gray-600',
 };
 

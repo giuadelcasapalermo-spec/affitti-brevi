@@ -5,6 +5,8 @@ let _colReady = false;
 async function ensureCol(): Promise<void> {
   if (_colReady) return;
   await sql`ALTER TABLE entrate ADD COLUMN IF NOT EXISTS fonte_pagamento TEXT NOT NULL DEFAULT 'Contanti'`;
+  // Categoria 'Tasse' rinominata 'Tassa di soggiorno' (21/10/2026)
+  await sql`UPDATE entrate SET categoria = 'Tassa di soggiorno' WHERE categoria = 'Tasse'`;
   _colReady = true;
 }
 
@@ -89,7 +91,7 @@ export async function sostituisciTassaGiorno(e: Entrata): Promise<'inserita' | '
   if (!(e.importo > 0)) return 'mantenuta';
   const eliminate = await sql`
     DELETE FROM entrate
-    WHERE data = ${e.data} AND categoria = 'Tasse' AND descrizione LIKE 'Tassa di soggiorno del %'
+    WHERE data = ${e.data} AND categoria IN ('Tassa di soggiorno', 'Tasse') AND descrizione LIKE 'Tassa di soggiorno del %'
     RETURNING id
   `;
   await aggiungiEntrata(e);

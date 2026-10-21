@@ -13,7 +13,7 @@ export async function PUT(req: NextRequest) {
     id: randomUUID(),
     data: body.data,
     descrizione: body.descrizione ?? '',
-    categoria: 'Tasse',
+    categoria: 'Tassa di soggiorno',
     importo: Number(body.importo) || 0,
     note: '',
     fonte_pagamento: body.fonte_pagamento ?? 'Contanti',
