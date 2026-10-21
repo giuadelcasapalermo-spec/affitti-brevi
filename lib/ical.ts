@@ -673,6 +673,28 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     }
   }
 
+  // Blocchi iCal già 'cancellata' (dal sync o da una riconciliazione precedente che non poteva
+  // eliminarli) coperti per intero da prenotazioni reali: sono doppioni rimasti, visibili nelle
+  // liste con le cancellate (13/10: 7 blocchi BK tolti a mano). Stesso trattamento dei ghost coperti.
+  const giaCancellati = prenotazioni.filter((p) => p.fonte === 'ical' && p.stato === 'cancellata');
+  for (const c of giaCancellati) {
+    const sovrapposte = reali
+      .filter((p) => p.camera_id === c.camera_id && p.check_in < c.check_out && p.check_out > c.check_in)
+      .sort((a, b) => a.check_in.localeCompare(b.check_in));
+    let cursore = c.check_in;
+    for (const p of sovrapposte) {
+      if (p.check_in > cursore) break;
+      if (p.check_out > cursore) cursore = p.check_out;
+    }
+    if (sovrapposte.length === 0 || cursore < c.check_out) continue;
+    daEliminareDelTutto.add(c.id);
+    // Documenti e link passano solo a una prenotazione con le stesse date: una cancellazione vera
+    // seguita da un altro ospite nelle stesse notti non deve dargli i documenti del precedente
+    const dest = sovrapposte.find((p) => p.check_in === c.check_in && p.check_out === c.check_out);
+    if (dest) destinazioni.set(c.id, dest);
+    modificate++;
+  }
+
   if (modificate === 0 && daEliminareDelTutto.size === 0) return 0;
 
   let daScrivere = [...prenotazioni, ...nuoveParti];
@@ -693,7 +715,7 @@ export async function riconciliaBlocchiIcal(struttura_id?: string): Promise<numb
     // ogni allineamento lo reimportava, il foglio lo riempiva e solo la riconciliazione lo
     // ritoglieva. Se Booking allarga il blocco a un soggiorno nuovo, l'UID torna da solo.
     const vivi = new Set(daScrivere.filter((p) => p.stato !== 'cancellata').map((p) => p.ical_uid));
-    for (const p of ghosts) {
+    for (const p of [...ghosts, ...giaCancellati.filter((c) => daEliminareDelTutto.has(c.id))]) {
       if (p.stato === 'cancellata' && p.ical_uid && !vivi.has(p.ical_uid)) {
         await ignoraUidIcal(p.ical_uid, p.camera_id);
       }
