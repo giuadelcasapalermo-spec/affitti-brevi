@@ -232,6 +232,10 @@ export default function Dashboard() {
   const etichettaMese = (mm: string) => `${MESI_BREVI[Number(mm.slice(5)) - 1]} ${mm.slice(2, 4)}`;
 
   const maxUscitaCat  = Math.max(1, ...uscitePerCat.map(c => c.totale));
+  const entratePerCatTutte = (CATEGORIE_ENTRATA as readonly string[]).map(cat => ({
+    categoria: cat,
+    totale: entratePeriodo.filter(e => e.categoria === cat).reduce((s, e) => s + e.importo, 0),
+  }));
   const maxEntrataCat = Math.max(1, ...entratePerCat.map(c => c.totale));
   // La tassa di soggiorno è una partita di giro (incassata dagli ospiti e versata al Comune):
   // resta nei totali ma non entra in percentuali e incidenza
@@ -821,7 +825,9 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-400 italic">Nessuna entrata nel periodo</p>
               ) : (
                 <div className="space-y-3">
-                  {entratePerCat.map(({ categoria, totale }) => {
+                  {[{ lista: entratePerCat, classe: 'sm:hidden' }, { lista: entratePerCatTutte, classe: 'hidden sm:block' }].map(({ lista, classe }) => (
+                  <div key={classe} className={`${classe} space-y-3`}>
+                  {lista.map(({ categoria, totale }) => {
                     const giro = categoria === TASSA;
                     const pct = baseEntratePct > 0 ? (totale / baseEntratePct) * 100 : 0;
                     const col = COLORI_CAT_ENTRATA[categoria] ?? COLORI_CAT_ENTRATA['Altro'];
@@ -840,6 +846,8 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
+                  </div>
+                  ))}
                   <div className="border-t pt-2 flex justify-between text-xs text-gray-500">
                     <span>Totale</span>
                     <span className="font-bold text-green-700">+€{entrateEffettive.toFixed(2)}</span>
