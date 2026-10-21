@@ -828,7 +828,7 @@ export default function PrimaNotaPage() {
           <table className="w-full text-sm table-fixed">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left pl-4 py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[6.5rem]">Data</th>
+                <th className="text-left pl-4 py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-24">Data</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px]">Descrizione</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-36">Categoria</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-28 hidden lg:table-cell">Modalità</th>
@@ -846,10 +846,10 @@ export default function PrimaNotaPage() {
                 const u = r.rec as Uscita;
                 return (
                   <tr key={r.rec.id} className={`border-b hover:bg-gray-50 ${isE ? 'border-l-2 border-l-green-300' : 'border-l-2 border-l-red-300'}`}>
-                    <td className="pl-4 pr-3 py-2 text-gray-500 whitespace-nowrap tabular-nums">{fData(r.rec.data)}</td>
+                    <td className="pl-4 pr-3 py-2 text-xs text-gray-500 whitespace-nowrap tabular-nums">{fData(r.rec.data)}</td>
                     <td className="pr-3 py-2" title={[r.rec.descrizione, r.rec.note].filter(Boolean).join(' — ')}>
-                      <div className="font-medium text-gray-800 line-clamp-2 leading-snug">{r.rec.descrizione}</div>
-                      {r.rec.note && <div className="text-xs text-gray-400 truncate">{r.rec.note}</div>}
+                      <div className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{r.rec.descrizione}</div>
+                      {r.rec.note && <div className="text-[11px] text-gray-400 truncate">{r.rec.note}</div>}
                       <div className="lg:hidden text-[11px] text-gray-400 flex items-center gap-1 truncate"><Wallet size={10} className="shrink-0" />{r.rec.fonte_pagamento || 'Contanti'}</div>
                     </td>
                     <td className="pr-3 py-2">
