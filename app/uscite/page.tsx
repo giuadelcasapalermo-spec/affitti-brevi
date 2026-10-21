@@ -831,7 +831,7 @@ export default function PrimaNotaPage() {
                 <th className="text-left pl-4 py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-24">Data</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px]">Descrizione</th>
                 <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-32">Categoria</th>
-                <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-28 hidden lg:table-cell">Modalità</th>
+                <th className="text-left py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-24 hidden lg:table-cell">Modalità</th>
                 <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[5.25rem]">Entrata</th>
                 <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[5.25rem]">Uscita</th>
                 <th className="text-right py-2.5 pr-3 font-medium text-gray-500 uppercase tracking-wide text-[11px] w-[5.75rem]">Saldo</th>
