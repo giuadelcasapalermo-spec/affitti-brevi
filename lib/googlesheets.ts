@@ -664,6 +664,8 @@ export interface NuovoRicavoBooking {
   importo_lordo: number;
   tassa_soggiorno?: number;
   note?: string;
+  /** Cliente privato (prenotazione inserita a mano): importo direttamente in Entrate, colonne Booking vuote */
+  privato?: boolean;
 }
 
 export async function inserisciRicavoBookingNelFoglio(
@@ -791,7 +793,24 @@ export async function inserisciRicavoBookingNelFoglio(
   });
 
   const r = rigaInserimento;
-  const riga: (string | number)[] = [
+  // Privato, come le righe "Ricavo Privato" già nel foglio: importo in Entrate, niente Booking né % Booking
+  const riga: (string | number)[] = dati.privato ? [
+    'Ricavo Privato',
+    dati.ospite_nome,
+    dati.ospite_telefono ?? '',
+    `=E${r}-F${r}`,
+    dati.importo_lordo,
+    '',
+    dati.tassa_soggiorno ?? '',
+    '',
+    '',
+    isoToSerial(dati.check_in),
+    isoToSerial(dati.check_out),
+    'Privato',
+    stanzaNome,
+    '',
+    dati.note ?? '',
+  ] : [
     'Ricavo Booking',
     dati.ospite_nome,
     dati.ospite_telefono ?? '',
@@ -844,6 +863,10 @@ export async function aggiornaRigaSheetPerPrenotazione(dati: {
   ospite_telefono?: string;
   importo_lordo: number;
   tassa_soggiorno?: number;
+  /** Prenotazione inserita a mano (cliente privato) */
+  privato?: boolean;
+  /** false = l'importo non è cambiato: celle degli importi non toccate */
+  scriviImporto?: boolean;
 }): Promise<{ aggiornata: boolean; tab: string; riga?: number; motivo?: string }> {
   const sheets = await getSheetsClient();
   const t = tabPerData(await tabMensili(sheets), dati.check_in);
@@ -892,6 +915,24 @@ export async function aggiornaRigaSheetPerPrenotazione(dati: {
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [[dati.ospite_nome, dati.ospite_telefono ?? '']] },
   });
+  if (dati.scriviImporto === false) return { aggiornata: true, tab, riga: r };
+
+  // Privato (inserita a mano, o riga già "Ricavo Privato"): importo in Entrate e colonne Booking vuote,
+  // altrimenti la formula =H*0,55 lo ridurrebbe come un incasso Booking. Una riga scheletro "Ricavo Booking"
+  // (blocco iCal delle date chiuse su Booking per il privato) diventa "Ricavo Privato".
+  const tipo = String(rows[candidate[0]][0] ?? '').trim();
+  if (dati.privato || /privat/i.test(tipo)) {
+    const updates = [
+      { range: `'${tab}'!E${r}`, values: [[dati.importo_lordo]] },
+      { range: `'${tab}'!G${r}:I${r}`, values: [[dati.tassa_soggiorno ?? '', '', '']] },
+    ];
+    if (!/privat/i.test(tipo)) updates.push({ range: `'${tab}'!A${r}`, values: [['Ricavo Privato']] });
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sid,
+      requestBody: { valueInputOption: 'USER_ENTERED', data: updates },
+    });
+    return { aggiornata: true, tab, riga: r };
+  }
   await sheets.spreadsheets.values.update({
     spreadsheetId: sid,
     range: `'${tab}'!G${r}:H${r}`,

@@ -15,6 +15,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
   await migraStruttura();
+  const [prima] = await sql`SELECT importo_totale, tassa_soggiorno FROM prenotazioni WHERE id = ${id}`;
 
   const rows = await sql`
     UPDATE prenotazioni SET
@@ -48,6 +49,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ospite_telefono: pren.ospite_telefono as string,
         importo_lordo: pren.importo_totale as number,
         tassa_soggiorno: pren.tassa_soggiorno as number | undefined,
+        privato: pren.fonte === 'manuale',
+        // Importi riscritti solo se cambiati: l'importo in app delle righe Booking viene dalla colonna
+        // Entrate (già al 55%), riscriverlo in Booking a ogni modifica del nome lo ridurrebbe di nuovo
+        scriviImporto: Number(prima?.importo_totale) !== Number(pren.importo_totale)
+          || Number(prima?.tassa_soggiorno ?? 0) !== Number(pren.tassa_soggiorno ?? 0),
       });
     }
   } catch {

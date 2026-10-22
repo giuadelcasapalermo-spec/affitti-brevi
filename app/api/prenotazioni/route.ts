@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { cookies } from 'next/headers';
 import { getStrutturaAttiva, migraStruttura } from '@/lib/strutture';
 import sql from '@/lib/postgres';
+import { aggiornaRigaSheetPerPrenotazione, inserisciRicavoBookingNelFoglio, sheetsConfigurato } from '@/lib/googlesheets';
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -54,5 +55,28 @@ export async function POST(req: NextRequest) {
        ${nuova.importo_totale}, ${nuova.tassa_soggiorno ?? null}, ${nuova.num_ospiti ?? null}, ${nuova.stato},
        ${nuova.note}, ${nuova.created_at}, ${nuova.fonte}, ${nuova.ical_uid ?? null})
   `;
+
+  // Prenotazione inserita a mano = cliente privato: nel foglio l'importo va in Entrate (non in Booking,
+  // dove la formula lo ridurrebbe al 55%). Se c'è già una riga per camera e check-in (es. lo scheletro
+  // del blocco iCal delle date chiuse su Booking) la si aggiorna, altrimenti si aggiunge "Ricavo Privato".
+  try {
+    if (Number(nuova.importo_totale) > 0 && await sheetsConfigurato()) {
+      const dati = {
+        ospite_nome: nuova.ospite_nome,
+        ospite_telefono: nuova.ospite_telefono,
+        check_in: nuova.check_in,
+        check_out: nuova.check_out,
+        camera_id: nuova.camera_id,
+        importo_lordo: Number(nuova.importo_totale),
+        tassa_soggiorno: nuova.tassa_soggiorno,
+        privato: true,
+      };
+      const agg = await aggiornaRigaSheetPerPrenotazione(dati);
+      if (!agg.aggiornata && agg.motivo?.startsWith('0 righe')) await inserisciRicavoBookingNelFoglio(dati);
+    }
+  } catch {
+    // Non bloccare il salvataggio in app per un errore sul foglio
+  }
+
   return NextResponse.json(nuova, { status: 201 });
 }

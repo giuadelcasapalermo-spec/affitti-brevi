@@ -12,7 +12,7 @@ import { ContoCorrente } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
 import ControlloLavanderia from '@/components/ControlloLavanderia';
 import MargineCamere from '@/components/MargineCamere';
-import { ComposedChart, BarChart, LabelList, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ComposedChart, LabelList, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useEtichette } from '@/hooks/useEtichette';
 
 
@@ -892,7 +892,7 @@ export default function Dashboard() {
             ) : (
             <>
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={graficoAndamento} margin={{ top: 18, right: 4, left: -8, bottom: 0 }} barCategoryGap="25%">
+              <ComposedChart data={graficoAndamento} margin={{ top: 18, right: 4, left: -8, bottom: 0 }} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="mese" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={56}
@@ -904,17 +904,17 @@ export default function Dashboard() {
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   itemSorter={(item: any) => -Number(item.value)}
                 />
-                {andamentoVisibile.map(({ categoria }, i) => (
+                {andamentoVisibile.map(({ categoria }) => (
                   <Bar key={categoria} dataKey={categoria} stackId="u" maxBarSize={56}
-                    fill={(COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro']).hex}
-                    radius={i === andamentoVisibile.length - 1 ? [3, 3, 0, 0] : undefined}>
-                    {i === andamentoVisibile.length - 1 && (
-                      <LabelList dataKey="Totale" position="top" formatter={(v) => Number(v) > 0 ? euro0(Number(v)) : ''}
-                        style={{ fontSize: 11, fontWeight: 600, fill: '#374151' }} />
-                    )}
-                  </Bar>
+                    fill={(COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro']).hex} />
                 ))}
-              </BarChart>
+                {/* Totale del mese sopra ogni colonna: linea invisibile all'altezza del totale (l'ultima categoria
+                    della pila può essere vuota in alcuni mesi e non porterebbe l'etichetta) */}
+                <Line dataKey="Totale" stroke="none" dot={false} activeDot={false} legendType="none" isAnimationActive={false}>
+                  <LabelList dataKey="Totale" position="top" offset={6} formatter={(v) => Number(v) > 0 ? euro0(Number(v)) : ''}
+                    style={{ fontSize: 11, fontWeight: 600, fill: '#374151' }} />
+                </Line>
+              </ComposedChart>
             </ResponsiveContainer>
             <div className="overflow-x-auto mt-3">
               <table className="w-full text-xs tabular-nums border-separate border-spacing-0">
