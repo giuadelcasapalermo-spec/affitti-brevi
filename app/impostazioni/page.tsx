@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT, CodiciCamera, OsservatorioCredentials } from '@/lib/types';
+import { Impostazioni, PrezzoPerPeriodo, ContoCorrente, TIPI_CONTO, TipoContoCorrente, AutomazioniStruttura, AUTOMAZIONI_DEFAULT, AlloggiatiCredentials, OSPITI_DEFAULT, CodiciCamera, OsservatorioCredentials, Struttura } from '@/lib/types';
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import { etichetteUnita } from '@/lib/unita';
@@ -188,6 +188,12 @@ export default function ImpostazioniPage() {
     setEditAutomazioni({ ...AUTOMAZIONI_DEFAULT, ...strutturaAttiva.automazioni });
     setNuovoPeriodo(p => ({ ...p, camera_id: 1 }));
   }, [strutturaAttiva?.id]);
+
+  // Tab Strutture: i dati della struttura attiva sono già aperti, senza clic
+  useEffect(() => {
+    if (sezione === 'strutture' && !editingDatiId && strutturaAttiva) selezionaStruttura(strutturaAttiva);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sezione, strutturaAttiva?.id]);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -681,6 +687,43 @@ export default function ImpostazioniPage() {
       </>
   );
 
+  /** Apre i dati di una struttura nel tab Strutture */
+  function selezionaStruttura(s: Struttura) {
+    setEditingDatiId(s.id);
+    setEditDatiNome(s.nome);
+    setEditDatiIndirizzo(s.indirizzo ?? '');
+    setEditDatiTelefono(s.telefono ?? '');
+    setEditDatiRagione(s.dati_fiscali?.ragione_sociale ?? '');
+    setEditDatiPiva(s.dati_fiscali?.partita_iva ?? '');
+    setEditDatiCasa(!!s.unita_casa);
+    setSalvatoEditDati(false);
+    setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
+    setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
+    setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
+    setEditCin(s.dati_fiscali?.cin ?? '');
+    setEditCir(s.dati_fiscali?.cir ?? '');
+    setSalvatoCodici(false);
+    setEditOss(s.osservatorio_credentials ?? { ...OSS_VUOTE });
+    setSalvatoOss(false);
+    setProvaOss(null);
+    setMostraPasswordAlloggiati(false);
+    setSalvatoAlloggiati(false);
+    setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
+    setEditCmHotelId(s.channel_manager_config?.hotel_id ?? '');
+    setEditCmUsername(s.channel_manager_config?.username ?? '');
+    setEditCmPassword(s.channel_manager_config?.password ?? '');
+    setEditCmWebhookSecret(s.channel_manager_config?.webhook_secret ?? '');
+    setEditCmRoomMap(s.channel_manager_config?.room_id_map ?? {});
+    setMostraPasswordCm(false);
+    setSalvatoCm(false);
+    setTestCmResult(null);
+    setSyncCmResult(null);
+    setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
+    setNuovoContoNome('');
+    setNuovoContoTipo('contanti');
+    setSalvatoConti(false);
+  }
+
   const SUB_TABS: { id: SubTab; label: string }[] = [
     { id: 'camere', label: et.Camere },
     { id: 'prezzi', label: 'Prezzi' },
@@ -696,17 +739,16 @@ export default function ImpostazioniPage() {
       <h1 className="text-2xl font-bold text-gray-800">Impostazioni</h1>
 
       {/* Tab principali */}
-      <div className="flex border-b border-gray-200 gap-1 -mb-2 sticky top-0 bg-white z-10 pt-1 overflow-x-auto">
+      <div className="flex border-b border-gray-200 gap-1 -mb-2 sticky top-0 bg-white z-10 pt-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TAB.map(t => {
           const Icon = t.icon;
           const active = sezione === t.id;
           return (
             <button key={t.id} onClick={() => setSezione(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors rounded-t whitespace-nowrap ${active ? tabColor[t.color] : tabInactive}`}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors rounded-t whitespace-nowrap ${active ? tabColor[t.color] : tabInactive}`}
             >
               <Icon size={15} />
               {t.label}
-              {t.id === 'sistema' && <span className="ml-1 text-[10px] bg-gray-200 text-gray-500 rounded px-1">globale</span>}
             </button>
           );
         })}
@@ -1442,41 +1484,6 @@ export default function ImpostazioniPage() {
       {/* ── STRUTTURE─────────────────────────────────────────────────── */}
       {sezione === 'strutture' && (() => {
         const selezionata = strutture.find(s => s.id === editingDatiId) ?? null;
-        function seleziona(s: typeof strutture[0]) {
-          setEditingDatiId(s.id);
-          setEditDatiNome(s.nome);
-          setEditDatiIndirizzo(s.indirizzo ?? '');
-          setEditDatiTelefono(s.telefono ?? '');
-          setEditDatiRagione(s.dati_fiscali?.ragione_sociale ?? '');
-          setEditDatiPiva(s.dati_fiscali?.partita_iva ?? '');
-          setEditDatiCasa(!!s.unita_casa);
-          setSalvatoEditDati(false);
-          setEditAlloggiatiUtente(s.alloggiati_credentials?.utente ?? '');
-          setEditAlloggiatiPassword(s.alloggiati_credentials?.password ?? '');
-          setEditAlloggiatiWskey(s.alloggiati_credentials?.wskey ?? '');
-          setEditCin(s.dati_fiscali?.cin ?? '');
-          setEditCir(s.dati_fiscali?.cir ?? '');
-          setSalvatoCodici(false);
-          setEditOss(s.osservatorio_credentials ?? { ...OSS_VUOTE });
-          setSalvatoOss(false);
-          setProvaOss(null);
-          setMostraPasswordAlloggiati(false);
-          setSalvatoAlloggiati(false);
-          setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
-          setEditCmHotelId(s.channel_manager_config?.hotel_id ?? '');
-          setEditCmUsername(s.channel_manager_config?.username ?? '');
-          setEditCmPassword(s.channel_manager_config?.password ?? '');
-          setEditCmWebhookSecret(s.channel_manager_config?.webhook_secret ?? '');
-          setEditCmRoomMap(s.channel_manager_config?.room_id_map ?? {});
-          setMostraPasswordCm(false);
-          setSalvatoCm(false);
-          setTestCmResult(null);
-          setSyncCmResult(null);
-          setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
-          setNuovoContoNome('');
-          setNuovoContoTipo('contanti');
-          setSalvatoConti(false);
-        }
         return (
           <div className="space-y-4">
 
@@ -1503,7 +1510,7 @@ export default function ImpostazioniPage() {
                   return (
                     <button
                       key={s.id}
-                      onClick={() => seleziona(s)}
+                      onClick={() => selezionaStruttura(s)}
                       className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
                         isSelezionata ? 'bg-slate-700 text-white' : 'hover:bg-slate-50'
                       }`}
@@ -1539,6 +1546,7 @@ export default function ImpostazioniPage() {
 
             {/* Dettaglio struttura selezionata */}
             {selezionata && (
+              <div className="space-y-4">
               <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-700 text-white">
                   <div className="flex items-center gap-2">
@@ -1557,44 +1565,42 @@ export default function ImpostazioniPage() {
                   </div>
                 </div>
 
-                <div className="px-5 py-4 space-y-2">
-                  {/* Nome e indirizzo */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Nome</label>
-                      <input type="text" value={editDatiNome} onChange={e => setEditDatiNome(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                      />
+                <div className="px-4 sm:px-5 py-4 space-y-4">
+                  {/* Dati struttura: un campo per riga, etichetta a sinistra su schermi larghi */}
+                  {([
+                    { titolo: 'Struttura', campi: [
+                      { etichetta: 'Nome', valore: editDatiNome, set: setEditDatiNome },
+                      { etichetta: 'Indirizzo', valore: editDatiIndirizzo, set: setEditDatiIndirizzo },
+                      { etichetta: 'Telefono WhatsApp', valore: editDatiTelefono, set: setEditDatiTelefono, tipo: 'tel', placeholder: '+39 333 1234567',
+                        nota: 'Riceve gli avvisi quando un invio automatico (link ospite, Alloggiati Web) non riesce.' },
+                    ] },
+                    { titolo: 'Dati fiscali', campi: [
+                      { etichetta: 'Ragione sociale / titolare', valore: editDatiRagione, set: setEditDatiRagione },
+                      { etichetta: 'Partita IVA', valore: editDatiPiva, set: setEditDatiPiva, mono: true, placeholder: '11 cifre',
+                        avviso: editDatiPiva && !/^\d{11}$/.test(editDatiPiva.replace(/\s/g, '')) ? 'La partita IVA italiana ha 11 cifre.' : '' },
+                    ] },
+                  ] as { titolo: string; campi: { etichetta: string; valore: string; set: (v: string) => void; tipo?: string; placeholder?: string; mono?: boolean; nota?: string; avviso?: string }[] }[]).map(gruppo => (
+                    <div key={gruppo.titolo}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">{gruppo.titolo}</p>
+                      <div className="space-y-2">
+                        {gruppo.campi.map(c => (
+                          <div key={c.etichetta} className="grid grid-cols-1 sm:grid-cols-[11rem_1fr] sm:items-center gap-x-3 gap-y-1">
+                            <label className="text-xs text-gray-500">{c.etichetta}</label>
+                            <div>
+                              <input type={c.tipo ?? 'text'} value={c.valore} onChange={e => c.set(e.target.value)} placeholder={c.placeholder}
+                                inputMode={c.etichetta === 'Partita IVA' ? 'numeric' : undefined}
+                                className={`w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 ${c.mono ? 'font-mono' : ''}`}
+                              />
+                              {c.nota && <p className="text-[11px] text-gray-400 mt-0.5">{c.nota}</p>}
+                              {c.avviso && <p className="text-[11px] text-amber-600 mt-0.5">{c.avviso}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Indirizzo</label>
-                      <input type="text" value={editDatiIndirizzo} onChange={e => setEditDatiIndirizzo(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs text-gray-500 mb-1">Telefono WhatsApp della struttura</label>
-                      <input type="tel" value={editDatiTelefono} onChange={e => setEditDatiTelefono(e.target.value)} placeholder="+39 333 1234567"
-                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                      />
-                      <p className="text-[11px] text-gray-400 mt-0.5">Riceve gli avvisi quando un invio automatico (link ospite, Alloggiati Web) non riesce.</p>
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-xs text-gray-500 mb-1">Ragione sociale / titolare</label>
-                      <input type="text" value={editDatiRagione} onChange={e => setEditDatiRagione(e.target.value)}
-                        className="w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                      />
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <label className="block text-xs text-gray-500 mb-1">Partita IVA</label>
-                      <input type="text" inputMode="numeric" value={editDatiPiva} onChange={e => setEditDatiPiva(e.target.value)} placeholder="11 cifre"
-                        className="w-full border rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-slate-400"
-                      />
-                      {editDatiPiva && !/^\d{11}$/.test(editDatiPiva.replace(/\s/g, '')) && (
-                        <p className="text-[11px] text-amber-600 mt-0.5">La partita IVA italiana ha 11 cifre.</p>
-                      )}
-                    </div>
-                    <label className="col-span-2 flex items-start gap-2 cursor-pointer rounded border border-gray-100 bg-gray-50 px-2 py-2">
+                  ))}
+                  <div>
+                    <label className="flex items-start gap-2 cursor-pointer rounded border border-gray-100 bg-gray-50 px-2 py-2">
                       <input type="checkbox" checked={editDatiCasa} onChange={e => setEditDatiCasa(e.target.checked)} className="mt-0.5" />
                       <span className="text-sm text-gray-700">
                         Le unità sono case / appartamenti
@@ -1611,12 +1617,14 @@ export default function ImpostazioniPage() {
                     <Save size={13} />
                     {salvatoEditDati ? 'Salvato!' : 'Salva dati struttura'}
                   </button>
+                </div>
+              </div>
 
                   {/* Conti correnti */}
-                  <div className="border-t pt-4 mt-2">
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-2">
                       <Euro size={14} className="text-emerald-600" />
-                      <span className="font-semibold text-gray-700 text-xs">Conti correnti / Modalità pagamento</span>
+                      <span className="font-semibold text-gray-700 text-sm">Conti correnti / Modalità pagamento</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-2">Cassa, POS, conti bancari. Appaiono come scelta nella Prima Nota.</p>
                     <div className="space-y-1 mb-2">
@@ -1661,11 +1669,11 @@ export default function ImpostazioniPage() {
                   </div>
 
                   {/* Google Sheets */}
-                  <div className="border-t pt-4 mt-2">
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <Table2 size={14} className="text-emerald-600" />
-                        <span className="font-semibold text-gray-700 text-xs">Google Sheets</span>
+                        <span className="font-semibold text-gray-700 text-sm">Google Sheets</span>
                       </div>
                       <button onClick={toggleGoogleSheets} disabled={togglingSheets}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${imp.google_sheets_abilitato ? 'bg-emerald-500' : 'bg-gray-300'}`}
@@ -1694,10 +1702,10 @@ export default function ImpostazioniPage() {
                   </div>
 
                   {/* Codici identificativi CIN / CIR */}
-                  <div className="border-t pt-4 mt-2">
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield size={14} className="text-amber-600" />
-                      <span className="font-semibold text-gray-700 text-xs">Codici identificativi (CIN / CIR)</span>
+                      <span className="font-semibold text-gray-700 text-sm">Codici identificativi (CIN / CIR)</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-2">Codici della struttura. Valgono per tutte le {et.camere} che non hanno codici propri (Altro → {et.Camere} → CIN / CIR).</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-1">
@@ -1718,10 +1726,10 @@ export default function ImpostazioniPage() {
                   </div>
 
                   {/* Osservatorio Turistico Regione Siciliana */}
-                  <div className="border-t pt-4 mt-2">
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-1">
                       <BarChart3 size={14} className="text-teal-600" />
-                      <span className="font-semibold text-gray-700 text-xs">Osservatorio Turistico (Regione Siciliana)</span>
+                      <span className="font-semibold text-gray-700 text-sm">Osservatorio Turistico (Regione Siciliana)</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-2">
                       Credenziali per i gestionali (WebAPI), diverse da quelle del portale: si richiedono all&apos;Osservatorio
@@ -1738,10 +1746,10 @@ export default function ImpostazioniPage() {
                   </div>
 
                   {/* AlloggiatiWeb */}
-                  <div className="border-t pt-4 mt-2">
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield size={14} className="text-blue-600" />
-                      <span className="font-semibold text-gray-700 text-xs">AlloggiatiWeb</span>
+                      <span className="font-semibold text-gray-700 text-sm">AlloggiatiWeb</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-2">Credenziali del portale Polizia di Stato (Questura) per l&apos;invio delle schedine. Valgono per tutte le {et.camere} che non hanno credenziali proprie (Altro → {et.Camere} → Alloggiati).</p>
                     <div className="space-y-2 mb-2">
@@ -1770,10 +1778,10 @@ export default function ImpostazioniPage() {
                   </div>
 
                   {/* Booking Channel Manager */}
-                  <div className="border-t pt-4 mt-2">
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-1">
                       <Plug size={14} className="text-indigo-600" />
-                      <span className="font-semibold text-gray-700 text-xs">Booking.com Channel Manager</span>
+                      <span className="font-semibold text-gray-700 text-sm">Booking.com Channel Manager</span>
                       {editCmUrl && testCmResult && (
                         testCmResult.ok
                           ? <span className="flex items-center gap-1 text-[10px] text-green-700 bg-green-50 rounded px-1.5 py-0.5"><Wifi size={10}/> Connesso</span>
@@ -1899,7 +1907,6 @@ export default function ImpostazioniPage() {
                       </div>
                     )}
                   </div>
-                </div>
               </div>
             )}
 

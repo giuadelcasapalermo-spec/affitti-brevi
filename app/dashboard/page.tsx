@@ -12,7 +12,7 @@ import { ContoCorrente } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
 import ControlloLavanderia from '@/components/ControlloLavanderia';
 import MargineCamere from '@/components/MargineCamere';
-import { ComposedChart, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ComposedChart, BarChart, LabelList, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useEtichette } from '@/hooks/useEtichette';
 
 
@@ -83,6 +83,7 @@ export default function Dashboard() {
   const [filtroAl, setFiltroAl]   = usePersistedState('dash-al',  DEFAULT_AL);
   const [filtroCamera, setFiltroCamera] = usePersistedState<number | 'tutte'>('dash-camera', 'tutte');
   const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota' | 'lavanderia'>('dash-sezione', 'camere');
+  const [andSenzaTassa, setAndSenzaTassa] = usePersistedState('dash-and-senza-tassa', true, { storage: 'local' });
 
   const carica = useCallback(() => {
     fetch('/api/prenotazioni')
@@ -170,7 +171,6 @@ export default function Dashboard() {
     const ricavo = pren.filter((p) => p.importo_totale > 0).reduce((s, p) => s + p.importo_totale, 0);
     return { camera, notti, ricavo };
   });
-  const maxNotti = Math.max(1, ...statsCamera.map((s) => s.notti));
 
   // Occupazione: notti vendute nel periodo su notti disponibili (stanze × giorni del periodo)
   const giorniPeriodo = Math.max(0, differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1);
@@ -215,20 +215,34 @@ export default function Dashboard() {
       if (m === 12) { y++; m = 1; } else m++;
     }
   }
+  // La tassa di soggiorno è una partita di giro (incassata dagli ospiti e versata al Comune):
+  // resta nei totali ma non entra in percentuali e incidenza; nell'andamento si può escludere
+  const TASSA = 'Tassa di soggiorno';
+  const usciteAnd = andSenzaTassa ? uscitePeriodo.filter(u => u.categoria !== TASSA) : uscitePeriodo;
+  const entrateAnd = andSenzaTassa ? entratePeriodo.filter(e => e.categoria !== TASSA) : entratePeriodo;
   const andamentoUscite = (CATEGORIE_USCITA as readonly string[]).map(cat => {
-    const mesi = mesiPeriodo.map(mm => uscitePeriodo
+    const mesi = mesiPeriodo.map(mm => usciteAnd
       .filter(u => u.categoria === cat && u.data.startsWith(mm))
       .reduce((s, u) => s + u.importo, 0));
-    return { categoria: cat, mesi, totale: mesi.reduce((a, b) => a + b, 0), max: Math.max(0, ...mesi) };
+    return { categoria: cat, mesi, totale: mesi.reduce((a, b) => a + b, 0) };
   });
   const totaliMese = mesiPeriodo.map((_, i) => andamentoUscite.reduce((s, c) => s + c.mesi[i], 0));
   const totaleAndamento = totaliMese.reduce((a, b) => a + b, 0);
-  const maxTotaleMese = Math.max(0, ...totaliMese);
+  const entrateMese = mesiPeriodo.map(mm => entrateAnd.filter(e => e.data.startsWith(mm)).reduce((s, e) => s + e.importo, 0));
+  const totaleEntrateAnd = entrateMese.reduce((a, b) => a + b, 0);
+  const margineMese = mesiPeriodo.map((_, i) => entrateMese[i] - totaliMese[i]);
+  const margineAnd = totaleEntrateAnd - totaleAndamento;
+  const pctMargine = (m: number, e: number) => e > 0 ? `${Math.round((m / e) * 100)}%` : '–';
   // Nella tabella solo le categorie con spese nel periodo, per incidenza
   const andamentoVisibile = andamentoUscite.filter(c => c.totale > 0).sort((a, b) => b.totale - a.totale);
-  const euro0 = (v: number) => `€${Math.round(v).toLocaleString('it-IT')}`;
+  const euro0 = (v: number) => `${v < 0 ? '−' : ''}€${Math.abs(Math.round(v)).toLocaleString('it-IT', { useGrouping: 'always' } as Intl.NumberFormatOptions)}`;
   const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
   const etichettaMese = (mm: string) => `${MESI_BREVI[Number(mm.slice(5)) - 1]} ${mm.slice(2, 4)}`;
+  const graficoAndamento = mesiPeriodo.map((mm, i) => ({
+    mese: etichettaMese(mm),
+    ...Object.fromEntries(andamentoVisibile.map(c => [c.categoria, Math.round(c.mesi[i])])),
+    Totale: Math.round(totaliMese[i]),
+  }));
 
   const maxUscitaCat  = Math.max(1, ...uscitePerCat.map(c => c.totale));
   const entratePerCatTutte = (CATEGORIE_ENTRATA as readonly string[]).map(cat => ({
@@ -236,9 +250,6 @@ export default function Dashboard() {
     totale: entratePeriodo.filter(e => e.categoria === cat).reduce((s, e) => s + e.importo, 0),
   }));
   const maxEntrataCat = Math.max(1, ...entratePerCat.map(c => c.totale));
-  // La tassa di soggiorno è una partita di giro (incassata dagli ospiti e versata al Comune):
-  // resta nei totali ma non entra in percentuali e incidenza
-  const TASSA = 'Tassa di soggiorno';
   const baseEntratePct = entratePeriodo.filter(e => e.categoria !== TASSA).reduce((s, e) => s + e.importo, 0);
   const baseUscitePct = uscitePeriodo.filter(u => u.categoria !== TASSA).reduce((s, u) => s + u.importo, 0);
   const saldoPN = entratePeriodo.reduce((s, e) => s + e.importo, 0) - uscitePeriodo.reduce((s, u) => s + u.importo, 0);
@@ -530,43 +541,6 @@ export default function Dashboard() {
       {sezione === 'camere' && (
         <div className="space-y-4">
 
-          {/* Statistiche per stanza — mobile */}
-          <div className="sm:hidden print-hidden bg-white rounded-lg shadow-sm p-4 space-y-3">
-            <h2 className="text-sm font-semibold text-gray-700">Statistiche per stanza</h2>
-            {(() => {
-              const nGiorniPeriodo = differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1;
-              const camFiltrate = camere.filter(c => filtroCamera === 'tutte' || c.id === filtroCamera).sort((a, b) => a.id - b.id);
-              return camFiltrate.map(camera => {
-                const pren = prenNelPeriodo.filter(p => p.camera_id === camera.id);
-                const notti = pren.reduce((s, p) => s + nottiInPeriodo(p), 0);
-                const ricavo = pren.filter(p => p.importo_totale > 0).reduce((s, p) => s + p.importo_totale, 0);
-                const satPct = nGiorniPeriodo > 0 ? Math.round((notti / nGiorniPeriodo) * 100) : 0;
-                const col = getCameraStyle(camera.id, camera.colore);
-                return (
-                  <div key={camera.id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold w-20 ${col.testo}`}>{camera.nome}</span>
-                        <span className="text-[11px] text-gray-400">{notti}n / {nGiorniPeriodo}gg</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {ricavo > 0 && <span className="text-xs font-semibold text-gray-800">€{ricavo.toFixed(0)}</span>}
-                        <span className={`text-[11px] font-bold w-9 text-right ${satPct >= 70 ? 'text-green-600' : satPct >= 30 ? 'text-amber-500' : 'text-gray-400'}`}>{satPct}%</span>
-                      </div>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${col.bar}`} style={{ width: `${satPct}%` }} />
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-            <div className="border-t border-gray-100 pt-2 flex justify-between items-center">
-              <span className="text-xs text-gray-400">Totale ricavi periodo</span>
-              <span className="text-sm font-bold text-gray-800">€{entrateDelPeriodo.toFixed(0)}</span>
-            </div>
-          </div>
-
           {/* Stato camere nel periodo */}
           {(() => {
             const camFiltrate = camere.filter((c) => filtroCamera === 'tutte' || c.id === filtroCamera).sort((a, b) => a.id - b.id);
@@ -679,10 +653,49 @@ export default function Dashboard() {
             );
           })()}
 
-          {/* Grafici statistici per stanza — desktop */}
-          <div className="hidden md:block print-block space-y-3">
-            <h2 className="font-semibold text-gray-700">Statistiche giornaliere per stanza</h2>
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-4 print-grid-2">
+          {/* Saturazione per stanza (web e app) */}
+          <div className="print-block bg-white rounded-lg shadow-sm p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-sm sm:text-base font-semibold text-gray-700">Saturazione per stanza</h2>
+              <span className="text-xs text-gray-400">
+                {differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1} giorni nel periodo
+              </span>
+            </div>
+            <div className="space-y-3">
+              {camere
+                .filter(c => filtroCamera === 'tutte' || c.id === filtroCamera)
+                .sort((a, b) => a.id - b.id)
+                .map(camera => {
+                  const { notti, ricavo } = statsCamera.find(s => s.camera.id === camera.id) ?? { notti: 0, ricavo: 0 };
+                  const nGiorniPeriodo = differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1;
+                  const satPct = nGiorniPeriodo > 0 ? Math.round((notti / nGiorniPeriodo) * 100) : 0;
+                  const col = getCameraStyle(camera.id, camera.colore);
+                  return (
+                    <div key={camera.id} className="flex items-center gap-2 sm:gap-4">
+                      <span className={`text-xs font-semibold w-16 sm:w-24 flex-shrink-0 truncate ${col.testo}`}>{camera.nome}</span>
+                      <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${col.bar}`}
+                          style={{ width: `${Math.min(100, satPct)}%` }}
+                          title={`${notti} notti`}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-500 w-16 text-right whitespace-nowrap">{notti}n &nbsp; {satPct}%</span>
+                      <span className="text-xs font-semibold text-gray-700 w-14 sm:w-16 text-right">{ricavo > 0 ? `€${ricavo.toFixed(0)}` : ''}</span>
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="border-t border-gray-100 mt-3 pt-2 flex justify-between items-center">
+              <span className="text-xs text-gray-400">Totale ricavi periodo</span>
+              <span className="text-sm font-bold text-gray-800">€{entrateDelPeriodo.toFixed(0)}</span>
+            </div>
+          </div>
+
+          {/* Grafici statistici per stanza (web e app) */}
+          <div className="print-block space-y-3">
+            <h2 className="text-sm sm:text-base font-semibold text-gray-700">Statistiche giornaliere per stanza</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 print-grid-2">
               {camere
                 .filter(c => filtroCamera === 'tutte' || c.id === filtroCamera)
                 .sort((a, b) => a.id - b.id)
@@ -735,43 +748,6 @@ export default function Dashboard() {
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-
-          {/* Saturazione globale stanze — desktop */}
-          <div className="hidden md:block print-block bg-white rounded-lg shadow-sm p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-gray-700">Saturazione per stanza</h2>
-              <span className="text-xs text-gray-400">
-                {differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1} giorni nel periodo
-              </span>
-            </div>
-            <div className="space-y-3">
-              {camere
-                .filter(c => filtroCamera === 'tutte' || c.id === filtroCamera)
-                .sort((a, b) => a.id - b.id)
-                .map(camera => {
-                  const { notti, ricavo } = statsCamera.find(s => s.camera.id === camera.id) ?? { notti: 0, ricavo: 0 };
-                  const nGiorniPeriodo = differenceInDays(parseISO(filtroAl), parseISO(filtroDal)) + 1;
-                  const satPct = nGiorniPeriodo > 0 ? Math.round((notti / nGiorniPeriodo) * 100) : 0;
-                  const col = getCameraStyle(camera.id, camera.colore);
-                  return (
-                    <div key={camera.id} className="flex items-center gap-4">
-                      <span className={`text-xs font-semibold w-24 flex-shrink-0 ${col.testo}`}>{camera.nome}</span>
-                      <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${col.bar}`}
-                          style={{ width: `${(notti / maxNotti) * 100}%` }}
-                          title={`${notti} notti`}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500 w-16 text-right">{notti}n &nbsp; {satPct}%</span>
-                      {ricavo > 0 && (
-                        <span className="text-xs font-semibold text-gray-700 w-16 text-right">€{ricavo.toFixed(0)}</span>
-                      )}
                     </div>
                   );
                 })}
@@ -899,52 +875,76 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Andamento mensile uscite per categoria (solo web) */}
-          <div className="hidden sm:block bg-white rounded-lg shadow-sm p-5">
-            <div className="flex items-baseline justify-between gap-4 mb-4">
+          {/* Andamento mensile: colonne impilate per categoria, tabella importi, confronto entrate / margine */}
+          <div className="bg-white rounded-lg shadow-sm p-3 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
                 <BarChart2 size={15} className="text-red-600" />
                 Andamento uscite per categoria
               </h3>
-              <span className="text-[11px] text-gray-400 text-right">
-                {andamentoVisibile.length} categorie con spese · barre in scala sul mese più alto di ogni categoria
-              </span>
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                <input type="checkbox" checked={andSenzaTassa} onChange={e => setAndSenzaTassa(e.target.checked)} className="accent-blue-600" />
+                Senza tassa di soggiorno
+              </label>
             </div>
             {andamentoVisibile.length === 0 ? (
               <p className="text-sm text-gray-400 italic">Nessuna uscita nel periodo</p>
             ) : (
-            <div className="overflow-x-auto">
+            <>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={graficoAndamento} margin={{ top: 18, right: 4, left: -8, bottom: 0 }} barCategoryGap="25%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="mese" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={56}
+                  tickFormatter={v => euro0(Number(v))} />
+                <Tooltip
+                  cursor={{ fill: '#f9fafb' }}
+                  contentStyle={{ fontSize: '11px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+                  formatter={(value, name) => [euro0(Number(value)), name]}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  itemSorter={(item: any) => -Number(item.value)}
+                />
+                {andamentoVisibile.map(({ categoria }, i) => (
+                  <Bar key={categoria} dataKey={categoria} stackId="u" maxBarSize={56}
+                    fill={(COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro']).hex}
+                    radius={i === andamentoVisibile.length - 1 ? [3, 3, 0, 0] : undefined}>
+                    {i === andamentoVisibile.length - 1 && (
+                      <LabelList dataKey="Totale" position="top" formatter={(v) => Number(v) > 0 ? euro0(Number(v)) : ''}
+                        style={{ fontSize: 11, fontWeight: 600, fill: '#374151' }} />
+                    )}
+                  </Bar>
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="overflow-x-auto mt-3">
               <table className="w-full text-xs tabular-nums border-separate border-spacing-0">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-wide text-gray-400">
-                    <th className="text-left font-medium pb-2 pr-4 sticky left-0 bg-white">Categoria</th>
+                    <th className="text-left font-medium pb-2 pr-3 sticky left-0 bg-white">Categoria</th>
                     {mesiPeriodo.map(mm => <th key={mm} className="text-right font-medium pb-2 px-2 whitespace-nowrap">{etichettaMese(mm)}</th>)}
-                    <th className="text-right font-medium pb-2 pl-4 border-l border-gray-100">Totale</th>
+                    <th className="text-right font-medium pb-2 pl-3 border-l border-gray-100">Totale</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {andamentoVisibile.map(({ categoria, mesi, totale, max }) => {
+                  {andamentoVisibile.map(({ categoria, mesi, totale }) => {
                     const col = COLORI_CAT_USCITA[categoria] ?? COLORI_CAT_USCITA['Altro'];
                     return (
                       <tr key={categoria} className="group">
-                        <td className="py-1.5 pr-4 border-t border-gray-100 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50">
+                        <td className="py-1.5 pr-3 border-t border-gray-100 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50">
                           <span className="inline-flex items-center gap-2 font-medium text-gray-700">
                             <span className={`w-2.5 h-2.5 rounded-sm shrink-0 ${col.bar}`} />
                             {categoria}
                           </span>
                         </td>
                         {mesi.map((v, i) => (
-                          <td key={i} className="py-1.5 px-2 border-t border-gray-100 group-hover:bg-gray-50 min-w-[4.5rem]"
+                          <td key={i} className={`py-1.5 px-2 border-t border-gray-100 group-hover:bg-gray-50 text-right whitespace-nowrap ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}
                             title={`${categoria}, ${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
-                            <div className={`text-right whitespace-nowrap ${v > 0 ? 'text-gray-700' : 'text-gray-300'}`}>{v > 0 ? euro0(v) : '–'}</div>
-                            <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden flex justify-end">
-                              <div className={`h-full rounded-full ${col.bar}`} style={{ width: v > 0 && max > 0 ? `${Math.max(6, (v / max) * 100)}%` : '0%' }} />
-                            </div>
+                            {v > 0 ? euro0(v) : '–'}
                           </td>
                         ))}
-                        <td className="py-1.5 pl-4 border-t border-l border-gray-100 text-right whitespace-nowrap group-hover:bg-gray-50">
-                          <div className="font-semibold text-gray-800">{euro0(totale)}</div>
-                          <div className="text-[10px] text-gray-400">{totaleAndamento > 0 ? ((totale / totaleAndamento) * 100).toFixed(0) : 0}%</div>
+                        <td className="py-1.5 pl-3 border-t border-l border-gray-100 text-right whitespace-nowrap group-hover:bg-gray-50">
+                          <span className="font-semibold text-gray-800">{euro0(totale)}</span>
+                          <span className="text-[10px] text-gray-400 ml-1.5">{totaleAndamento > 0 ? ((totale / totaleAndamento) * 100).toFixed(0) : 0}%</span>
                         </td>
                       </tr>
                     );
@@ -952,20 +952,59 @@ export default function Dashboard() {
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td className="pt-2.5 pr-4 border-t-2 border-gray-200 text-gray-600 whitespace-nowrap sticky left-0 bg-white">Totale mese</td>
+                    <td className="py-1.5 pr-3 border-t-2 border-gray-200 text-gray-600 whitespace-nowrap sticky left-0 bg-white">Totale uscite</td>
                     {totaliMese.map((v, i) => (
-                      <td key={i} className="pt-2.5 px-2 border-t-2 border-gray-200" title={`${etichettaMese(mesiPeriodo[i])}: €${v.toFixed(2)}`}>
-                        <div className="text-right whitespace-nowrap text-gray-800">{euro0(v)}</div>
-                        <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden flex justify-end">
-                              <div className="h-full rounded-full bg-gray-400" style={{ width: maxTotaleMese > 0 ? `${(v / maxTotaleMese) * 100}%` : '0%' }} />
-                            </div>
+                      <td key={i} className="py-1.5 px-2 border-t-2 border-gray-200 text-right whitespace-nowrap text-red-600">{euro0(v)}</td>
+                    ))}
+                    <td className="py-1.5 pl-3 border-t-2 border-l border-gray-200 text-right whitespace-nowrap font-bold text-red-600">{euro0(totaleAndamento)}</td>
+                  </tr>
+                  <tr className="font-semibold">
+                    <td className="py-1.5 pr-3 text-gray-600 whitespace-nowrap sticky left-0 bg-white">Entrate</td>
+                    {entrateMese.map((v, i) => (
+                      <td key={i} className="py-1.5 px-2 text-right whitespace-nowrap text-green-700">{euro0(v)}</td>
+                    ))}
+                    <td className="py-1.5 pl-3 border-l border-gray-200 text-right whitespace-nowrap font-bold text-green-700">{euro0(totaleEntrateAnd)}</td>
+                  </tr>
+                  <tr className="font-semibold bg-gray-50">
+                    <td className="py-1.5 pr-3 text-gray-700 whitespace-nowrap sticky left-0 bg-gray-50">Margine</td>
+                    {margineMese.map((v, i) => (
+                      <td key={i} className={`py-1.5 px-2 text-right whitespace-nowrap ${v >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                        {euro0(v)}
+                        <span className="block text-[10px] font-normal text-gray-400">{pctMargine(v, entrateMese[i])}</span>
                       </td>
                     ))}
-                    <td className="pt-2.5 pl-4 border-t-2 border-l border-gray-200 text-right whitespace-nowrap font-bold text-red-600">{euro0(totaleAndamento)}</td>
+                    <td className={`py-1.5 pl-3 border-l border-gray-200 text-right whitespace-nowrap font-bold ${margineAnd >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {euro0(margineAnd)}
+                      <span className="block text-[10px] font-normal text-gray-400">{pctMargine(margineAnd, totaleEntrateAnd)}</span>
+                    </td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+
+            {/* Confronto del periodo: entrate (somma) e margine */}
+            <div className="mt-4 pt-4 border-t border-gray-100 space-y-2.5">
+              {[
+                { etichetta: 'Entrate del periodo', valore: totaleEntrateAnd, colore: 'bg-green-500', testo: 'text-green-700' },
+                { etichetta: 'Uscite del periodo', valore: totaleAndamento, colore: 'bg-red-400', testo: 'text-red-600' },
+                { etichetta: 'Margine', valore: margineAnd, colore: margineAnd >= 0 ? 'bg-blue-500' : 'bg-red-600', testo: margineAnd >= 0 ? 'text-blue-700' : 'text-red-600' },
+              ].map(r => {
+                const scala = Math.max(totaleEntrateAnd, totaleAndamento, 1);
+                return (
+                  <div key={r.etichetta} className="flex items-center gap-3 text-xs">
+                    <span className="w-24 sm:w-36 shrink-0 text-gray-600">{r.etichetta}</span>
+                    <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${r.colore}`} style={{ width: `${(Math.abs(r.valore) / scala) * 100}%` }} />
+                    </div>
+                    <span className={`w-20 sm:w-24 text-right font-semibold tabular-nums whitespace-nowrap ${r.testo}`}>{euro0(r.valore)}</span>
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-gray-400 text-right">
+                Margine {pctMargine(margineAnd, totaleEntrateAnd)} delle entrate{andSenzaTassa ? ' · tassa di soggiorno esclusa' : ''}
+              </p>
+            </div>
+            </>
             )}
           </div>
 
