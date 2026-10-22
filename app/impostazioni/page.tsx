@@ -9,7 +9,7 @@ import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
-  Plug, ArrowDownToLine, Wifi, WifiOff, ChevronRight, BarChart3, BookUser,
+  ChevronRight, BarChart3, BookUser,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import RubricaContatti from '@/components/RubricaContatti';
@@ -29,8 +29,8 @@ interface ICalSyncResult {
   gmail?: { importate: number; aggiornate: number; cancellate: number; dettagli: string[] };
 }
 
-type MainTab = 'strutture' | 'camere' | 'rubrica' | 'account' | 'app' | 'sistema';
-type SubTab = 'camere' | 'ical' | 'prezzi' | 'checkin' | 'codici' | 'alloggiati' | 'osservatorio';
+type MainTab = 'strutture' | 'camere' | 'checkin' | 'rubrica' | 'account' | 'app' | 'sistema';
+type SubTab = 'camere' | 'ical' | 'prezzi' | 'codici' | 'alloggiati' | 'osservatorio';
 type CanalePrezzi = 'privato' | 'booking' | 'airbnb';
 
 // Stesso controllo della configurazione guidata
@@ -143,20 +143,6 @@ export default function ImpostazioniPage() {
   const [salvatoCamera, setSalvatoCamera] = useState<'codici' | 'alloggiati' | 'osservatorio' | null>(null);
   const [provaOss, setProvaOss] = useState<{ chiave: string; ok: boolean; testo: string } | null>(null);
   const [invioOss, setInvioOss] = useState<{ stato: 'loading' | 'ok' | 'errore'; righe: string[] } | null>(null);
-
-  // Booking Channel Manager (per struttura)
-  const [editCmUrl, setEditCmUrl] = useState('');
-  const [editCmHotelId, setEditCmHotelId] = useState('');
-  const [editCmUsername, setEditCmUsername] = useState('');
-  const [editCmPassword, setEditCmPassword] = useState('');
-  const [editCmWebhookSecret, setEditCmWebhookSecret] = useState('');
-  const [editCmRoomMap, setEditCmRoomMap] = useState<Record<number, string>>({});
-  const [mostraPasswordCm, setMostraPasswordCm] = useState(false);
-  const [salvatoCm, setSalvatoCm] = useState(false);
-  const [testCmLoading, setTestCmLoading] = useState(false);
-  const [testCmResult, setTestCmResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [syncCmLoading, setSyncCmLoading] = useState(false);
-  const [syncCmResult, setSyncCmResult] = useState<{ importate: number; aggiornate: number; cancellate: number; errori: string[] } | null>(null);
 
   // Sistema backup
   const [backupLoading, setBackupLoading] = useState(false);
@@ -339,49 +325,6 @@ export default function ImpostazioniPage() {
     } catch {
       setInvioOss({ stato: 'errore', righe: ['Errore di rete'] });
     }
-  }
-
-  async function salvaChannelManager(id: string) {
-    await fetch(`/api/strutture/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channel_manager_config: {
-          channel_manager_url: editCmUrl.trim(),
-          hotel_id: editCmHotelId.trim(),
-          username: editCmUsername.trim(),
-          password: editCmPassword,
-          webhook_secret: editCmWebhookSecret.trim() || undefined,
-          room_id_map: editCmRoomMap,
-        },
-      }),
-    });
-    setSalvatoCm(true);
-    setTimeout(() => setSalvatoCm(false), 2000);
-  }
-
-  async function testChannelManager(id: string) {
-    setTestCmLoading(true);
-    setTestCmResult(null);
-    const res = await fetch('/api/channel-manager/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ struttura_id: id }),
-    });
-    setTestCmResult(await res.json());
-    setTestCmLoading(false);
-  }
-
-  async function syncChannelManager(id: string) {
-    setSyncCmLoading(true);
-    setSyncCmResult(null);
-    const res = await fetch('/api/channel-manager/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ struttura_id: id, stato: 'all' }),
-    });
-    setSyncCmResult(await res.json());
-    setSyncCmLoading(false);
   }
 
   async function salvaEditDati(id: string) {
@@ -647,6 +590,7 @@ export default function ImpostazioniPage() {
   const TAB = [
     { id: 'strutture', label: 'Strutture', icon: Building2, color: 'slate'  },
     { id: 'camere',    label: et.Camere,   icon: PenLine,   color: 'purple' },
+    { id: 'checkin',   label: 'Check-in',  icon: Mail,      color: 'blue'   },
     { id: 'rubrica',   label: 'Rubrica',   icon: BookUser,  color: 'rose'   },
     { id: 'account',   label: 'Account',   icon: Shield,    color: 'indigo' },
     { id: 'app',       label: 'App',       icon: Palette,   color: 'teal'   },
@@ -708,16 +652,6 @@ export default function ImpostazioniPage() {
     setProvaOss(null);
     setMostraPasswordAlloggiati(false);
     setSalvatoAlloggiati(false);
-    setEditCmUrl(s.channel_manager_config?.channel_manager_url ?? '');
-    setEditCmHotelId(s.channel_manager_config?.hotel_id ?? '');
-    setEditCmUsername(s.channel_manager_config?.username ?? '');
-    setEditCmPassword(s.channel_manager_config?.password ?? '');
-    setEditCmWebhookSecret(s.channel_manager_config?.webhook_secret ?? '');
-    setEditCmRoomMap(s.channel_manager_config?.room_id_map ?? {});
-    setMostraPasswordCm(false);
-    setSalvatoCm(false);
-    setTestCmResult(null);
-    setSyncCmResult(null);
     setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
     setNuovoContoNome('');
     setNuovoContoTipo('contanti');
@@ -728,7 +662,6 @@ export default function ImpostazioniPage() {
     { id: 'camere', label: et.Camere },
     { id: 'prezzi', label: 'Prezzi' },
     { id: 'ical',   label: 'iCal'   },
-    { id: 'checkin', label: 'Check-in' },
     { id: 'codici', label: 'CIN / CIR' },
     { id: 'alloggiati', label: 'Alloggiati' },
     { id: 'osservatorio', label: 'Osservatorio' },
@@ -739,13 +672,13 @@ export default function ImpostazioniPage() {
       <h1 className="text-2xl font-bold text-gray-800">Impostazioni</h1>
 
       {/* Tab principali */}
-      <div className="flex border-b border-gray-200 gap-1 -mb-2 sticky top-0 bg-white z-10 pt-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex border-b border-gray-200 gap-0.5 -mb-2 sticky top-0 bg-white z-10 pt-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TAB.map(t => {
           const Icon = t.icon;
           const active = sezione === t.id;
           return (
             <button key={t.id} onClick={() => setSezione(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors rounded-t whitespace-nowrap ${active ? tabColor[t.color] : tabInactive}`}
+              className={`flex items-center gap-1.5 px-2.5 py-2.5 text-sm font-medium border-b-2 transition-colors rounded-t whitespace-nowrap ${active ? tabColor[t.color] : tabInactive}`}
             >
               <Icon size={15} />
               {t.label}
@@ -1322,163 +1255,178 @@ export default function ImpostazioniPage() {
                   </div>
                 )}
 
-                {/* Sub-tab: CHECK-IN */}
-                {subTab === 'checkin' && (
-                  <div>
-                    {/* Invii automatici */}
-                    <div className="mb-6 pb-5 border-b">
-                      <div className="flex items-center gap-2 mb-3">
-                        <RefreshCw size={16} className="text-blue-600" />
-                        <h3 className="font-semibold text-gray-700 text-sm">Invii automatici</h3>
-                      </div>
-                      <div className="space-y-3">
-                        <label className="flex items-start gap-2 cursor-pointer">
-                          <input type="checkbox" checked={editAutomazioni.portale} onChange={e => cambiaAutomazione('portale', e.target.checked)} className="mt-0.5" />
-                          <span className="text-sm text-gray-700">
-                            Invio delle schedine ad Alloggiati Web il giorno del check-in
-                            <span className="block text-xs text-gray-400">Alle 15:00 e alle 21:00; le schedine già inviate non vengono ripetute.</span>
-                          </span>
-                        </label>
-                      </div>
-                      <div className="space-y-3 mt-3">
-                        <label className="flex items-start gap-2 cursor-pointer">
-                          <input type="checkbox" checked={editAutomazioni.osservatorio} onChange={e => cambiaAutomazione('osservatorio', e.target.checked)} className="mt-0.5" />
-                          <span className="text-sm text-gray-700">
-                            Invio all&apos;Osservatorio Turistico della Regione Siciliana
-                            <span className="block text-xs text-gray-400">
-                              Ogni sera alle 23:00: arrivi e partenze del giorno (dalle schede in Alloggiati) e chiusura della giornata,
-                              anche senza movimenti. Spegnilo nei periodi di chiusura della struttura.
-                            </span>
-                          </span>
-                        </label>
-                        {editAutomazioni.osservatorio && !strutturaAttiva.osservatorio_credentials?.codice_struttura
-                          && Object.keys(strutturaAttiva.osservatorio_camere ?? {}).length === 0 && (
-                          <p className="text-xs text-amber-600">Mancano le credenziali dell&apos;Osservatorio (scheda Strutture).</p>
-                        )}
-                        <div className="flex items-center gap-2 flex-wrap pl-6">
-                          <label className="text-xs text-gray-600">Prima giornata gestita dall&apos;app</label>
-                          <input type="date" value={editAutomazioni.osservatorio_dal ?? ''}
-                            onChange={e => cambiaAutomazione('osservatorio_dal', e.target.value)}
-                            className="border rounded px-2 py-1 text-xs w-[8.5rem]" />
-                          <span className="text-[11px] text-gray-400 basis-full">
-                            Il portale accetta solo gli arrivi della giornata aperta. Prima di accendere, chiudi a mano su Turist@t tutte le giornate fino al giorno prima di questa data; da qui in poi l&apos;app manda arrivi, partenze e chiusura giorno per giorno. Gli arrivi precedenti restano da inserire a mano.
-                          </span>
-                        </div>
-                        <div>
-                          <button type="button" onClick={() => inviaOsservatorioOra()} disabled={invioOss?.stato === 'loading'}
-                            className="flex items-center gap-1.5 border border-teal-300 text-teal-700 px-2.5 py-1 rounded text-xs font-medium hover:bg-teal-50 disabled:opacity-50">
-                            {invioOss?.stato === 'loading' ? <Loader2 size={12} className="animate-spin" /> : <BarChart3 size={12} />}
-                            Invia ora all&apos;Osservatorio (chiude le giornate fino a ieri)
-                          </button>
-                          {invioOss && invioOss.stato !== 'loading' && (
-                            <ul className={`mt-1.5 text-xs rounded px-3 py-2 space-y-0.5 ${invioOss.stato === 'ok' ? 'bg-teal-50 text-teal-800' : 'bg-red-50 text-red-700'}`}>
-                              {invioOss.righe.map((r, i) => <li key={i} className="break-words">{r}</li>)}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-3">Link di registrazione e istruzioni agli ospiti: da Prenotazioni → WhatsApp.</p>
-                      {editAutomazioni.portale && !strutturaAttiva.telefono && (
-                        <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
-                      )}
-                      {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey
-                        && Object.keys(strutturaAttiva.alloggiati_camere ?? {}).length < strutturaAttiva.num_camere && (
-                        <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura o di alcune {et.camere} (scheda Strutture).</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-3">
-                      <Mail size={16} className="text-blue-600" />
-                      <h3 className="font-semibold text-gray-700 text-sm">Messaggio di check-in</h3>
-                    </div>
-                    <p className="text-xs text-gray-400 mb-3">
-                      Inviato all&apos;ospite dalla pagina Alloggiati. Tocca un segnaposto per inserirlo: viene sostituito con i dati della prenotazione.
-                      Le {et.camere} senza un messaggio proprio usano quello della struttura.
-                    </p>
-                    <div className="flex items-center gap-2 mb-3">
-                      <label className="text-xs text-gray-600 shrink-0">Messaggio per</label>
-                      <select value={istrSel} onChange={e => setIstrSel(Number(e.target.value))}
-                        className="border rounded px-2 py-1 text-sm min-w-0 flex-1 sm:flex-none focus:outline-none focus:ring-1 focus:ring-blue-400">
-                        <option value={0}>Struttura (predefinito)</option>
-                        {Array.from({ length: strutturaAttiva.num_camere }, (_, i) => i + 1).map(id => (
-                          <option key={id} value={id}>
-                            {strutturaAttiva.nomi_camere[id] || `${et.Camera} ${id}`}{editIstrCamere[id]?.trim() ? ' · messaggio proprio' : ' · usa struttura'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {istrSel > 0 && editIstrCamere[istrSel] === undefined ? (
-                      <div className="rounded border border-dashed border-gray-300 p-4 text-sm text-gray-600 mb-3">
-                        Questa {et.camera} usa il messaggio della struttura.
-                        <button type="button" onClick={() => setEditIstrCamere(prev => ({ ...prev, [istrSel]: editIstruzioni }))}
-                          className="block mt-2 text-blue-600 text-sm underline text-left">
-                          Scrivi un messaggio solo per questa {et.camera} (parte dal testo della struttura)
-                        </button>
-                      </div>
-                    ) : (<>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {Object.entries(SEGNAPOSTO_ISTRUZIONI).map(([s, descr]) => (
-                        <button key={s} type="button" onClick={() => inserisciSegnaposto(s)} title={descr}
-                          className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea ref={istruzioniRef} value={testoIstr} onChange={e => { const v = e.target.value; setTestoIstr(() => v); }}
-                      rows={14}
-                      className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    />
-                    {istrSel === 0 && modelloNonSalvato && (
-                      <p className="text-xs text-amber-600 mt-1">Modello di partenza, non ancora salvato: completa le parti tra [ ].</p>
-                    )}
-                    <div className="flex items-center gap-3 mt-3 flex-wrap">
-                      {istrSel === 0 ? (
-                        <button onClick={salvaIstruzioni} disabled={!editIstruzioni.trim()}
-                          className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                        >
-                          <Save size={14} />
-                          {salvatoIstruzioni ? 'Salvato!' : 'Salva messaggio'}
-                        </button>
-                      ) : (
-                        <>
-                          <button onClick={() => salvaIstruzioniCamere(editIstrCamere)} disabled={!testoIstr.trim()}
-                            className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            <Save size={14} />
-                            {salvatoIstrCamera ? 'Salvato!' : `Salva messaggio della ${et.camera}`}
-                          </button>
-                          <button type="button"
-                            onClick={() => { const v = { ...editIstrCamere }; delete v[istrSel]; salvaIstruzioniCamere(v); }}
-                            className="text-sm text-gray-500 underline">
-                            Usa il messaggio della struttura
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    </>)}
-
-                    <div className="border-t pt-4 mt-5">
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Anteprima (dati di esempio)</h4>
-                      <div className="bg-gray-50 rounded p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
-                        {componiIstruzioni(istrSel && editIstrCamere[istrSel] !== undefined ? testoIstr : editIstruzioni, {
-                          ospite: 'Mario Rossi',
-                          camera: istrSel || 1,
-                          tassa: '€ 6,00',
-                          indirizzo: strutturaAttiva.indirizzo || 'indirizzo della struttura',
-                          struttura: strutturaAttiva.nome,
-                          cin: editCodiciCamere[istrSel || 1]?.cin || strutturaAttiva.dati_fiscali.cin,
-                          cir: editCodiciCamere[istrSel || 1]?.cir || strutturaAttiva.dati_fiscali.cir,
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
               </div>
             </div>
           )}
         </>
+      )}
+
+      {/* ── CHECK-IN ──────────────────────────────────────────────────── */}
+      {sezione === 'checkin' && (
+        !strutturaAttiva ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-400 text-sm">
+            Nessuna struttura selezionata
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b bg-blue-50 flex items-center gap-2">
+              <Building2 size={16} className="text-blue-600" />
+              <span className="font-semibold text-blue-800">{strutturaAttiva.nome}</span>
+              {strutturaAttiva.indirizzo && <span className="text-xs text-blue-500">— {strutturaAttiva.indirizzo}</span>}
+            </div>
+            <div className="px-5 py-5">
+              <div>
+                {/* Invii automatici */}
+                <div className="mb-6 pb-5 border-b">
+                  <div className="flex items-center gap-2 mb-3">
+                    <RefreshCw size={16} className="text-blue-600" />
+                    <h3 className="font-semibold text-gray-700 text-sm">Invii automatici</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input type="checkbox" checked={editAutomazioni.portale} onChange={e => cambiaAutomazione('portale', e.target.checked)} className="mt-0.5" />
+                      <span className="text-sm text-gray-700">
+                        Invio delle schedine ad Alloggiati Web il giorno del check-in
+                        <span className="block text-xs text-gray-400">Alle 15:00 e alle 21:00; le schedine già inviate non vengono ripetute.</span>
+                      </span>
+                    </label>
+                  </div>
+                  <div className="space-y-3 mt-3">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input type="checkbox" checked={editAutomazioni.osservatorio} onChange={e => cambiaAutomazione('osservatorio', e.target.checked)} className="mt-0.5" />
+                      <span className="text-sm text-gray-700">
+                        Invio all&apos;Osservatorio Turistico della Regione Siciliana
+                        <span className="block text-xs text-gray-400">
+                          Ogni sera alle 23:00: arrivi e partenze del giorno (dalle schede in Alloggiati) e chiusura della giornata,
+                          anche senza movimenti. Spegnilo nei periodi di chiusura della struttura.
+                        </span>
+                      </span>
+                    </label>
+                    {editAutomazioni.osservatorio && !strutturaAttiva.osservatorio_credentials?.codice_struttura
+                      && Object.keys(strutturaAttiva.osservatorio_camere ?? {}).length === 0 && (
+                      <p className="text-xs text-amber-600">Mancano le credenziali dell&apos;Osservatorio (scheda Strutture).</p>
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap pl-6">
+                      <label className="text-xs text-gray-600">Prima giornata gestita dall&apos;app</label>
+                      <input type="date" value={editAutomazioni.osservatorio_dal ?? ''}
+                        onChange={e => cambiaAutomazione('osservatorio_dal', e.target.value)}
+                        className="border rounded px-2 py-1 text-xs w-[8.5rem]" />
+                      <span className="text-[11px] text-gray-400 basis-full">
+                        Il portale accetta solo gli arrivi della giornata aperta. Prima di accendere, chiudi a mano su Turist@t tutte le giornate fino al giorno prima di questa data; da qui in poi l&apos;app manda arrivi, partenze e chiusura giorno per giorno. Gli arrivi precedenti restano da inserire a mano.
+                      </span>
+                    </div>
+                    <div>
+                      <button type="button" onClick={() => inviaOsservatorioOra()} disabled={invioOss?.stato === 'loading'}
+                        className="flex items-center gap-1.5 border border-teal-300 text-teal-700 px-2.5 py-1 rounded text-xs font-medium hover:bg-teal-50 disabled:opacity-50">
+                        {invioOss?.stato === 'loading' ? <Loader2 size={12} className="animate-spin" /> : <BarChart3 size={12} />}
+                        Invia ora all&apos;Osservatorio (chiude le giornate fino a ieri)
+                      </button>
+                      {invioOss && invioOss.stato !== 'loading' && (
+                        <ul className={`mt-1.5 text-xs rounded px-3 py-2 space-y-0.5 ${invioOss.stato === 'ok' ? 'bg-teal-50 text-teal-800' : 'bg-red-50 text-red-700'}`}>
+                          {invioOss.righe.map((r, i) => <li key={i} className="break-words">{r}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-3">Link di registrazione e istruzioni agli ospiti: da Prenotazioni → WhatsApp.</p>
+                  {editAutomazioni.portale && !strutturaAttiva.telefono && (
+                    <p className="text-xs text-amber-600 mt-3">Indica il telefono WhatsApp della struttura (scheda Strutture → dati struttura): lì arrivano gli avvisi quando un invio non riesce.</p>
+                  )}
+                  {editAutomazioni.portale && !strutturaAttiva.alloggiati_credentials?.wskey
+                    && Object.keys(strutturaAttiva.alloggiati_camere ?? {}).length < strutturaAttiva.num_camere && (
+                    <p className="text-xs text-amber-600 mt-1">Mancano le credenziali Alloggiati Web della struttura o di alcune {et.camere} (scheda Strutture).</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 mb-3">
+                  <Mail size={16} className="text-blue-600" />
+                  <h3 className="font-semibold text-gray-700 text-sm">Messaggio di check-in</h3>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">
+                  Inviato all&apos;ospite dalla pagina Alloggiati. Tocca un segnaposto per inserirlo: viene sostituito con i dati della prenotazione.
+                  Le {et.camere} senza un messaggio proprio usano quello della struttura.
+                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <label className="text-xs text-gray-600 shrink-0">Messaggio per</label>
+                  <select value={istrSel} onChange={e => setIstrSel(Number(e.target.value))}
+                    className="border rounded px-2 py-1 text-sm min-w-0 flex-1 sm:flex-none focus:outline-none focus:ring-1 focus:ring-blue-400">
+                    <option value={0}>Struttura (predefinito)</option>
+                    {Array.from({ length: strutturaAttiva.num_camere }, (_, i) => i + 1).map(id => (
+                      <option key={id} value={id}>
+                        {strutturaAttiva.nomi_camere[id] || `${et.Camera} ${id}`}{editIstrCamere[id]?.trim() ? ' · messaggio proprio' : ' · usa struttura'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {istrSel > 0 && editIstrCamere[istrSel] === undefined ? (
+                  <div className="rounded border border-dashed border-gray-300 p-4 text-sm text-gray-600 mb-3">
+                    Questa {et.camera} usa il messaggio della struttura.
+                    <button type="button" onClick={() => setEditIstrCamere(prev => ({ ...prev, [istrSel]: editIstruzioni }))}
+                      className="block mt-2 text-blue-600 text-sm underline text-left">
+                      Scrivi un messaggio solo per questa {et.camera} (parte dal testo della struttura)
+                    </button>
+                  </div>
+                ) : (<>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(SEGNAPOSTO_ISTRUZIONI).map(([s, descr]) => (
+                    <button key={s} type="button" onClick={() => inserisciSegnaposto(s)} title={descr}
+                      className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <textarea ref={istruzioniRef} value={testoIstr} onChange={e => { const v = e.target.value; setTestoIstr(() => v); }}
+                  rows={14}
+                  className="w-full border rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                {istrSel === 0 && modelloNonSalvato && (
+                  <p className="text-xs text-amber-600 mt-1">Modello di partenza, non ancora salvato: completa le parti tra [ ].</p>
+                )}
+                <div className="flex items-center gap-3 mt-3 flex-wrap">
+                  {istrSel === 0 ? (
+                    <button onClick={salvaIstruzioni} disabled={!editIstruzioni.trim()}
+                      className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      <Save size={14} />
+                      {salvatoIstruzioni ? 'Salvato!' : 'Salva messaggio'}
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => salvaIstruzioniCamere(editIstrCamere)} disabled={!testoIstr.trim()}
+                        className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <Save size={14} />
+                        {salvatoIstrCamera ? 'Salvato!' : `Salva messaggio della ${et.camera}`}
+                      </button>
+                      <button type="button"
+                        onClick={() => { const v = { ...editIstrCamere }; delete v[istrSel]; salvaIstruzioniCamere(v); }}
+                        className="text-sm text-gray-500 underline">
+                        Usa il messaggio della struttura
+                      </button>
+                    </>
+                  )}
+                </div>
+                </>)}
+
+                <div className="border-t pt-4 mt-5">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Anteprima (dati di esempio)</h4>
+                  <div className="bg-gray-50 rounded p-3 text-sm text-gray-700 whitespace-pre-wrap break-words">
+                    {componiIstruzioni(istrSel && editIstrCamere[istrSel] !== undefined ? testoIstr : editIstruzioni, {
+                      ospite: 'Mario Rossi',
+                      camera: istrSel || 1,
+                      tassa: '€ 6,00',
+                      indirizzo: strutturaAttiva.indirizzo || 'indirizzo della struttura',
+                      struttura: strutturaAttiva.nome,
+                      cin: editCodiciCamere[istrSel || 1]?.cin || strutturaAttiva.dati_fiscali.cin,
+                      cir: editCodiciCamere[istrSel || 1]?.cir || strutturaAttiva.dati_fiscali.cir,
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
       )}
 
       {/* ── STRUTTURE─────────────────────────────────────────────────── */}
@@ -1775,137 +1723,6 @@ export default function ImpostazioniPage() {
                       <Save size={12} />
                       {salvatoAlloggiati ? 'Salvato!' : 'Salva credenziali'}
                     </button>
-                  </div>
-
-                  {/* Booking Channel Manager */}
-                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Plug size={14} className="text-indigo-600" />
-                      <span className="font-semibold text-gray-700 text-sm">Booking.com Channel Manager</span>
-                      {editCmUrl && testCmResult && (
-                        testCmResult.ok
-                          ? <span className="flex items-center gap-1 text-[10px] text-green-700 bg-green-50 rounded px-1.5 py-0.5"><Wifi size={10}/> Connesso</span>
-                          : <span className="flex items-center gap-1 text-[10px] text-red-600 bg-red-50 rounded px-1.5 py-0.5"><WifiOff size={10}/> Errore</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 mb-3">
-                      Connetti questa struttura al Channel Manager per sincronizzare tariffe, disponibilità e prenotazioni con Booking.com.
-                    </p>
-
-                    {/* Credenziali principali */}
-                    <div className="space-y-2 mb-3">
-                      <div>
-                        <label className="block text-[10px] text-gray-500 mb-0.5">URL Channel Manager</label>
-                        <input type="url" placeholder="http://localhost:3001" value={editCmUrl}
-                          onChange={e => setEditCmUrl(e.target.value)}
-                          className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-gray-500 mb-0.5">Hotel ID (Booking.com)</label>
-                          <input type="text" placeholder="hotel-test-001" value={editCmHotelId}
-                            onChange={e => setEditCmHotelId(e.target.value)}
-                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-gray-500 mb-0.5">Username</label>
-                          <input type="text" placeholder="machine-account-user" value={editCmUsername}
-                            onChange={e => setEditCmUsername(e.target.value)}
-                            autoComplete="off"
-                            className="w-full border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <input type={mostraPasswordCm ? 'text' : 'password'} placeholder="Password"
-                          value={editCmPassword} onChange={e => setEditCmPassword(e.target.value)}
-                          autoComplete="new-password"
-                          className="flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        />
-                        <button type="button" onClick={() => setMostraPasswordCm(p => !p)} className="border rounded px-2 text-xs text-gray-500 hover:bg-gray-50">
-                          {mostraPasswordCm ? 'Nascondi' : 'Mostra'}
-                        </button>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-gray-500 mb-0.5">Webhook Secret (opzionale)</label>
-                        <input type="text" placeholder="Segreto HMAC per validare i push di Booking.com" value={editCmWebhookSecret}
-                          onChange={e => setEditCmWebhookSecret(e.target.value)}
-                          className="w-full border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Mapping camere */}
-                    <div className="mb-3">
-                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
-                        Mapping {et.camere} → Room ID Channel Manager
-                      </p>
-                      <div className="space-y-1">
-                        {idsEditCamere.map(id => (
-                          <div key={id} className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5 w-28 shrink-0">
-                              <div className={`w-2 h-2 rounded-full ${getCameraStyle(id, editColoriCamere[id]).dot}`} />
-                              <span className="text-xs text-gray-600 truncate">{editNomiCamere[id] || `${et.Camera} ${id}`}</span>
-                            </div>
-                            <input type="text" placeholder="room-deluxe-01"
-                              value={editCmRoomMap[id] ?? ''}
-                              onChange={e => setEditCmRoomMap(prev => ({ ...prev, [id]: e.target.value }))}
-                              className="flex-1 border rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-gray-400 mt-1">
-                        Inserisci gli ID esatti usati nel Channel Manager (es. room-deluxe-01).
-                      </p>
-                    </div>
-
-                    {/* Azioni */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button onClick={() => salvaChannelManager(selezionata.id)}
-                        disabled={!editCmUrl || !editCmHotelId}
-                        className="flex items-center gap-1.5 bg-indigo-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
-                      >
-                        <Save size={12} />
-                        {salvatoCm ? 'Salvato!' : 'Salva configurazione'}
-                      </button>
-                      <button onClick={() => testChannelManager(selezionata.id)}
-                        disabled={testCmLoading || !editCmUrl}
-                        className="flex items-center gap-1.5 border border-indigo-300 text-indigo-700 px-2.5 py-1.5 rounded text-xs font-medium hover:bg-indigo-50 disabled:opacity-40"
-                      >
-                        {testCmLoading ? <Loader2 size={12} className="animate-spin" /> : <Wifi size={12} />}
-                        Test connessione
-                      </button>
-                      <button onClick={() => syncChannelManager(selezionata.id)}
-                        disabled={syncCmLoading || !editCmUrl}
-                        className="flex items-center gap-1.5 border border-green-300 text-green-700 px-2.5 py-1.5 rounded text-xs font-medium hover:bg-green-50 disabled:opacity-40"
-                      >
-                        {syncCmLoading ? <Loader2 size={12} className="animate-spin" /> : <ArrowDownToLine size={12} />}
-                        Importa prenotazioni
-                      </button>
-                    </div>
-
-                    {/* Risultato test */}
-                    {testCmResult && (
-                      <div className={`mt-2 text-xs px-3 py-2 rounded flex items-center gap-2 ${testCmResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                        {testCmResult.ok ? <Wifi size={12} /> : <WifiOff size={12} />}
-                        {testCmResult.message}
-                      </div>
-                    )}
-
-                    {/* Risultato sync */}
-                    {syncCmResult && (
-                      <div className="mt-2 text-xs space-y-1">
-                        <div className="px-3 py-2 rounded bg-blue-50 text-blue-700">
-                          Sync completato — {syncCmResult.importate} nuove, {syncCmResult.aggiornate} aggiornate, {syncCmResult.cancellate} cancellate
-                        </div>
-                        {syncCmResult.errori.length > 0 && syncCmResult.errori.map((e, i) => (
-                          <div key={i} className="px-3 py-1.5 rounded bg-red-50 text-red-600">{e}</div>
-                        ))}
-                      </div>
-                    )}
                   </div>
               </div>
             )}
