@@ -403,15 +403,6 @@ export default function AlloggiatiPage() {
           Alloggiati
         </button>
         <button
-          onClick={() => setTab('tassa')}
-          className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
-            tab === 'tassa' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Upload size={14} />
-          Tassa di Soggiorno
-        </button>
-        <button
           onClick={() => setTab('turistat')}
           className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
             tab === 'turistat' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
@@ -419,6 +410,16 @@ export default function AlloggiatiPage() {
         >
           <BarChart3 size={14} />
           Turistat
+        </button>
+        <button
+          onClick={() => setTab('tassa')}
+          title="Tassa di soggiorno"
+          className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
+            tab === 'tassa' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Upload size={14} />
+          TDS
         </button>
       </div>
 
