@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generaTesto } from '@/lib/gemini';
+import { generaTesto, messaggioErroreAI } from '@/lib/gemini';
 
 const oggi = () => new Date().toISOString().split('T')[0];
 
@@ -108,6 +108,6 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[voice/parse]', msg);
-    return NextResponse.json({ errore: `Errore elaborazione AI: ${msg}` }, { status: 500 });
+    return NextResponse.json({ errore: messaggioErroreAI(err, 'Errore elaborazione AI') }, { status: 500 });
   }
 }

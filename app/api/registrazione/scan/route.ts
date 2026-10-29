@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generaTesto } from '@/lib/gemini';
+import { generaTesto, messaggioErroreAI } from '@/lib/gemini';
 import { pulisciNumeroDocumento } from '@/lib/numero-documento';
 import { nomePaeseACodice, aggettivoCittadinanzaACodice, normalizzaNome } from '@/lib/codici-alloggiati';
 import { nomeACodiceComune } from '@/lib/comuni-italiani';
@@ -73,6 +73,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[registrazione/scan]', msg);
-    return NextResponse.json({ errore: `Errore elaborazione: ${msg}` }, { status: 500 });
+    return NextResponse.json({ errore: messaggioErroreAI(err, 'Errore elaborazione') }, { status: 500 });
   }
 }

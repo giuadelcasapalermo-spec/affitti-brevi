@@ -15,6 +15,27 @@ function erroreRecuperabile(err: unknown): boolean {
   return /\[(404|429|500|503)[ \]]/.test(msg) || /not found|no longer available|high demand|overloaded|quota/i.test(msg);
 }
 
+/**
+ * Messaggio per l'utente: gli errori noti di Gemini (credito, quota, chiave, carico) diventano
+ * frasi comprensibili; gli altri restano tecnici con il prefisso indicato.
+ */
+export function messaggioErroreAI(err: unknown, prefisso: string): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/\[402[ \]]|prepayment|billing/i.test(msg)) {
+    return 'Servizio AI non disponibile: il credito del servizio è esaurito. Inserisci i dati manualmente e avvisa l\'amministratore.';
+  }
+  if (/\[429[ \]]|quota|rate limit/i.test(msg)) {
+    return 'Servizio AI temporaneamente non disponibile: limite di utilizzo raggiunto. Riprova tra qualche minuto o inserisci i dati manualmente.';
+  }
+  if (/\[(401|403)[ \]]|api key not valid|permission denied/i.test(msg)) {
+    return 'Servizio AI non disponibile: chiave di accesso non valida. Inserisci i dati manualmente e avvisa l\'amministratore.';
+  }
+  if (/\[(500|503)[ \]]|high demand|overloaded/i.test(msg)) {
+    return 'Servizio AI momentaneamente sovraccarico. Riprova tra qualche istante.';
+  }
+  return `${prefisso}: ${msg}`;
+}
+
 /** Chiama Gemini e restituisce il testo della risposta, provando i modelli in ordine. */
 export async function generaTesto(contenuto: string | Array<string | Part>): Promise<string> {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
