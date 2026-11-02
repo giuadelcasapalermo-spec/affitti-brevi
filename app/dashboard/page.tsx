@@ -254,6 +254,15 @@ export default function Dashboard() {
   const baseUscitePct = uscitePeriodo.filter(u => u.categoria !== TASSA).reduce((s, u) => s + u.importo, 0);
   const saldoPN = entratePeriodo.reduce((s, e) => s + e.importo, 0) - uscitePeriodo.reduce((s, u) => s + u.importo, 0);
   const saldo = entrateEffettive - usciteDelPeriodo;
+  // KPI delle analisi camere: la tassa di soggiorno (partita di giro) non si considera né nelle
+  // entrate né nelle uscite. I totali di Prima Nota e l'export restano completi.
+  const entrateKpi = entrate
+    .filter((e) => e.data >= filtroDal && e.data <= filtroAl && e.categoria !== TASSA)
+    .reduce((s, e) => s + e.importo, 0);
+  const usciteKpi = uscite
+    .filter((u) => u.data >= filtroDal && u.data <= filtroAl && u.categoria !== TASSA)
+    .reduce((s, u) => s + u.importo, 0);
+  const saldoKpi = entrateKpi - usciteKpi;
   const incidenzaUscite = entrateEffettive > 0 ? (usciteDelPeriodo / entrateEffettive) * 100 : 0;
 
   const movimenti = [
@@ -427,15 +436,15 @@ export default function Dashboard() {
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Entrate</div>
-          <div className="text-base font-bold text-green-700">+€{entrateEffettive.toFixed(0)}</div>
+          <div className="text-base font-bold text-green-700">+€{entrateKpi.toFixed(0)}</div>
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Uscite</div>
-          <div className="text-base font-bold text-red-600">-€{usciteDelPeriodo.toFixed(0)}</div>
+          <div className="text-base font-bold text-red-600">-€{usciteKpi.toFixed(0)}</div>
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Saldo</div>
-          <div className={`text-base font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldo.toFixed(0)}</div>
+          <div className={`text-base font-bold ${saldoKpi >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldoKpi.toFixed(0)}</div>
         </div>
       </div>
 
@@ -468,24 +477,24 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-green-100 rounded-full p-2"><TrendingUp size={20} className="text-green-600" /></div>
           <div>
-            <div className="text-sm text-gray-500">Entrate effettive</div>
-            <div className="text-lg font-bold text-green-700">+€{entrateEffettive.toFixed(2)}</div>
+            <div className="text-sm text-gray-500">Entrate effettive <span className="text-[10px] text-gray-400">(senza tassa sogg.)</span></div>
+            <div className="text-lg font-bold text-green-700">+€{entrateKpi.toFixed(2)}</div>
           </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
           <div>
             <div className="text-sm text-gray-500">Uscite del periodo</div>
-            <div className="text-lg font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</div>
+            <div className="text-lg font-bold text-red-600">-€{usciteKpi.toFixed(2)}</div>
           </div>
         </div>
-        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
-          <div className={`rounded-full p-2 ${saldo >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-            <TrendingUp size={20} className={saldo >= 0 ? 'text-green-600' : 'text-red-600'} />
+        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldoKpi >= 0 ? 'bg-white' : 'bg-red-50'}`}>
+          <div className={`rounded-full p-2 ${saldoKpi >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <TrendingUp size={20} className={saldoKpi >= 0 ? 'text-green-600' : 'text-red-600'} />
           </div>
           <div>
             <div className="text-sm text-gray-500">Saldo effettivo</div>
-            <div className={`text-lg font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldo.toFixed(2)}</div>
+            <div className={`text-lg font-bold ${saldoKpi >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldoKpi.toFixed(2)}</div>
           </div>
         </div>
       </div>
