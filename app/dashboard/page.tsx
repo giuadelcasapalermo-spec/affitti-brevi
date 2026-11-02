@@ -168,7 +168,8 @@ export default function Dashboard() {
   const statsCamera = camere.map((camera) => {
     const pren = prenNelPeriodo.filter((p) => p.camera_id === camera.id);
     const notti = pren.reduce((s, p) => s + nottiInPeriodo(p), 0);
-    const ricavo = pren.filter((p) => p.importo_totale > 0).reduce((s, p) => s + p.importo_totale, 0);
+    // ricavo per competenza di check-in, come il foglio mensile (tassa di soggiorno esclusa)
+    const ricavo = pren.filter((p) => p.importo_totale > 0 && p.check_in >= filtroDal).reduce((s, p) => s + p.importo_totale, 0);
     return { camera, notti, ricavo };
   });
 
@@ -561,7 +562,7 @@ export default function Dashboard() {
                     const prenotazioniCamera = prenNelPeriodo.filter((p) => p.camera_id === camera.id);
                     const impegnata = prenotazioniCamera.length > 0;
                     const nottiTotali = prenotazioniCamera.reduce((s, p) => s + differenceInDays(parseISO(p.check_out), parseISO(p.check_in)), 0);
-                    const stimaCamera = prenotazioniCamera.filter((p) => p.importo_totale > 0).reduce((s, p) => s + p.importo_totale, 0);
+                    const stimaCamera = prenotazioniCamera.filter((p) => p.importo_totale > 0 && p.check_in >= filtroDal).reduce((s, p) => s + p.importo_totale, 0);
                     const occupazioneOggi = isCameraOccupata(prenotazioni, camera.id);
                     const col = getCameraStyle(camera.id, camera.colore);
                     return (
