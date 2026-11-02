@@ -687,14 +687,14 @@ export default function CalendarioPage() {
                 <div className="grid grid-cols-7 mb-0.5">
                   {GIORNI_SETTIMANA.map((g, i) => (
                     <div key={i} className="flex items-center justify-center">
-                      <span className="text-[8px] font-semibold text-gray-400">{g}</span>
+                      <span className="text-[9px] font-semibold text-gray-400">{g}</span>
                     </div>
                   ))}
                 </div>
                 {settimane.map((settimana, si) => (
                   <div key={si} className="grid grid-cols-7">
                     {settimana.map((day, di) => {
-                      if (!day) return <div key={di} className="h-[18px]" />;
+                      if (!day) return <div key={di} className="h-[22px]" />;
                       const banda = bandaGiorno(day, camera.id);
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
@@ -710,7 +710,7 @@ export default function CalendarioPage() {
                         >
                           {bandaJSX(banda, stile.bar, 'h-2.5')}
                           <div
-                            className={`relative w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px]
+                            className={`relative w-5 h-5 rounded-full flex items-center justify-center text-[10px]
                               ${libero
                                 ? 'text-gray-900 font-extrabold group-hover:bg-black/5'
                                 : banda.pieno ? 'text-white font-semibold' : banda.notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff]' : 'text-gray-400 font-medium group-hover:bg-black/5'}
@@ -727,7 +727,7 @@ export default function CalendarioPage() {
                 ))}
                 <div className="flex items-center gap-1 mt-1.5">
                   <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stile.dot}`} />
-                  <span className="text-[9px] font-semibold text-gray-700 truncate">{camera.nome}</span>
+                  <span className="text-[10px] font-semibold text-gray-700 truncate">{camera.nome}</span>
                 </div>
               </div>
             );
@@ -790,7 +790,7 @@ export default function CalendarioPage() {
                       >
                         {bandaJSX(banda, stile.bar, 'h-3.5')}
                         <div
-                          className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-colors
+                          className={`relative w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors
                             ${pieno ? 'text-white font-semibold' : sinistra || notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff,0_0_4px_#fff]' : 'text-gray-700 font-medium group-hover:bg-black/5'}
                             ${isToday    ? 'ring-2 ring-offset-1 ring-blue-400' : ''}
                             ${isSelected ? 'outline outline-2 outline-offset-1 outline-gray-500' : ''}
