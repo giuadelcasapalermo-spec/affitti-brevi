@@ -677,28 +677,13 @@ export default function CalendarioPage() {
         <span><strong className="text-purple-700">{ospititDelGiorno}</strong> <span className="text-gray-400">osp</span></span>
       </div>
 
-      {/* Vista compatta: notti libere in verde, notti occupate in grigio a blocchi continui per soggiorno */}
-      {vistaEffettiva && (
-        <div className="flex items-center gap-3 text-[11px] text-gray-500 -mb-1">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-400" />Libero</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-300" />Occupato</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-100 border border-gray-200 opacity-60" />Passato</span>
-        </div>
-      )}
+      {/* Vista compatta: 2 colonne, cerchi colorati sui giorni */}
       {vistaEffettiva && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
           {camere.map(camera => {
             const stile = getCameraStyle(camera.id, camera.colore);
-            const liberiDaOggi = settimane.flat().filter((d): d is Date => !!d && (isSameDay(d, today) || !isBefore(d, today)) && !getDayInfo(d, camera.id).pren).length;
             return (
-              <div key={camera.id} className="bg-white rounded-xl shadow-sm px-1.5 pt-1.5 pb-2">
-                <div className="flex items-center gap-1 mb-1 px-0.5">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${stile.dot}`} />
-                  <span className="text-[10px] font-semibold text-gray-700 truncate">{camera.nome}</span>
-                  <span className={`ml-auto text-[9px] font-semibold flex-shrink-0 ${liberiDaOggi ? 'text-emerald-600' : 'text-gray-400'}`}>
-                    {liberiDaOggi ? `${liberiDaOggi} lib.` : 'pieno'}
-                  </span>
-                </div>
+              <div key={camera.id} className="bg-white rounded-xl shadow-sm px-2 pt-2 pb-2">
                 <div className="grid grid-cols-7 mb-0.5">
                   {GIORNI_SETTIMANA.map((g, i) => (
                     <div key={i} className="flex items-center justify-center">
@@ -706,34 +691,31 @@ export default function CalendarioPage() {
                     </div>
                   ))}
                 </div>
-                <div className="space-y-[2px]">
                 {settimane.map((settimana, si) => (
                   <div key={si} className="grid grid-cols-7">
                     {settimana.map((day, di) => {
-                      if (!day) return <div key={di} className="h-5" />;
-                      const notte = getDayInfo(day, camera.id).pren;
-                      const passato = isBefore(day, today) && !isSameDay(day, today);
+                      if (!day) return <div key={di} className="h-[18px]" />;
+                      const banda = bandaGiorno(day, camera.id);
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
-                      // estremi del soggiorno: staccano due soggiorni attaccati e arrotondano il blocco
-                      const inizio = !!notte && (isSameDay(day, parseISO(notte.check_in)) || di === 0);
-                      const ultimaNotte = !!notte && getDayInfo(addDays(day, 1), camera.id).pren?.id !== notte.id;
-                      const fine = ultimaNotte || di === 6;
-                      const tessera = notte
-                        ? `bg-gray-300 text-gray-500 ${inizio ? 'ml-[2px] rounded-l' : ''} ${fine ? 'mr-[2px] rounded-r' : ''}`
-                        : 'mx-[2px] rounded bg-emerald-100 border border-emerald-400 text-emerald-800 font-bold';
+                      // notte libera da oggi in poi: cerchio verde ben visibile
+                      const libero = !banda.notte && !(isBefore(day, today) && !isToday);
                       return (
                         <div
                           key={di}
-                          title={notte ? (isSameDay(day, parseISO(notte.check_in)) ? `Arrivo: ${notte.ospite_nome}` : notte.ospite_nome) : 'Libero'}
+                          title={libero ? 'Libero' : undefined}
                           onClick={() => setGiornoSelezionato(day)}
                           onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
-                          className={`relative h-5 cursor-pointer select-none ${passato ? 'opacity-35' : ''}`}
+                          className="relative flex items-center justify-center py-[1px] cursor-pointer select-none group"
                         >
+                          {bandaJSX(banda, stile.bar, 'h-2.5')}
                           <div
-                            className={`absolute inset-y-0 left-0 right-0 flex items-center justify-center text-[9px] ${tessera}
-                              ${isToday    ? 'ring-2 ring-blue-500 z-10' : ''}
-                              ${isSelected && !isToday ? 'ring-1 ring-gray-600 z-10' : ''}
+                            className={`relative w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px]
+                              ${libero
+                                ? 'bg-emerald-100 border border-emerald-500 text-emerald-800 font-bold group-hover:bg-emerald-200'
+                                : banda.pieno ? 'text-white font-semibold' : banda.notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff]' : 'text-gray-400 font-medium group-hover:bg-black/5'}
+                              ${isToday    ? 'ring-1 ring-blue-400 ring-offset-0' : ''}
+                              ${isSelected ? 'outline outline-1 outline-gray-400' : ''}
                             `}
                           >
                             {format(day, 'd')}
@@ -743,6 +725,9 @@ export default function CalendarioPage() {
                     })}
                   </div>
                 ))}
+                <div className="flex items-center gap-1 mt-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stile.dot}`} />
+                  <span className="text-[9px] font-semibold text-gray-700 truncate">{camera.nome}</span>
                 </div>
               </div>
             );
