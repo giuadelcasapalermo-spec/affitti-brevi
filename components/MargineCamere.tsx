@@ -5,7 +5,7 @@ import { addDays, differenceInDays, format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ChevronDown } from 'lucide-react';
 import { BiancheriaStanza, CAPI_BIANCHERIA, Camera, CapoBiancheria, Prenotazione } from '@/lib/types';
-import { COSTI_PULIZIA_DEFAULT, CostiPulizia, TipoPulizia, costoPulizia, puliziaGiorno, ricavoCheckIn } from '@/lib/pulizie';
+import { COSTI_PULIZIA_DEFAULT, CostiPulizia, TipoPulizia, costoPulizia, puliziaGiorno, ricavoNotte } from '@/lib/pulizie';
 import { useStruttura } from '@/hooks/useStruttura';
 import { getCameraStyle } from '@/lib/camera-colors';
 
@@ -18,7 +18,7 @@ function Euro0({ v }: { v: number }) {
   return <>{n < 0 ? '-' : ''}<span className="hidden sm:inline">€</span>{Math.abs(n)}</>;
 }
 
-// Margine lordo giornaliero per stanza: ricavo dei soggiorni con check-in nel giorno (come il foglio mensile, tassa di soggiorno
+// Margine lordo giornaliero per stanza: quota di ricavo della notte (come nel calendario, tassa di soggiorno
 // esclusa perché partita di giro) − lavanderia (biancheria segnata dalla collaboratrice × listino)
 // − costo pulizia della collaboratrice per stanza pulita. Costi indiretti non ancora ribaltati.
 export default function MargineCamere({ prenotazioni, camere, dal, al }: {
@@ -73,7 +73,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
       const pulizie = puliziaGiorno(prenotazioni, g);
       for (const c of camere) {
         const k = `${g}|${c.id}`;
-        const ricavo = ricavoCheckIn(prenotazioni, c.id, g);
+        const ricavo = ricavoNotte(prenotazioni, c.id, g);
         const lavanderia = lavPer.get(k) ?? 0;
         const tipo = pulizie.get(c.id);
         const pulizia = costoPulizia(tipo, costi);
@@ -114,7 +114,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
       <div>
         <h2 className="font-semibold text-gray-700 text-sm sm:text-base">Margine lordo per stanza</h2>
         <p className="text-[11px] text-gray-400 mt-0.5">
-          Ricavo dei soggiorni con check-in nel periodo (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{costi.checkout} per check-out, €{costi.cambio} per cambio).
+          Ricavo ripartito per notte come nel calendario (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{costi.checkout} per check-out, €{costi.cambio} per cambio).
           Costi indiretti non ancora ribaltati.
         </p>
       </div>

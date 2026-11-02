@@ -165,11 +165,17 @@ export default function Dashboard() {
     return Math.max(0, differenceInDays(parseISO(co), parseISO(ci)));
   }
 
+  // Quota dell'importo che cade nelle notti del periodo (importo ÷ notti × notti nel periodo)
+  function quotaRicavoPeriodo(p: Prenotazione): number {
+    const n = differenceInDays(parseISO(p.check_out), parseISO(p.check_in));
+    return n > 0 && p.importo_totale > 0 ? (p.importo_totale / n) * nottiInPeriodo(p) : 0;
+  }
+
   const statsCamera = camere.map((camera) => {
     const pren = prenNelPeriodo.filter((p) => p.camera_id === camera.id);
     const notti = pren.reduce((s, p) => s + nottiInPeriodo(p), 0);
-    // ricavo per competenza di check-in, come il foglio mensile (tassa di soggiorno esclusa)
-    const ricavo = pren.filter((p) => p.importo_totale > 0 && p.check_in >= filtroDal).reduce((s, p) => s + p.importo_totale, 0);
+    // ricavo ripartito per notte come nel calendario: solo la quota delle notti nel periodo (tassa esclusa)
+    const ricavo = pren.reduce((s, p) => s + quotaRicavoPeriodo(p), 0);
     return { camera, notti, ricavo };
   });
 
@@ -561,8 +567,8 @@ export default function Dashboard() {
                   {camFiltrate.map((camera) => {
                     const prenotazioniCamera = prenNelPeriodo.filter((p) => p.camera_id === camera.id);
                     const impegnata = prenotazioniCamera.length > 0;
-                    const nottiTotali = prenotazioniCamera.reduce((s, p) => s + differenceInDays(parseISO(p.check_out), parseISO(p.check_in)), 0);
-                    const stimaCamera = prenotazioniCamera.filter((p) => p.importo_totale > 0 && p.check_in >= filtroDal).reduce((s, p) => s + p.importo_totale, 0);
+                    const nottiTotali = prenotazioniCamera.reduce((s, p) => s + nottiInPeriodo(p), 0);
+                    const stimaCamera = prenotazioniCamera.reduce((s, p) => s + quotaRicavoPeriodo(p), 0);
                     const occupazioneOggi = isCameraOccupata(prenotazioni, camera.id);
                     const col = getCameraStyle(camera.id, camera.colore);
                     return (
