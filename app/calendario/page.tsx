@@ -698,7 +698,7 @@ export default function CalendarioPage() {
                       const banda = bandaGiorno(day, camera.id);
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
-                      // notte libera da oggi in poi: cerchio verde ben visibile
+                      // notte libera da oggi in poi: numero in grassetto
                       const libero = !banda.notte && !(isBefore(day, today) && !isToday);
                       return (
                         <div
@@ -712,7 +712,7 @@ export default function CalendarioPage() {
                           <div
                             className={`relative w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px]
                               ${libero
-                                ? 'bg-emerald-100 border border-emerald-500 text-emerald-800 font-bold group-hover:bg-emerald-200'
+                                ? 'text-gray-900 font-extrabold group-hover:bg-black/5'
                                 : banda.pieno ? 'text-white font-semibold' : banda.notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff]' : 'text-gray-400 font-medium group-hover:bg-black/5'}
                               ${isToday    ? 'ring-1 ring-blue-400 ring-offset-0' : ''}
                               ${isSelected ? 'outline outline-1 outline-gray-400' : ''}
