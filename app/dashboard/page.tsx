@@ -6,12 +6,13 @@ import { Prenotazione, Uscita, Entrata, CATEGORIE_USCITA, CATEGORIE_ENTRATA } fr
 import { useCamere } from '@/hooks/useCamere';
 import { isWithinInterval, parseISO, differenceInDays, format, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from 'date-fns';
 import { fData } from '@/lib/utils';
-import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet, Shirt } from 'lucide-react';
+import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet, Shirt, Sparkles } from 'lucide-react';
 import { useStruttura } from '@/hooks/useStruttura';
 import { ContoCorrente } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
 import ControlloLavanderia from '@/components/ControlloLavanderia';
 import MargineCamere from '@/components/MargineCamere';
+import PulizieCameriera from '@/components/PulizieCameriera';
 import { ComposedChart, LabelList, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useEtichette } from '@/hooks/useEtichette';
 
@@ -82,7 +83,7 @@ export default function Dashboard() {
   const [filtroDal, setFiltroDal] = usePersistedState('dash-dal', DEFAULT_DAL);
   const [filtroAl, setFiltroAl]   = usePersistedState('dash-al',  DEFAULT_AL);
   const [filtroCamera, setFiltroCamera] = usePersistedState<number | 'tutte'>('dash-camera', 'tutte');
-  const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota' | 'lavanderia'>('dash-sezione', 'camere');
+  const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota' | 'lavanderia' | 'pulizie'>('dash-sezione', 'camere');
   const [andSenzaTassa, setAndSenzaTassa] = usePersistedState('dash-and-senza-tassa', true, { storage: 'local' });
 
   const carica = useCallback(() => {
@@ -366,7 +367,7 @@ export default function Dashboard() {
               syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
             }`}>{syncMsg}</span>
           )}
-          {sezione !== 'lavanderia' && <button
+          {(sezione === 'camere' || sezione === 'prima_nota') && <button
             onClick={() => sezione === 'camere' ? scaricaExcelCamere() : scaricaExcelPrimaNota()}
             title="Esporta Excel"
             className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
@@ -399,30 +400,39 @@ export default function Dashboard() {
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-full sm:w-fit">
         <button
           onClick={() => setSezione('camere')}
-          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'camere' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <BarChart2 size={14} />
+          <BarChart2 size={14} className="hidden sm:block" />
           <span className="sm:hidden">{et.Camere}</span><span className="hidden sm:inline">Performance {et.Camere}</span>
         </button>
         <button
           onClick={() => setSezione('prima_nota')}
-          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'prima_nota' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <BookOpen size={14} />
+          <BookOpen size={14} className="hidden sm:block" />
           <span className="sm:hidden">Prima Nota</span><span className="hidden sm:inline">Analisi Prima Nota</span>
         </button>
         <button
           onClick={() => setSezione('lavanderia')}
-          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'lavanderia' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <Shirt size={14} />
+          <Shirt size={14} className="hidden sm:block" />
           <span className="sm:hidden">Lavanderia</span><span className="hidden sm:inline">Controllo Lavanderia</span>
+        </button>
+        <button
+          onClick={() => setSezione('pulizie')}
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+            sezione === 'pulizie' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Sparkles size={14} className="hidden sm:block" />
+          Pulizie
         </button>
       </div>
 
@@ -1098,6 +1108,12 @@ export default function Dashboard() {
       {/* ═══════════════════════ SEZIONE: CONTROLLO LAVANDERIA ═══════════════════════ */}
       {sezione === 'lavanderia' && (
         <ControlloLavanderia dal={filtroDal} al={filtroAl} uscite={uscite} />
+      )}
+
+      {/* ═══════════════════════ SEZIONE: PULIZIE (CAMERIERA) ═══════════════════════ */}
+      {sezione === 'pulizie' && (
+        <PulizieCameriera dal={filtroDal} al={filtroAl} prenotazioni={prenotazioni} uscite={uscite}
+          camere={camere.filter((c) => filtroCamera === 'tutte' || c.id === filtroCamera).sort((a, b) => a.id - b.id)} />
       )}
 
     </div>
