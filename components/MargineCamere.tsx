@@ -153,6 +153,22 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
         </p>
       </div>
 
+      {/* Totali del periodo: ricavo − lavanderia − pulizie = margine */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { etichetta: 'Ricavo', valore: euro(tot.ricavo), nota: 'quota notti del periodo', cls: 'text-gray-800', bg: 'bg-gray-50' },
+          { etichetta: 'Lavanderia', valore: tot.lavanderia > 0 ? `-${euro(tot.lavanderia)}` : '—', nota: pct(tot.lavanderia, tot.ricavo) + ' del ricavo', cls: 'text-sky-700', bg: 'bg-sky-50' },
+          { etichetta: 'Pulizie', valore: tot.pulizia > 0 ? `-${euro(tot.pulizia)}` : '—', nota: pct(tot.pulizia, tot.ricavo) + ' del ricavo', cls: 'text-pink-700', bg: 'bg-pink-50' },
+          { etichetta: 'Margine', valore: euro(tot.margine), nota: pct(tot.margine, tot.ricavo) + ' del ricavo', cls: tot.margine >= 0 ? 'text-green-700' : 'text-red-600', bg: tot.margine >= 0 ? 'bg-green-50' : 'bg-red-50' },
+        ].map((k) => (
+          <div key={k.etichetta} className={`rounded-lg px-3 py-2 ${k.bg}`}>
+            <div className="text-[11px] text-gray-500">{k.etichetta}</div>
+            <div className={`text-base sm:text-lg font-bold tabular-nums ${k.cls}`}>{k.valore}</div>
+            <div className="text-[10px] text-gray-400">{k.nota}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-xs sm:text-sm tabular-nums">
           <thead>
@@ -259,8 +275,23 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                 })}
               </tbody>
               <tfoot>
+                {([
+                  { k: 'ricavo', label: 'Ric.', titolo: 'Ricavo', cls: 'text-gray-700', segno: 1 },
+                  { k: 'lavanderia', label: 'Lav.', titolo: 'Lavanderia', cls: 'text-sky-700', segno: -1 },
+                  { k: 'pulizia', label: 'Pul.', titolo: 'Pulizie', cls: 'text-pink-700', segno: -1 },
+                ] as const).map((r, i) => (
+                  <tr key={r.k} className={i === 0 ? 'border-t' : ''}>
+                    <td className="pt-1 pr-1 text-gray-500" title={r.titolo}>
+                      <span className="sm:hidden">{r.label}</span><span className="hidden sm:inline">{r.titolo}</span>
+                    </td>
+                    {totaliCamera.map((t) => (
+                      <td key={t.camera.id} className={`pt-1 px-0.5 text-right ${r.cls}`}><Euro0 v={r.segno * t[r.k]} /></td>
+                    ))}
+                    <td className={`pt-1 pl-1 text-right font-semibold ${r.cls}`}><Euro0 v={r.segno * tot[r.k]} /></td>
+                  </tr>
+                ))}
                 <tr className="font-semibold border-t">
-                  <td className="pt-1.5 pr-1 text-gray-500">Tot</td>
+                  <td className="pt-1.5 pr-1 text-gray-500"><span className="sm:hidden">Marg.</span><span className="hidden sm:inline">Margine</span></td>
                   {totaliCamera.map((t) => (
                     <td key={t.camera.id} className={`pt-1.5 px-0.5 text-right ${t.margine >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                       <Euro0 v={t.margine} />
