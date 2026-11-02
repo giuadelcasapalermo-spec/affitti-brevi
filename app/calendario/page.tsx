@@ -702,21 +702,20 @@ export default function CalendarioPage() {
                       const notte = getDayInfo(day, camera.id).pren;
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
-                      const passato = isBefore(day, today) && !isToday;
                       const checkIn = !!notte && isSameDay(day, parseISO(notte.check_in));
                       const ultimaNotte = !!notte && getDayInfo(addDays(day, 1), camera.id).pren?.id !== notte.id;
                       const forma = notte
                         ? `${stile.bar} text-white font-bold
                            ${checkIn ? 'ml-[2px] rounded-l-full' : di === 0 ? 'rounded-l-sm' : ''}
                            ${ultimaNotte ? 'mr-[2px] rounded-r-full' : di === 6 ? 'rounded-r-sm' : ''}`
-                        : `mx-[1px] rounded-full ${passato ? 'text-gray-300 font-medium' : 'text-gray-900 font-extrabold group-hover:bg-black/5'}`;
+                        : 'mx-[1px] rounded-full text-gray-900 font-extrabold group-hover:bg-black/5';
                       return (
                         <div
                           key={di}
                           title={notte ? (checkIn ? `Check-in: ${notte.ospite_nome}` : notte.ospite_nome) : 'Libero'}
                           onClick={() => setGiornoSelezionato(day)}
                           onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
-                          className={`relative h-[22px] py-[1px] cursor-pointer select-none group ${passato && notte ? 'opacity-50' : ''}`}
+                          className="relative h-[22px] py-[1px] cursor-pointer select-none group"
                         >
                           <div
                             className={`relative h-full flex items-center justify-center text-[10px] ${forma}
