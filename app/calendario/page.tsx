@@ -695,29 +695,36 @@ export default function CalendarioPage() {
                   <div key={si} className="grid grid-cols-7">
                     {settimana.map((day, di) => {
                       if (!day) return <div key={di} className="h-[22px]" />;
-                      const banda = bandaGiorno(day, camera.id);
+                      // Ogni giorno è una notte: occupata = blocco pieno del colore della camera con il
+                      // numero in bianco, continuo per tutto il soggiorno; libera = sfondo bianco e numero
+                      // in grassetto. Il check-in apre il blocco (bordo arrotondato, stacco e puntino
+                      // bianco), l'ultima notte lo chiude; il giorno di check-out, se nessuno arriva, è libero.
+                      const notte = getDayInfo(day, camera.id).pren;
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
-                      // notte libera da oggi in poi: numero in grassetto
-                      const libero = !banda.notte && !(isBefore(day, today) && !isToday);
+                      const passato = isBefore(day, today) && !isToday;
+                      const checkIn = !!notte && isSameDay(day, parseISO(notte.check_in));
+                      const ultimaNotte = !!notte && getDayInfo(addDays(day, 1), camera.id).pren?.id !== notte.id;
+                      const forma = notte
+                        ? `${stile.bar} text-white font-bold
+                           ${checkIn ? 'ml-[2px] rounded-l-full' : di === 0 ? 'rounded-l-sm' : ''}
+                           ${ultimaNotte ? 'mr-[2px] rounded-r-full' : di === 6 ? 'rounded-r-sm' : ''}`
+                        : `mx-[1px] rounded-full ${passato ? 'text-gray-300 font-medium' : 'text-gray-900 font-extrabold group-hover:bg-black/5'}`;
                       return (
                         <div
                           key={di}
-                          title={libero ? 'Libero' : undefined}
+                          title={notte ? (checkIn ? `Check-in: ${notte.ospite_nome}` : notte.ospite_nome) : 'Libero'}
                           onClick={() => setGiornoSelezionato(day)}
                           onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
-                          className="relative flex items-center justify-center py-[1px] cursor-pointer select-none group"
+                          className={`relative h-[22px] py-[1px] cursor-pointer select-none group ${passato && notte ? 'opacity-50' : ''}`}
                         >
-                          {bandaJSX(banda, stile.bar, 'h-2.5')}
                           <div
-                            className={`relative w-5 h-5 rounded-full flex items-center justify-center text-[10px]
-                              ${libero
-                                ? 'text-gray-900 font-extrabold group-hover:bg-black/5'
-                                : banda.pieno ? 'text-white font-semibold' : banda.notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff]' : 'text-gray-400 font-medium group-hover:bg-black/5'}
-                              ${isToday    ? 'ring-1 ring-blue-400 ring-offset-0' : ''}
-                              ${isSelected ? 'outline outline-1 outline-gray-400' : ''}
+                            className={`relative h-full flex items-center justify-center text-[10px] ${forma}
+                              ${isToday    ? 'ring-2 ring-blue-500 z-10' : ''}
+                              ${isSelected && !isToday ? 'ring-1 ring-gray-700 z-10' : ''}
                             `}
                           >
+                            {checkIn && <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-white" />}
                             {format(day, 'd')}
                           </div>
                         </div>
