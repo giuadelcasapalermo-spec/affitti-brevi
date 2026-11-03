@@ -5,7 +5,7 @@
       "path": "/api/cron/sync",
       "schedule": "0 6 * * *"
     },
-    { "path": "/api/cron/ical", "schedule": "0 * * * *" },
+    { "path": "/api/cron/ical", "schedule": "0 5 * * *" },
     { "path": "/api/cron/automazioni?utc=13", "schedule": "0 13 * * *" },
     { "path": "/api/cron/automazioni?utc=14", "schedule": "0 14 * * *" },
     { "path": "/api/cron/automazioni?utc=19", "schedule": "0 19 * * *" },
