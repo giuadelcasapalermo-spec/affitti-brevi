@@ -222,6 +222,7 @@ export interface SyncResult {
 // perdere prenotazioni reali: lo ignoriamo solo finché il feed lo ripresenta con le STESSE date.
 // valore = "camera" (date non ancora note) oppure "camera|check_in|check_out".
 export interface UidIgnorato {
+  camera_id?: number;
   check_in?: string;
   check_out?: string;
 }
@@ -229,8 +230,13 @@ export interface UidIgnorato {
 export async function leggiUidIgnorati(): Promise<Map<string, UidIgnorato>> {
   const rows = await sql`SELECT chiave, valore FROM impostazioni WHERE tipo = 'ical_ignora'`;
   return new Map(rows.map((r) => {
-    const [, check_in, check_out] = String(r.valore ?? '').split('|');
-    return [r.chiave as string, { check_in: check_in || undefined, check_out: check_out || undefined }];
+    const [camera, check_in, check_out] = String(r.valore ?? '').split('|');
+    const camera_id = camera ? Number(camera) : NaN;
+    return [r.chiave as string, {
+      camera_id: Number.isFinite(camera_id) ? camera_id : undefined,
+      check_in: check_in || undefined,
+      check_out: check_out || undefined,
+    }];
   }));
 }
 
@@ -290,6 +296,21 @@ export async function sincronizzaCalendario(
     (p) => p.camera_id === cameraId && p.fonte === 'ical'
   );
   const uidIgnorati = await leggiUidIgnorati();
+
+  // Un UID si ignora solo finché il feed lo pubblica SENZA interruzioni. Booking riusa lo stesso
+  // UID per la stessa finestra camera+periodo: se il soggiorno ignorato viene cancellato l'evento
+  // sparisce, e se la camera viene riprenotata per le stesse date torna con lo stesso UID e le
+  // stesse date, ma è un ospite nuovo (Bianca 13→15/11/2026: Marta Maria Molinari, prenotata il
+  // 3/11, mai importata perché l'UID era ignorato con date identiche). Gli UID Booking ignorati
+  // per questa camera che non sono più nel feed tornano quindi importabili.
+  if (testo.includes('BEGIN:VCALENDAR')) {
+    for (const [uid, ign] of [...uidIgnorati]) {
+      if (ign.camera_id === cameraId && uid.endsWith('@booking.com') && !remoteUids.has(uid)) {
+        await rimuoviUidIgnorato(uid);
+        uidIgnorati.delete(uid);
+      }
+    }
+  }
 
   // Prenotazioni il cui UID iCal non compare più nel feed: Booking.com a volte rigenera
   // l'UID di una prenotazione esistente quando viene modificata (es. il cliente la
