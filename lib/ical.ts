@@ -212,6 +212,19 @@ export interface SyncResult {
   /** Periodi occupati nel feed Booking ([inizio, fine) AAAA-MM-GG), solo se il feed è stato letto:
    *  servono a riconoscere le prenotazioni del foglio cancellate su Booking */
   periodi?: [string, string][];
+  /** Notti che Booking dà occupate, coperte solo da un UID ignorato e libere in app */
+  avvisi?: AvvisoBooking[];
+}
+
+/** Booking dichiara occupate notti che in app sono libere, ma l'UID è tra gli ignorati (blocco
+ *  eliminato a mano): può essere una chiusura voluta o un ospite nuovo sulle stesse date con lo
+ *  stesso UID. Non si importa da solo: decide l'utente (Importa / Ignora). */
+export interface AvvisoBooking {
+  uid: string;
+  struttura_id: string;
+  camera_id: number;
+  check_in: string;
+  check_out: string;
 }
 
 // ── UID iCal da ignorare (blocchi/prenotazioni fantasma eliminate manualmente) ──
@@ -220,24 +233,68 @@ export interface SyncResult {
 // 25/09→05/10/2026, UID eliminato a mano quando il blocco era un doppione, poi allargato per
 // includere una prenotazione nuova che restava invisibile). Ignorare l'UID per sempre fa quindi
 // perdere prenotazioni reali: lo ignoriamo solo finché il feed lo ripresenta con le STESSE date.
-// valore = "camera" (date non ancora note) oppure "camera|check_in|check_out".
+// valore = "camera" (date non ancora note) oppure "camera|check_in|check_out", con "|ok" in fondo
+// se l'utente ha confermato dall'avviso che quelle notti vanno ignorate.
 export interface UidIgnorato {
   camera_id?: number;
   check_in?: string;
   check_out?: string;
+  confermato?: boolean;
 }
 
 export async function leggiUidIgnorati(): Promise<Map<string, UidIgnorato>> {
   const rows = await sql`SELECT chiave, valore FROM impostazioni WHERE tipo = 'ical_ignora'`;
   return new Map(rows.map((r) => {
-    const [camera, check_in, check_out] = String(r.valore ?? '').split('|');
+    const [camera, check_in, check_out, ok] = String(r.valore ?? '').split('|');
     const camera_id = camera ? Number(camera) : NaN;
     return [r.chiave as string, {
       camera_id: Number.isFinite(camera_id) ? camera_id : undefined,
       check_in: check_in || undefined,
       check_out: check_out || undefined,
+      confermato: ok === 'ok',
     }];
   }));
+}
+
+// ── Avvisi "Booking occupata, app libera" (tipo 'ical_avviso', chiave = UID, valore = JSON) ──
+export async function leggiAvvisiBooking(strutturaId: string): Promise<AvvisoBooking[]> {
+  const rows = await sql`SELECT valore FROM impostazioni WHERE tipo = 'ical_avviso'`;
+  return rows
+    .map((r) => { try { return JSON.parse(String(r.valore)) as AvvisoBooking; } catch { return null; } })
+    .filter((a): a is AvvisoBooking => !!a && a.struttura_id === strutturaId)
+    .sort((a, b) => a.check_in.localeCompare(b.check_in) || a.camera_id - b.camera_id);
+}
+
+/** Sostituisce gli avvisi di una camera con quelli trovati dall'ultima lettura del suo feed */
+async function scriviAvvisiCamera(strutturaId: string, cameraId: number, avvisi: AvvisoBooking[]): Promise<void> {
+  const rows = await sql`SELECT chiave, valore FROM impostazioni WHERE tipo = 'ical_avviso'`;
+  for (const r of rows) {
+    try {
+      const a = JSON.parse(String(r.valore)) as AvvisoBooking;
+      if (a.struttura_id !== strutturaId || a.camera_id !== cameraId) continue;
+    } catch { /* valore illeggibile: si toglie */ }
+    await sql`DELETE FROM impostazioni WHERE tipo = 'ical_avviso' AND chiave = ${r.chiave}`;
+  }
+  for (const a of avvisi) {
+    await sql`
+      INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('ical_avviso', ${a.uid}, ${JSON.stringify(a)})
+      ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
+    `;
+  }
+}
+
+/** Importa: l'UID non è più ignorato e il prossimo sync crea il blocco. Ignora: resta ignorato
+ *  finché il feed lo ripresenta con le stesse date, senza più avvisi. */
+export async function risolviAvvisoBooking(uid: string, azione: 'importa' | 'ignora'): Promise<void> {
+  if (azione === 'importa') {
+    await rimuoviUidIgnorato(uid);
+  } else {
+    await sql`
+      UPDATE impostazioni SET valore = valore || '|ok'
+      WHERE tipo = 'ical_ignora' AND chiave = ${uid} AND valore NOT LIKE '%|ok'
+    `;
+  }
+  await sql`DELETE FROM impostazioni WHERE tipo = 'ical_avviso' AND chiave = ${uid}`;
 }
 
 // All'eliminazione si salva solo la camera: le date vengono fissate al sync successivo con
@@ -326,6 +383,28 @@ export async function sincronizzaCalendario(
   const daAggiungere: Prenotazione[] = [];
   const riattivate: Prenotazione[] = [];
   const daAggiornare = new Map<string, Prenotazione>();
+  const avvisi: AvvisoBooking[] = [];
+
+  // Notti future di [inizio, fine) non coperte da nessuna prenotazione viva della camera
+  const nottiScoperte = (inizio: string, fine: string): [string, string][] => {
+    const occupate = prenotazioni
+      .filter((p) => p.camera_id === cameraId && p.stato !== 'cancellata' && p.check_in < fine && p.check_out > inizio)
+      .sort((a, b) => a.check_in.localeCompare(b.check_in));
+    let cursore = inizio < oggi ? oggi : inizio;
+    const scoperte: [string, string][] = [];
+    for (const p of occupate) {
+      if (p.check_in > cursore) scoperte.push([cursore, p.check_in < fine ? p.check_in : fine]);
+      if (p.check_out > cursore) cursore = p.check_out;
+    }
+    if (cursore < fine) scoperte.push([cursore, fine]);
+    return scoperte.filter(([s, e]) => s < e);
+  };
+  const avvisaSeScoperto = (uid: string, inizio: string, fine: string, confermato?: boolean) => {
+    if (confermato) return;
+    for (const [s, e] of nottiScoperte(inizio, fine)) {
+      avvisi.push({ uid, struttura_id: strutturaId, camera_id: cameraId, check_in: s, check_out: e });
+    }
+  };
 
   for (const ev of eventiRemoti) {
     if (isBloccoGenerico(ev.summary, ev.start, ev.end)) continue; // blocco di disponibilità, non una prenotazione reale
@@ -336,12 +415,18 @@ export async function sincronizzaCalendario(
       const fine = format(ev.end, 'yyyy-MM-dd');
       if (!ignorato.check_in || !ignorato.check_out) {
         await fissaDateUidIgnorato(ev.uid, cameraId, inizio, fine);
+        avvisaSeScoperto(ev.uid, inizio, fine);
         continue;
       }
       // Il feed taglia i giorni passati: un blocco in corso "inizia" sempre oggi, quindi il
       // solo avanzamento dell'inizio fino a oggi non è un cambiamento.
       const inizioUguale = ignorato.check_in === inizio || (inizio === oggi && ignorato.check_in <= oggi);
-      if (inizioUguale && ignorato.check_out === fine) continue;
+      if (inizioUguale && ignorato.check_out === fine) {
+        // Stesse date: può essere la stessa chiusura eliminata a mano o un ospite nuovo che ha
+        // riprenotato le stesse notti tra due sync (stesso UID). Se in app sono libere, avviso.
+        avvisaSeScoperto(ev.uid, inizio, fine, ignorato.confermato);
+        continue;
+      }
       // Stesso UID ma date cambiate: Booking ha allargato/spostato il blocco, che quindi
       // contiene qualcosa di nuovo. Lo reimportiamo (la riconciliazione lo riduce alle notti scoperte).
       await rimuoviUidIgnorato(ev.uid);
@@ -543,12 +628,17 @@ export async function sincronizzaCalendario(
   const aggiornate = [...esistentiAggiornate, ...daAggiungere];
   await scriviPrenotazioni(aggiornate, strutturaId);
 
+  // Notti coperte da un blocco importato in questo stesso giro (altro UID) non sono da segnalare
+  const avvisiVeri = avvisi.filter((a) => !daAggiungere.some((p) => p.check_in < a.check_out && p.check_out > a.check_in));
+  if (testo.includes('BEGIN:VCALENDAR')) await scriviAvvisiCamera(strutturaId, cameraId, avvisiVeri);
+
   return {
     camera_id: cameraId,
     aggiunte: daAggiungere.length,
     rimosse,
     nuove: daAggiungere,
     riattivate,
+    avvisi: avvisiVeri,
     periodi: testo.includes('BEGIN:VCALENDAR')
       ? eventiRemoti.map((e): [string, string] => [format(e.start, 'yyyy-MM-dd'), format(e.end, 'yyyy-MM-dd')])
       : undefined,

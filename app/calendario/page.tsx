@@ -28,6 +28,7 @@ import { isGiornoCambio } from '@/lib/pulizie';
 import PrenotazioneForm from '@/components/PrenotazioneForm';
 import { useSoloCalendario } from '@/hooks/useSoloCalendario';
 import { useEtichette } from '@/hooks/useEtichette';
+import AvvisiBooking from '@/components/AvvisiBooking';
 
 
 const GIORNI_SETTIMANA = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
@@ -615,6 +616,8 @@ export default function CalendarioPage() {
           <div className="flex items-center gap-2">{azioniJSX}</div>
         </div>
       </div>
+
+      {!soloCalendario && <AvvisiBooking aggiorna={syncOk} onImportata={caricaPrenotazioni} />}
 
       {/* Riepilogo pulizie del giorno selezionato — versione estesa, solo mobile (su desktop vedi row 2) */}
       {(pulizieCheckout.length > 0 || pulizieCambio.length > 0) && (
