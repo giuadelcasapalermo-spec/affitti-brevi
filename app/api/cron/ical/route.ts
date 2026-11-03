@@ -1,5 +1,5 @@
 /**
- * GET /api/cron/ical — Vercel Cron, ogni ora.
+ * GET /api/cron/ical — Vercel Cron, una volta al giorno (05 UTC: il piano Hobby non permette di più).
  *
  * Stesso sync del pulsante "Sync iCal" per tutte le strutture con almeno un feed. Serve anche ad
  * accorgersi in tempo delle cancellazioni: se un soggiorno con UID ignorato sparisce dal feed e le
