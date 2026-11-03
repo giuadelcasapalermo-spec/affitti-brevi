@@ -8,6 +8,7 @@ import { fData } from '@/lib/utils';
 import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useEtichette } from '@/hooks/useEtichette';
+import AvvisiBooking from '@/components/AvvisiBooking';
 
 const COLORI_CAMERA: Record<number, { bg: string; border: string; testo: string; bar: string }> = {
   1: { bg: 'bg-red-100',   border: 'border-red-300',   testo: 'text-red-800',   bar: 'bg-red-500' },   // Rossa
@@ -188,6 +189,8 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      <AvvisiBooking aggiorna={syncOk} onImportata={carica} />
 
       {/* Filtro periodo + camera */}
       <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4 flex-wrap">
