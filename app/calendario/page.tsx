@@ -700,7 +700,7 @@ export default function CalendarioPage() {
                       if (!day) return <div key={di} className="h-[22px]" />;
                       // Ogni giorno è una notte: occupata = blocco pieno del colore della camera con il
                       // numero in bianco, continuo per tutto il soggiorno; libera = sfondo bianco e numero
-                      // in grassetto. Il check-in apre il blocco (bordo arrotondato, stacco e puntino
+                      // normale (niente grassetto: richiesta utente 2026-11-03). Il check-in apre il blocco (bordo arrotondato, stacco e puntino
                       // bianco), l'ultima notte lo chiude; il giorno di check-out, se nessuno arriva, è libero.
                       const notte = getDayInfo(day, camera.id).pren;
                       const isToday    = isSameDay(day, today);
@@ -711,7 +711,7 @@ export default function CalendarioPage() {
                         ? `${stile.bar} text-white font-bold
                            ${checkIn ? 'ml-[2px] rounded-l-full' : di === 0 ? 'rounded-l-sm' : ''}
                            ${ultimaNotte ? 'mr-[2px] rounded-r-full' : di === 6 ? 'rounded-r-sm' : ''}`
-                        : 'mx-[1px] rounded-full text-gray-900 font-extrabold group-hover:bg-black/5';
+                        : 'mx-[1px] rounded-full text-gray-900 font-normal group-hover:bg-black/5';
                       return (
                         <div
                           key={di}
