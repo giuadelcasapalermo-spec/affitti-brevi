@@ -6,7 +6,7 @@ import { leggiUscite, scriviUscite } from './uscite';
 import { leggiPrenotazioni, scriviPrenotazioni } from './db';
 import { getStrutturaAttiva } from './strutture';
 import { categoriaUtenza, CATEGORIE_UTENZE } from './categorie';
-import { leggiImpostazioni, riconciliaBlocchiIcal, haCollegamenti, type SyncResult } from './ical';
+import { leggiImpostazioni, riconciliaBlocchiIcal, haDatiOspite, eliminaLinkNonUsati, type SyncResult } from './ical';
 import sql from './postgres';
 import { randomUUID } from 'crypto';
 
@@ -981,6 +981,13 @@ async function eliminaRigaBookingDalFoglio(
   return { esito: 'eliminata', tab, riga: candidate[0] + 1 };
 }
 
+/** Cancellazione manuale di una prenotazione 'sheet' Ricavo Booking: toglie anche la riga dal
+ *  tab mensile, altrimenti al sync successivo l'arricchimento dal foglio la ricrea. */
+export async function eliminaRigaBookingPerPrenotazione(dati: { check_in: string; camera_id: number }) {
+  const sheets = await getSheetsClient();
+  return eliminaRigaBookingDalFoglio(sheets, await tabMensili(sheets), dati);
+}
+
 // ── Prenotazioni Booking cancellate: via dal foglio e dall'app ──────────────
 // Una prenotazione cancellata su Booking resta sul foglio (e quindi nell'app, come prenotazione
 // 'sheet'): occupa le sue date e la riconciliazione scambia per doppione la prenotazione nuova
@@ -1022,8 +1029,8 @@ export async function depuraCancellateBooking(
   const tabs = await tabMensili(sheets);
   for (const p of cancellate) {
     const chi = `${p.ospite_nome || 'senza nome'} camera ${p.camera_id} ${p.check_in}→${p.check_out}`;
-    if (await haCollegamenti(p.id)) {
-      avvisi.push(`${chi}: non più su Booking ma ha documenti o link di check-in, da controllare a mano`);
+    if (await haDatiOspite(p.id)) {
+      avvisi.push(`${chi}: non più su Booking ma ha documenti, ricevuta o check-in compilato, da controllare a mano`);
       continue;
     }
     const r = await eliminaRigaBookingDalFoglio(sheets, tabs, p);
@@ -1031,6 +1038,7 @@ export async function depuraCancellateBooking(
       avvisi.push(`${chi}: non più su Booking, riga del foglio (${r.tab}) non individuabile con certezza`);
       continue;
     }
+    await eliminaLinkNonUsati(p.id);
     await sql`DELETE FROM prenotazioni WHERE id = ${p.id}`;
     eliminate.push(`${chi}${r.esito === 'eliminata' ? ` (tolta da ${r.tab} riga ${r.riga})` : ''}`);
   }
