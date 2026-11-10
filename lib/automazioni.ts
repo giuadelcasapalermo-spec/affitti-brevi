@@ -48,6 +48,26 @@ export interface AvvisoApp {
   ospite: string;
   errore: string;
   creato: string;
+  /** Chiave senza data: "Non mostrare più" la usa per non far ricomparire lo stesso avviso nei giorni dopo */
+  riferimento?: string;
+}
+
+/** Riferimento stabile dell'avviso: per prenotazione (+ tipo); per gli errori di struttura anche il testo, cifre escluse */
+function riferimentoAvviso(tipo: string, idOggetto: string | number, perPrenotazione: boolean, errore: string): string {
+  const base = `${tipo ? tipo + ':' : ''}${idOggetto}`;
+  return perPrenotazione ? base : `${base}:${errore.replace(/[0-9/]+/g, '#').slice(0, 120)}`;
+}
+
+/** Avvisi vecchi senza riferimento: si ricava dall'id (data:[tipo:]oggetto) */
+function riferimentoDi(a: AvvisoApp): string {
+  if (a.riferimento) return a.riferimento;
+  const senzaData = a.id.slice(a.id.indexOf(':') + 1);
+  return a.ospite === '-' ? `${senzaData}:${a.errore.replace(/[0-9/]+/g, '#').slice(0, 120)}` : senzaData;
+}
+
+async function avvisoIgnorato(riferimento: string): Promise<boolean> {
+  const r = await sql`SELECT 1 FROM impostazioni WHERE tipo = 'avviso_app_ignora' AND chiave = ${riferimento} LIMIT 1`;
+  return r.length > 0;
 }
 
 const whatsappConfigurato = () =>
@@ -67,7 +87,10 @@ export async function avvisaStruttura(
       + ` · tel ${p.ospite_telefono || '-'} · email ${p.ospite_email || '-'}`
     : '-';
   const id = `${dataItalia(0)}:${tipo ? tipo + ':' : ''}${p?.id ?? s.id}`;
-  const avviso: AvvisoApp = { id, struttura: s.nome, operazione, ospite, errore, creato: new Date().toISOString() };
+  const riferimento = riferimentoAvviso(tipo, p?.id ?? s.id, !!p, errore);
+  // Il titolare ha chiesto di non mostrarlo più: niente banner né WhatsApp
+  if (await avvisoIgnorato(riferimento)) return 'non_inviato';
+  const avviso: AvvisoApp = { id, struttura: s.nome, operazione, ospite, errore, creato: new Date().toISOString(), riferimento };
   await sql`
     INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('avviso_app', ${id}, ${JSON.stringify(avviso)})
     ON CONFLICT (tipo, chiave) DO UPDATE SET valore = EXCLUDED.valore
@@ -86,11 +109,32 @@ export async function avvisaStruttura(
 
 export async function leggiAvvisiApp(): Promise<AvvisoApp[]> {
   const rows = await sql`SELECT valore FROM impostazioni WHERE tipo = 'avviso_app' ORDER BY chiave DESC LIMIT 50`;
-  return rows.map(r => JSON.parse(r.valore as string) as AvvisoApp);
+  const ignorati = new Set((await sql`SELECT chiave FROM impostazioni WHERE tipo = 'avviso_app_ignora'`).map(r => r.chiave as string));
+  return rows
+    .map(r => JSON.parse(r.valore as string) as AvvisoApp)
+    .map(a => ({ ...a, riferimento: riferimentoDi(a) }))
+    .filter(a => !ignorati.has(a.riferimento!));
 }
 
 export async function chiudiAvvisoApp(id: string): Promise<void> {
   await sql`DELETE FROM impostazioni WHERE tipo = 'avviso_app' AND chiave = ${id}`;
+}
+
+/** "Non mostrare più": chiude tutti gli avvisi con lo stesso riferimento e impedisce che vengano ricreati */
+export async function ignoraAvvisoApp(id: string): Promise<void> {
+  const rows = await sql`SELECT valore FROM impostazioni WHERE tipo = 'avviso_app' AND chiave = ${id}`;
+  if (!rows.length) return;
+  const riferimento = riferimentoDi(JSON.parse(rows[0].valore as string) as AvvisoApp);
+  await sql`
+    INSERT INTO impostazioni (tipo, chiave, valore) VALUES ('avviso_app_ignora', ${riferimento}, ${new Date().toISOString()})
+    ON CONFLICT (tipo, chiave) DO NOTHING
+  `;
+  const tutti = await sql`SELECT chiave, valore FROM impostazioni WHERE tipo = 'avviso_app'`;
+  for (const r of tutti) {
+    if (riferimentoDi(JSON.parse(r.valore as string) as AvvisoApp) === riferimento) {
+      await sql`DELETE FROM impostazioni WHERE tipo = 'avviso_app' AND chiave = ${r.chiave as string}`;
+    }
+  }
 }
 
 // ─── Schedine ad AlloggiatiWeb ──────────────────────────────────────────────

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, X } from 'lucide-react';
 
-interface Avviso { id: string; struttura: string; operazione: string; ospite: string; errore: string; creato: string }
+interface Avviso { id: string; struttura: string; operazione: string; ospite: string; errore: string; creato: string; riferimento?: string }
 
 export default function AvvisiAutomazioni() {
   const [avvisi, setAvvisi] = useState<Avviso[]>([]);
@@ -23,6 +23,13 @@ export default function AvvisiAutomazioni() {
     await fetch(`/api/automazioni/avvisi?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
   }
 
+  /** Non mostrare più: nasconde anche le copie degli altri giorni e impedisce che l'avviso torni */
+  async function nonMostrarePiu(a: Avviso) {
+    if (!confirm('Non mostrare più questo avviso? Non ricomparirà nemmeno nei prossimi giorni.')) return;
+    setAvvisi(lista => lista.filter(x => x.id !== a.id && (!a.riferimento || x.riferimento !== a.riferimento)));
+    await fetch(`/api/automazioni/avvisi?id=${encodeURIComponent(a.id)}&sempre=1`, { method: 'DELETE' }).catch(() => {});
+  }
+
   if (avvisi.length === 0) return null;
   return (
     <div className="space-y-2 mb-5">
@@ -37,6 +44,9 @@ export default function AvvisiAutomazioni() {
               {new Date(a.creato).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} ·{' '}
               <Link href="/alloggiati" className="underline">Apri Alloggiati</Link> per correggere e inviare entro 24 ore dall&apos;arrivo
             </div>
+            <button onClick={() => nonMostrarePiu(a)} className="mt-1.5 text-xs font-medium text-red-700 underline hover:text-red-900">
+              Non mostrare più
+            </button>
           </div>
           <button onClick={() => chiudi(a.id)} title="Chiudi" className="text-red-400 hover:text-red-700 shrink-0"><X size={16} /></button>
         </div>
