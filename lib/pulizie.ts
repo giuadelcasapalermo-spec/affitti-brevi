@@ -44,10 +44,11 @@ export function costoPulizia(tipo: TipoPulizia | undefined, costi: CostiPulizia 
   return tipo === 'checkout' ? costi.checkout : tipo === 'cambio' ? costi.cambio : 0;
 }
 
-// Quota di ricavo della notte (come nel calendario): importo del soggiorno diviso le notti
+// Quota di ricavo della notte (come nel calendario): importo del soggiorno diviso le notti, dal giorno
+// di check-in alla notte prima del check-out (il giorno di check-out vale 0). Tassa di soggiorno esclusa.
 export function ricavoNotte(prenotazioni: Prenotazione[], cameraId: number, giorno: string): number {
   const p = prenotazioni.find((x) =>
-    x.camera_id === cameraId && x.stato !== 'cancellata' && x.check_in <= giorno && x.check_out > giorno
+    x.camera_id === cameraId && x.stato === 'confermata' && x.check_in <= giorno && x.check_out > giorno
   );
   if (!p || !(p.importo_totale > 0)) return 0;
   const n = differenceInDays(parseISO(p.check_out), parseISO(p.check_in));

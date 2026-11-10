@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/postgres';
 import { migraStruttura } from '@/lib/strutture';
-import { ignoraUidIcal, gemelloReale, trasferisciCollegamenti } from '@/lib/ical';
-import { aggiornaRigaSheetPerPrenotazione, sheetsConfigurato } from '@/lib/googlesheets';
+import { ignoraUidIcal, gemelloReale, trasferisciCollegamenti, eliminaLinkNonUsati } from '@/lib/ical';
+import { aggiornaRigaSheetPerPrenotazione, eliminaRigaBookingPerPrenotazione, sheetsConfigurato } from '@/lib/googlesheets';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -65,14 +65,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [pren] = await sql`SELECT id, struttura_id, camera_id, check_in, fonte FROM prenotazioni WHERE id = ${id}`;
+  const [pren] = await sql`SELECT id, struttura_id, camera_id, check_in, fonte, note FROM prenotazioni WHERE id = ${id}`;
   if (!pren) return NextResponse.json({ error: 'Non trovata' }, { status: 404 });
+  // Prenotazione Booking venuta dal foglio: senza togliere la riga dal tab mensile il sync
+  // successivo la ricreerebbe. Riga ambigua (più righe stessa camera e check-in): si blocca.
+  let avviso: string | undefined;
+  if (pren.fonte === 'sheet' && String(pren.note ?? '').toLowerCase().includes('booking') && await sheetsConfigurato()) {
+    const r = await eliminaRigaBookingPerPrenotazione({ check_in: pren.check_in as string, camera_id: pren.camera_id as number });
+    if (r.esito === 'ambigua') {
+      return NextResponse.json({ error: `Riga del foglio (${r.tab}) non individuabile con certezza: toglila a mano dal foglio, poi elimina la prenotazione` }, { status: 409 });
+    }
+    if (r.esito === 'assente') avviso = `Riga non trovata nel foglio (${r.tab})`;
+  }
   // Doppione BK di una prenotazione reale: check-in online, documenti e ricevuta dell'imposta
   // fatti sul blocco passano alla prenotazione reale invece di restare orfani
   if (pren.fonte === 'ical' || pren.fonte === 'airbnb') {
     const gemello = await gemelloReale({ id, struttura_id: pren.struttura_id as string | null, camera_id: pren.camera_id as number, check_in: pren.check_in as string });
     if (gemello) await trasferisciCollegamenti(id, gemello);
   }
+  await eliminaLinkNonUsati(id);
   const rows = await sql`DELETE FROM prenotazioni WHERE id = ${id} RETURNING id, camera_id, fonte, ical_uid`;
   if (rows.length === 0) return NextResponse.json({ error: 'Non trovata' }, { status: 404 });
   const deleted = rows[0];
@@ -80,5 +91,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if ((deleted.fonte === 'ical' || deleted.fonte === 'airbnb') && deleted.ical_uid) {
     await ignoraUidIcal(deleted.ical_uid as string, deleted.camera_id as number);
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, avviso });
 }

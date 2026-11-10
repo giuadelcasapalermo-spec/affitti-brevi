@@ -9,7 +9,7 @@ import {
 import { useCamere } from '@/hooks/useCamere';
 import { useStruttura } from '@/hooks/useStruttura';
 import { fData } from '@/lib/utils';
-import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search, Receipt } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Euro, Wallet, FileSpreadsheet, Printer, Search, Receipt, Repeat } from 'lucide-react';
 import VoiceInput from '@/components/VoiceInput';
 import RicevutaPrivato from '@/components/RicevutaPrivato';
 import RistampaRicevute from '@/components/RistampaRicevute';
@@ -135,6 +135,124 @@ function FormUscita({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
   );
 }
 
+/* ── Form uscita periodica ────────────────────────────── */
+const NOMI_MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+
+/** Elenco dei mesi (YYYY-MM) compresi tra inizio e fine, estremi inclusi */
+function mesiTra(inizio: string, fine: string): string[] {
+  if (!inizio || !fine || fine < inizio) return [];
+  const out: string[] = [];
+  let [y, m] = inizio.split('-').map(Number);
+  const [yf, mf] = fine.split('-').map(Number);
+  while ((y < yf || (y === yf && m <= mf)) && out.length < 120) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+function FormUscitaPeriodica({ onSalva, onAnnulla, camere, contiCorrenti }: {
+  onSalva: (d: Partial<Uscita>[]) => void;
+  onAnnulla: () => void;
+  camere: { id: number; nome: string }[];
+  contiCorrenti: ContoCorrente[];
+}) {
+  const et = useEtichette();
+  const meseCorrente = oggi.slice(0, 7);
+  const [f, setF] = useState({
+    mese_inizio:     meseCorrente,
+    mese_fine:       meseCorrente,
+    giorno:          oggi.slice(8, 10),
+    descrizione:     '',
+    categoria:       'Altro' as CategoriaUscita,
+    importo:         '',
+    camera_id:       '',
+    note:            '',
+    fonte_pagamento: contiCorrenti[0]?.nome ?? 'Contanti',
+  });
+  const set = (k: string, v: string | number) => setF(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    const nomi = contiCorrenti.map(c => c.nome);
+    if (!nomi.includes(f.fonte_pagamento)) {
+      setF(p => ({ ...p, fonte_pagamento: contiCorrenti[0]?.nome ?? 'Contanti' }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contiCorrenti]);
+
+  const mesi = mesiTra(f.mese_inizio, f.mese_fine);
+  const etichettaMese = (ym: string) => `${NOMI_MESI[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+
+  function invia(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mesi.length) return;
+    const g = Math.min(31, Math.max(1, Number(f.giorno) || 1));
+    onSalva(mesi.map(ym => {
+      const [y, m] = ym.split('-').map(Number);
+      const giorno = Math.min(g, new Date(y, m, 0).getDate());
+      return {
+        data: `${ym}-${String(giorno).padStart(2, '0')}`,
+        descrizione: `${f.descrizione.trim()} - ${etichettaMese(ym)}`,
+        categoria: f.categoria,
+        importo: Number(f.importo),
+        camera_id: f.camera_id ? Number(f.camera_id) : undefined,
+        note: f.note,
+        fonte_pagamento: f.fonte_pagamento,
+      };
+    }));
+  }
+
+  return (
+    <form onSubmit={invia} className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Mese inizio *</label>
+          <input type="month" value={f.mese_inizio} onChange={e => set('mese_inizio', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Mese fine *</label>
+          <input type="month" value={f.mese_fine} min={f.mese_inizio} onChange={e => set('mese_fine', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Giorno *</label>
+          <input type="number" min="1" max="31" value={f.giorno} onChange={e => set('giorno', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+          <select value={f.categoria} onChange={e => set('categoria', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required>
+            {CATEGORIE_USCITA.map(c => <option key={c} value={c}>{c}</option>)}
+          </select></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Importo mensile (€) *</label>
+          <input type="number" min="0" step="0.01" value={f.importo} onChange={e => set('importo', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" required /></div>
+      </div>
+      <div><label className="block text-sm font-medium text-gray-700 mb-1">Descrizione *</label>
+        <input type="text" value={f.descrizione} onChange={e => set('descrizione', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" placeholder="es. Canone internet" required />
+        {f.descrizione.trim() && mesi.length > 0 && (
+          <p className="text-xs text-gray-400 mt-1">es. &quot;{f.descrizione.trim()} - {etichettaMese(mesi[0])}&quot;</p>
+        )}</div>
+      <div className="grid grid-cols-2 gap-4">
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">Modalità pagamento</label>
+          <select value={f.fonte_pagamento} onChange={e => set('fonte_pagamento', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
+            {contiCorrenti.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+          </select></div>
+        <div><label className="block text-sm font-medium text-gray-700 mb-1">{et.Camera}</label>
+          <select value={f.camera_id} onChange={e => set('camera_id', e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
+            <option value="">Generale</option>
+            {camere.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select></div>
+      </div>
+      <div><label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+        <input type="text" value={f.note} onChange={e => set('note', e.target.value)} className="w-full border rounded px-3 py-2 text-sm" /></div>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <span className="text-sm text-gray-500">
+          {mesi.length > 0
+            ? <>{mesi.length} {mesi.length === 1 ? 'uscita' : 'uscite'}{f.importo ? <> · totale €{(mesi.length * Number(f.importo)).toFixed(2)}</> : null}</>
+            : <span className="text-red-600">Il mese fine deve seguire il mese inizio</span>}
+        </span>
+        <div className="flex gap-2">
+          <button type="button" onClick={onAnnulla} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">Annulla</button>
+          <button type="submit" disabled={!mesi.length} className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">Crea uscite</button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 /* ── Form entrata ─────────────────────────────────────── */
 function FormEntrata({ iniziale, onSalva, onAnnulla, camere, contiCorrenti }: {
   iniziale?: Partial<Entrata>;
@@ -227,6 +345,7 @@ export default function PrimaNotaPage() {
   const [formAperto, setFormAperto] = useState<'entrata' | 'uscita' | null>(null);
   const [editingE, setEditingE] = useState<Entrata | null>(null);
   const [editingU, setEditingU] = useState<Uscita | null>(null);
+  const [periodicaAperta, setPeriodicaAperta] = useState(false);
   const [ricevute, setRicevute] = useState<Map<string, Ricevuta>>(new Map());
   const [ricevutaDi, setRicevutaDi] = useState<Entrata | null>(null);
   const [ristampaAperta, setRistampaAperta] = useState(false);
@@ -322,6 +441,25 @@ export default function PrimaNotaPage() {
     setFormAperto(null);
     setUscite(prev => [...prev, nuova]);
     fetch('/api/uscite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, id }) });
+  }
+  async function creaUscitePeriodiche(lista: Partial<Uscita>[]) {
+    const nuove: Uscita[] = lista.map(d => ({
+      id: crypto.randomUUID(),
+      data: d.data!,
+      descrizione: d.descrizione!,
+      categoria: d.categoria as CategoriaUscita,
+      importo: Number(d.importo),
+      camera_id: d.camera_id,
+      note: d.note ?? '',
+      fonte_pagamento: d.fonte_pagamento ?? 'Contanti',
+      created_at: new Date().toISOString(),
+    }));
+    setPeriodicaAperta(false);
+    setUscite(prev => [...prev, ...nuove]);
+    // invio sequenziale per non sovrapporre le scritture
+    for (const u of nuove) {
+      await fetch('/api/uscite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+    }
   }
   async function aggiornaUscita(id: string, d: Partial<Uscita>) {
     setEditingU(null);
@@ -455,6 +593,13 @@ export default function PrimaNotaPage() {
             className="flex items-center gap-1.5 bg-red-600 text-white px-2.5 py-1.5 rounded text-sm font-medium hover:bg-red-700 sm:px-4 sm:py-2"
           >
             <Plus size={15} /><span className="hidden sm:inline">Uscita</span>
+          </button>
+          <button
+            onClick={() => setPeriodicaAperta(true)}
+            title="Uscita periodica"
+            className="flex items-center gap-1.5 border border-red-600 bg-white text-red-600 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-red-50 sm:px-4 sm:py-2"
+          >
+            <Repeat size={15} /><span className="hidden sm:inline">Periodica</span>
           </button>
         </div>
       </div>
@@ -746,6 +891,18 @@ export default function PrimaNotaPage() {
             <button onClick={() => setEditingU(null)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
           </div>
           <FormUscita iniziale={editingU} onSalva={d => aggiornaUscita(editingU.id, d)} onAnnulla={() => setEditingU(null)} camere={camere} contiCorrenti={contiCorrenti} />
+        </div>
+      )}
+
+      {periodicaAperta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setPeriodicaAperta(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-5 border-l-4 border-red-500" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-semibold text-gray-700">Nuova uscita periodica</h2>
+              <button onClick={() => setPeriodicaAperta(false)}><X size={18} className="text-gray-400 hover:text-gray-600" /></button>
+            </div>
+            <FormUscitaPeriodica onSalva={creaUscitePeriodiche} onAnnulla={() => setPeriodicaAperta(false)} camere={camere} contiCorrenti={contiCorrenti} />
+          </div>
         </div>
       )}
 

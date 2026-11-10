@@ -6,12 +6,13 @@ import { Prenotazione, Uscita, Entrata, CATEGORIE_USCITA, CATEGORIE_ENTRATA } fr
 import { useCamere } from '@/hooks/useCamere';
 import { isWithinInterval, parseISO, differenceInDays, format, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from 'date-fns';
 import { fData } from '@/lib/utils';
-import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet, Shirt } from 'lucide-react';
+import { BedDouble, Euro, Users, RefreshCw, TrendingDown, TrendingUp, ChevronLeft, ChevronRight, BookOpen, BarChart2, FileSpreadsheet, Printer, Wallet, Shirt, Sparkles } from 'lucide-react';
 import { useStruttura } from '@/hooks/useStruttura';
 import { ContoCorrente } from '@/lib/types';
 import { getCameraStyle } from '@/lib/camera-colors';
 import ControlloLavanderia from '@/components/ControlloLavanderia';
 import MargineCamere from '@/components/MargineCamere';
+import PulizieCameriera from '@/components/PulizieCameriera';
 import { ComposedChart, LabelList, Bar, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useEtichette } from '@/hooks/useEtichette';
 
@@ -82,7 +83,7 @@ export default function Dashboard() {
   const [filtroDal, setFiltroDal] = usePersistedState('dash-dal', DEFAULT_DAL);
   const [filtroAl, setFiltroAl]   = usePersistedState('dash-al',  DEFAULT_AL);
   const [filtroCamera, setFiltroCamera] = usePersistedState<number | 'tutte'>('dash-camera', 'tutte');
-  const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota' | 'lavanderia'>('dash-sezione', 'camere');
+  const [sezione, setSezione] = usePersistedState<'camere' | 'prima_nota' | 'lavanderia' | 'pulizie'>('dash-sezione', 'camere');
   const [andSenzaTassa, setAndSenzaTassa] = usePersistedState('dash-and-senza-tassa', true, { storage: 'local' });
 
   const carica = useCallback(() => {
@@ -165,10 +166,17 @@ export default function Dashboard() {
     return Math.max(0, differenceInDays(parseISO(co), parseISO(ci)));
   }
 
+  // Quota dell'importo che cade nelle notti del periodo (importo ÷ notti × notti nel periodo)
+  function quotaRicavoPeriodo(p: Prenotazione): number {
+    const n = differenceInDays(parseISO(p.check_out), parseISO(p.check_in));
+    return n > 0 && p.importo_totale > 0 ? (p.importo_totale / n) * nottiInPeriodo(p) : 0;
+  }
+
   const statsCamera = camere.map((camera) => {
     const pren = prenNelPeriodo.filter((p) => p.camera_id === camera.id);
     const notti = pren.reduce((s, p) => s + nottiInPeriodo(p), 0);
-    const ricavo = pren.filter((p) => p.importo_totale > 0).reduce((s, p) => s + p.importo_totale, 0);
+    // ricavo ripartito per notte come nel calendario: solo la quota delle notti nel periodo (tassa esclusa)
+    const ricavo = pren.reduce((s, p) => s + quotaRicavoPeriodo(p), 0);
     return { camera, notti, ricavo };
   });
 
@@ -254,6 +262,15 @@ export default function Dashboard() {
   const baseUscitePct = uscitePeriodo.filter(u => u.categoria !== TASSA).reduce((s, u) => s + u.importo, 0);
   const saldoPN = entratePeriodo.reduce((s, e) => s + e.importo, 0) - uscitePeriodo.reduce((s, u) => s + u.importo, 0);
   const saldo = entrateEffettive - usciteDelPeriodo;
+  // KPI delle analisi camere: la tassa di soggiorno (partita di giro) non si considera né nelle
+  // entrate né nelle uscite. I totali di Prima Nota e l'export restano completi.
+  const entrateKpi = entrate
+    .filter((e) => e.data >= filtroDal && e.data <= filtroAl && e.categoria !== TASSA)
+    .reduce((s, e) => s + e.importo, 0);
+  const usciteKpi = uscite
+    .filter((u) => u.data >= filtroDal && u.data <= filtroAl && u.categoria !== TASSA)
+    .reduce((s, u) => s + u.importo, 0);
+  const saldoKpi = entrateKpi - usciteKpi;
   const incidenzaUscite = entrateEffettive > 0 ? (usciteDelPeriodo / entrateEffettive) * 100 : 0;
 
   const movimenti = [
@@ -350,7 +367,7 @@ export default function Dashboard() {
               syncOk === false ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
             }`}>{syncMsg}</span>
           )}
-          {sezione !== 'lavanderia' && <button
+          {(sezione === 'camere' || sezione === 'prima_nota') && <button
             onClick={() => sezione === 'camere' ? scaricaExcelCamere() : scaricaExcelPrimaNota()}
             title="Esporta Excel"
             className="flex items-center gap-1.5 border border-gray-300 bg-white text-gray-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-gray-50"
@@ -383,30 +400,39 @@ export default function Dashboard() {
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-full sm:w-fit">
         <button
           onClick={() => setSezione('camere')}
-          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'camere' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <BarChart2 size={14} />
+          <BarChart2 size={14} className="hidden sm:block" />
           <span className="sm:hidden">{et.Camere}</span><span className="hidden sm:inline">Performance {et.Camere}</span>
         </button>
         <button
           onClick={() => setSezione('prima_nota')}
-          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'prima_nota' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <BookOpen size={14} />
+          <BookOpen size={14} className="hidden sm:block" />
           <span className="sm:hidden">Prima Nota</span><span className="hidden sm:inline">Analisi Prima Nota</span>
         </button>
         <button
           onClick={() => setSezione('lavanderia')}
-          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             sezione === 'lavanderia' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <Shirt size={14} />
+          <Shirt size={14} className="hidden sm:block" />
           <span className="sm:hidden">Lavanderia</span><span className="hidden sm:inline">Controllo Lavanderia</span>
+        </button>
+        <button
+          onClick={() => setSezione('pulizie')}
+          className={`flex flex-1 sm:flex-none items-center justify-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+            sezione === 'pulizie' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Sparkles size={14} className="hidden sm:block" />
+          Pulizie
         </button>
       </div>
 
@@ -427,15 +453,15 @@ export default function Dashboard() {
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Entrate</div>
-          <div className="text-base font-bold text-green-700">+€{entrateEffettive.toFixed(0)}</div>
+          <div className="text-base font-bold text-green-700">+€{entrateKpi.toFixed(0)}</div>
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Uscite</div>
-          <div className="text-base font-bold text-red-600">-€{usciteDelPeriodo.toFixed(0)}</div>
+          <div className="text-base font-bold text-red-600">-€{usciteKpi.toFixed(0)}</div>
         </div>
         <div className="text-center pt-2">
           <div className="text-[11px] text-gray-400">Saldo</div>
-          <div className={`text-base font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldo.toFixed(0)}</div>
+          <div className={`text-base font-bold ${saldoKpi >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldoKpi.toFixed(0)}</div>
         </div>
       </div>
 
@@ -468,24 +494,24 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-green-100 rounded-full p-2"><TrendingUp size={20} className="text-green-600" /></div>
           <div>
-            <div className="text-sm text-gray-500">Entrate effettive</div>
-            <div className="text-lg font-bold text-green-700">+€{entrateEffettive.toFixed(2)}</div>
+            <div className="text-sm text-gray-500">Entrate effettive <span className="text-[10px] text-gray-400">(senza tassa sogg.)</span></div>
+            <div className="text-lg font-bold text-green-700">+€{entrateKpi.toFixed(2)}</div>
           </div>
         </div>
         <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-3">
           <div className="bg-red-100 rounded-full p-2"><TrendingDown size={20} className="text-red-600" /></div>
           <div>
             <div className="text-sm text-gray-500">Uscite del periodo</div>
-            <div className="text-lg font-bold text-red-600">-€{usciteDelPeriodo.toFixed(2)}</div>
+            <div className="text-lg font-bold text-red-600">-€{usciteKpi.toFixed(2)}</div>
           </div>
         </div>
-        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldo >= 0 ? 'bg-white' : 'bg-red-50'}`}>
-          <div className={`rounded-full p-2 ${saldo >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-            <TrendingUp size={20} className={saldo >= 0 ? 'text-green-600' : 'text-red-600'} />
+        <div className={`rounded-lg shadow-sm p-4 flex items-center gap-3 ${saldoKpi >= 0 ? 'bg-white' : 'bg-red-50'}`}>
+          <div className={`rounded-full p-2 ${saldoKpi >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <TrendingUp size={20} className={saldoKpi >= 0 ? 'text-green-600' : 'text-red-600'} />
           </div>
           <div>
             <div className="text-sm text-gray-500">Saldo effettivo</div>
-            <div className={`text-lg font-bold ${saldo >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldo.toFixed(2)}</div>
+            <div className={`text-lg font-bold ${saldoKpi >= 0 ? 'text-green-700' : 'text-red-600'}`}>€{saldoKpi.toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -551,8 +577,8 @@ export default function Dashboard() {
                   {camFiltrate.map((camera) => {
                     const prenotazioniCamera = prenNelPeriodo.filter((p) => p.camera_id === camera.id);
                     const impegnata = prenotazioniCamera.length > 0;
-                    const nottiTotali = prenotazioniCamera.reduce((s, p) => s + differenceInDays(parseISO(p.check_out), parseISO(p.check_in)), 0);
-                    const stimaCamera = prenotazioniCamera.filter((p) => p.importo_totale > 0).reduce((s, p) => s + p.importo_totale, 0);
+                    const nottiTotali = prenotazioniCamera.reduce((s, p) => s + nottiInPeriodo(p), 0);
+                    const stimaCamera = prenotazioniCamera.reduce((s, p) => s + quotaRicavoPeriodo(p), 0);
                     const occupazioneOggi = isCameraOccupata(prenotazioni, camera.id);
                     const col = getCameraStyle(camera.id, camera.colore);
                     return (
@@ -1082,6 +1108,12 @@ export default function Dashboard() {
       {/* ═══════════════════════ SEZIONE: CONTROLLO LAVANDERIA ═══════════════════════ */}
       {sezione === 'lavanderia' && (
         <ControlloLavanderia dal={filtroDal} al={filtroAl} uscite={uscite} />
+      )}
+
+      {/* ═══════════════════════ SEZIONE: PULIZIE (CAMERIERA) ═══════════════════════ */}
+      {sezione === 'pulizie' && (
+        <PulizieCameriera dal={filtroDal} al={filtroAl} prenotazioni={prenotazioni} uscite={uscite}
+          camere={camere.filter((c) => filtroCamera === 'tutte' || c.id === filtroCamera).sort((a, b) => a.id - b.id)} />
       )}
 
     </div>

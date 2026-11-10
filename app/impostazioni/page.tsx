@@ -9,7 +9,7 @@ import {
   Save, PenLine, Users, Trash2, Plus, KeyRound, Link, Copy, Check,
   RefreshCw, Table2, Palette, Download, Upload, ShieldAlert, Building2,
   Radio, Shield, Settings2, CalendarRange, MapPin, Mail, Loader2, Euro,
-  ChevronRight, BarChart3, BookUser,
+  ChevronRight, BarChart3, BookUser, Sparkles,
 } from 'lucide-react';
 import { invalidateNomeAppCache } from '@/hooks/useNomeApp';
 import RubricaContatti from '@/components/RubricaContatti';
@@ -120,6 +120,10 @@ export default function ImpostazioniPage() {
   const [nuovoContoNome, setNuovoContoNome] = useState('');
   const [nuovoContoTipo, setNuovoContoTipo] = useState<TipoContoCorrente>('contanti');
   const [salvatoConti, setSalvatoConti] = useState(false);
+  // Tariffario cameriera (per struttura, in regole)
+  const [editTariffaPulizia, setEditTariffaPulizia] = useState('');
+  const [editTariffaCambio, setEditTariffaCambio] = useState('');
+  const [salvatoTariffe, setSalvatoTariffe] = useState(false);
 
   // AlloggiatiWeb credentials (per struttura)
   const [editAlloggiatiUtente, setEditAlloggiatiUtente] = useState('');
@@ -220,6 +224,20 @@ export default function ImpostazioniPage() {
     });
     setSalvatoConti(true);
     setTimeout(() => setSalvatoConti(false), 2000);
+    caricaStrutture();
+  }
+
+  async function salvaTariffe(s: Struttura) {
+    const num = (v: string) => Math.max(0, parseFloat(v.replace(',', '.')) || 0);
+    await fetch(`/api/strutture/${s.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        regole: { ...s.regole, costo_pulizia_checkout: num(editTariffaPulizia), costo_cambio_stanza: num(editTariffaCambio) },
+      }),
+    });
+    setSalvatoTariffe(true);
+    setTimeout(() => setSalvatoTariffe(false), 2000);
     caricaStrutture();
   }
 
@@ -655,6 +673,9 @@ export default function ImpostazioniPage() {
     setEditContiCorrenti(s.conti_correnti?.length ? [...s.conti_correnti] : [{ id: 'contanti-default', tipo: 'contanti' as const, nome: 'Contanti' }]);
     setNuovoContoNome('');
     setNuovoContoTipo('contanti');
+    setEditTariffaPulizia(String(s.regole.costo_pulizia_checkout));
+    setEditTariffaCambio(String(s.regole.costo_cambio_stanza));
+    setSalvatoTariffe(false);
     setSalvatoConti(false);
   }
 
@@ -1613,6 +1634,33 @@ export default function ImpostazioniPage() {
                     >
                       <Save size={12} />
                       {salvatoConti ? 'Salvato!' : 'Salva modalità pagamento'}
+                    </button>
+                  </div>
+
+                  {/* Tariffario cameriera */}
+                  <div className="bg-white rounded-lg shadow-sm p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Sparkles size={14} className="text-pink-600" />
+                      <span className="font-semibold text-gray-700 text-sm">Tariffario cameriera</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-2">Compenso per {et.camera}: usato nella Dashboard (tab Pulizie e margine per {et.camera}).</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                      <label className="text-xs text-gray-500">
+                        Pulizia completa (check-out / nuovo arrivo) €
+                        <input type="number" min={0} step={0.5} inputMode="decimal" value={editTariffaPulizia} onChange={e => setEditTariffaPulizia(e.target.value)}
+                          className="mt-0.5 w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-pink-400" />
+                      </label>
+                      <label className="text-xs text-gray-500">
+                        Cambio {et.camera} durante il soggiorno €
+                        <input type="number" min={0} step={0.5} inputMode="decimal" value={editTariffaCambio} onChange={e => setEditTariffaCambio(e.target.value)}
+                          className="mt-0.5 w-full border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-pink-400" />
+                      </label>
+                    </div>
+                    <button onClick={() => salvaTariffe(selezionata)}
+                      className="flex items-center gap-1.5 bg-pink-600 text-white px-2.5 py-1.5 rounded text-xs font-medium hover:bg-pink-700"
+                    >
+                      <Save size={12} />
+                      {salvatoTariffe ? 'Salvato!' : 'Salva tariffario'}
                     </button>
                   </div>
 

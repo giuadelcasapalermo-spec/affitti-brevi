@@ -18,9 +18,10 @@ function Euro0({ v }: { v: number }) {
   return <>{n < 0 ? '-' : ''}<span className="hidden sm:inline">€</span>{Math.abs(n)}</>;
 }
 
-// Margine lordo giornaliero per stanza: ricavo della notte (come nel calendario, tassa di soggiorno
+// Margine lordo giornaliero per stanza: quota di ricavo della notte (come nel calendario, tassa di soggiorno
 // esclusa perché partita di giro) − lavanderia (biancheria segnata dalla collaboratrice × listino)
-// − costo pulizia della collaboratrice per stanza pulita. Costi indiretti non ancora ribaltati.
+// − costo pulizia della collaboratrice per stanza pulita. Lavanderia e pulizie si attribuiscono al
+// soggiorno e si ripartiscono sulle sue notti come il ricavo. Costi indiretti non ancora ribaltati.
 export default function MargineCamere({ prenotazioni, camere, dal, al }: {
   prenotazioni: Prenotazione[];
   camere: Camera[];
@@ -38,13 +39,23 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
   const [prezzi, setPrezzi] = useState<Record<CapoBiancheria, number> | null>(null);
   const [dettaglio, setDettaglio] = useState(false);
 
+  // Soggiorni con almeno una notte nel periodo: i loro costi (pulizie e lavanderia, anche se cadono
+  // fuori dal periodo) si ripartiscono sulle notti, quindi servono i giorni dal primo check-in
+  // all'ultimo check-out
+  const soggiorni = useMemo(
+    () => prenotazioni.filter((p) => p.stato !== 'cancellata' && p.check_in <= al && p.check_out > dal),
+    [prenotazioni, dal, al],
+  );
+  const estDal = soggiorni.reduce((m, p) => (p.check_in < m ? p.check_in : m), dal);
+  const estAl = soggiorni.reduce((m, p) => (p.check_out > m ? p.check_out : m), al);
+
   useEffect(() => {
-    if (!dal || !al || dal > al) return; // periodo non valido: nessun giorno da calcolare
-    fetch(`/api/biancheria?dal=${dal}&al=${al}`)
+    if (!estDal || !estAl || estDal > estAl) return; // periodo non valido: nessun giorno da calcolare
+    fetch(`/api/biancheria?dal=${estDal}&al=${estAl}`)
       .then((r) => r.json())
       .then((d) => setBiancheria(Array.isArray(d) ? d : []))
       .catch(() => setBiancheria([]));
-  }, [dal, al]);
+  }, [estDal, estAl]);
 
   useEffect(() => {
     fetch('/api/biancheria/prezzi')
@@ -61,27 +72,49 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
     }
     const costoRiga = (r: BiancheriaStanza) =>
       CAPI_BIANCHERIA.reduce((s, c) => s + (Number(r[c.key]) || 0) * (prezzi?.[c.key] ?? 0), 0);
-    const lavPer = new Map<string, number>(); // `${giorno}|${camera}` → costo
+    // Costi ripartiti per notte con lo stesso criterio del ricavo: un costo del giorno g va al
+    // soggiorno a cui appartiene (quello che parte in g, altrimenti quello in corso) e si divide
+    // sulle sue notti, dal check-in alla notte prima del check-out. Senza soggiorno resta sul giorno.
+    const lavPer = new Map<string, number>(); // `${giorno}|${camera}` → costo ripartito
+    const pulPer = new Map<string, number>();
+    const aggiungi = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+    const ripartisci = (m: Map<string, number>, g: string, cameraId: number, costo: number) => {
+      if (!costo) return;
+      const p = prenotazioni.find((x) => x.camera_id === cameraId && x.stato !== 'cancellata' && x.check_out === g)
+        ?? prenotazioni.find((x) => x.camera_id === cameraId && x.stato !== 'cancellata' && x.check_in <= g && x.check_out > g);
+      const n = p ? differenceInDays(parseISO(p.check_out), parseISO(p.check_in)) : 0;
+      if (!p || n <= 0) { aggiungi(m, `${g}|${cameraId}`, costo); return; }
+      for (let i = 0; i < n; i++) aggiungi(m, `${format(addDays(parseISO(p.check_in), i), 'yyyy-MM-dd')}|${cameraId}`, costo / n);
+    };
     let lavNonAttribuita = 0;
     for (const r of biancheria) {
-      if (r.camera_id === 0) { lavNonAttribuita += costoRiga(r); continue; }
-      const k = `${r.data}|${r.camera_id}`;
-      lavPer.set(k, (lavPer.get(k) ?? 0) + costoRiga(r));
+      if (r.camera_id === 0) { if (r.data >= dal && r.data <= al) lavNonAttribuita += costoRiga(r); continue; }
+      ripartisci(lavPer, r.data, r.camera_id, costoRiga(r));
+    }
+    // pulizie: tutti i giorni dal primo check-in all'ultimo check-out dei soggiorni del periodo
+    const tipoPer = new Map<string, TipoPulizia>(); // tipo di pulizia fatta nel giorno (per i conteggi)
+    if (estDal && estAl && estDal <= estAl) {
+      const nEst = differenceInDays(parseISO(estAl), parseISO(estDal)) + 1;
+      for (let i = 0; i < nEst; i++) {
+        const g = format(addDays(parseISO(estDal), i), 'yyyy-MM-dd');
+        for (const [cameraId, tipo] of puliziaGiorno(prenotazioni, g)) {
+          tipoPer.set(`${g}|${cameraId}`, tipo);
+          ripartisci(pulPer, g, cameraId, costoPulizia(tipo, costi));
+        }
+      }
     }
     const celle = new Map<string, Cella>();
     for (const g of giorni) {
-      const pulizie = puliziaGiorno(prenotazioni, g);
       for (const c of camere) {
         const k = `${g}|${c.id}`;
         const ricavo = ricavoNotte(prenotazioni, c.id, g);
         const lavanderia = lavPer.get(k) ?? 0;
-        const tipo = pulizie.get(c.id);
-        const pulizia = costoPulizia(tipo, costi);
-        celle.set(k, { ricavo, lavanderia, pulizia, tipo, margine: ricavo - lavanderia - pulizia });
+        const pulizia = pulPer.get(k) ?? 0;
+        celle.set(k, { ricavo, lavanderia, pulizia, tipo: tipoPer.get(k), margine: ricavo - lavanderia - pulizia });
       }
     }
     return { giorni, celle, lavNonAttribuita };
-  }, [dal, al, prenotazioni, camere, biancheria, prezzi, costi]);
+  }, [dal, al, estDal, estAl, prenotazioni, camere, biancheria, prezzi, costi]);
 
   const totaliCamera = camere.map((c) => {
     const t = { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, checkout: 0, cambi: 0 };
@@ -102,7 +135,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
     { ricavo: 0, lavanderia: 0, pulizia: 0, margine: 0, checkout: 0, cambi: 0 },
   );
   const titoloPulizie = (checkout: number, cambi: number) =>
-    `${checkout} check-out × €${costi.checkout} + ${cambi} cambi × €${costi.cambio}`;
+    `${checkout} check-out e ${cambi} cambi nel periodo; costo ripartito sulle notti dei soggiorni`;
   const pct = (m: number, r: number) => (r > 0 ? `${Math.round((m / r) * 100)}%` : '—');
   const giorniConValori = giorni.filter((g) => camere.some((c) => {
     const x = celle.get(`${g}|${c.id}`);
@@ -114,9 +147,26 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
       <div>
         <h2 className="font-semibold text-gray-700 text-sm sm:text-base">Margine lordo per stanza</h2>
         <p className="text-[11px] text-gray-400 mt-0.5">
-          Ricavo notte (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{costi.checkout} per check-out, €{costi.cambio} per cambio).
+          Ricavo ripartito per notte come nel calendario (tassa di soggiorno esclusa) − lavanderia (biancheria segnata × listino) − pulizie (€{costi.checkout} per check-out, €{costi.cambio} per cambio).
+          Lavanderia e pulizie sono attribuite al soggiorno e ripartite sulle sue notti, come il ricavo.
           Costi indiretti non ancora ribaltati.
         </p>
+      </div>
+
+      {/* Totali del periodo: ricavo − lavanderia − pulizie = margine */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { etichetta: 'Ricavo', valore: euro(tot.ricavo), nota: 'quota notti del periodo', cls: 'text-gray-800', bg: 'bg-gray-50' },
+          { etichetta: 'Lavanderia', valore: tot.lavanderia > 0 ? `-${euro(tot.lavanderia)}` : '—', nota: pct(tot.lavanderia, tot.ricavo) + ' del ricavo', cls: 'text-sky-700', bg: 'bg-sky-50' },
+          { etichetta: 'Pulizie', valore: tot.pulizia > 0 ? `-${euro(tot.pulizia)}` : '—', nota: pct(tot.pulizia, tot.ricavo) + ' del ricavo', cls: 'text-pink-700', bg: 'bg-pink-50' },
+          { etichetta: 'Margine', valore: euro(tot.margine), nota: pct(tot.margine, tot.ricavo) + ' del ricavo', cls: tot.margine >= 0 ? 'text-green-700' : 'text-red-600', bg: tot.margine >= 0 ? 'bg-green-50' : 'bg-red-50' },
+        ].map((k) => (
+          <div key={k.etichetta} className={`rounded-lg px-3 py-2 ${k.bg}`}>
+            <div className="text-[11px] text-gray-500">{k.etichetta}</div>
+            <div className={`text-base sm:text-lg font-bold tabular-nums ${k.cls}`}>{k.valore}</div>
+            <div className="text-[10px] text-gray-400">{k.nota}</div>
+          </div>
+        ))}
       </div>
 
       <div className="overflow-x-auto">
@@ -213,7 +263,7 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                           <td
                             key={c.id}
                             className={`py-1 px-0.5 text-right ${x.margine >= 0 ? 'text-gray-700' : 'text-red-600'}`}
-                            title={`Ricavo ${euro(x.ricavo)} − lavanderia ${euro(x.lavanderia)} − ${x.tipo === 'cambio' ? 'cambio' : 'pulizia check-out'} ${euro(x.pulizia)}`}
+                            title={`Ricavo ${euro(x.ricavo)} − lavanderia ${euro(x.lavanderia)} − pulizie ${euro(x.pulizia)} (quote per notte)`}
                           >
                             <Euro0 v={x.margine} />
                           </td>
@@ -225,8 +275,23 @@ export default function MargineCamere({ prenotazioni, camere, dal, al }: {
                 })}
               </tbody>
               <tfoot>
+                {([
+                  { k: 'ricavo', label: 'Ric.', titolo: 'Ricavo', cls: 'text-gray-700', segno: 1 },
+                  { k: 'lavanderia', label: 'Lav.', titolo: 'Lavanderia', cls: 'text-sky-700', segno: -1 },
+                  { k: 'pulizia', label: 'Pul.', titolo: 'Pulizie', cls: 'text-pink-700', segno: -1 },
+                ] as const).map((r, i) => (
+                  <tr key={r.k} className={i === 0 ? 'border-t' : ''}>
+                    <td className="pt-1 pr-1 text-gray-500" title={r.titolo}>
+                      <span className="sm:hidden">{r.label}</span><span className="hidden sm:inline">{r.titolo}</span>
+                    </td>
+                    {totaliCamera.map((t) => (
+                      <td key={t.camera.id} className={`pt-1 px-0.5 text-right ${r.cls}`}><Euro0 v={r.segno * t[r.k]} /></td>
+                    ))}
+                    <td className={`pt-1 pl-1 text-right font-semibold ${r.cls}`}><Euro0 v={r.segno * tot[r.k]} /></td>
+                  </tr>
+                ))}
                 <tr className="font-semibold border-t">
-                  <td className="pt-1.5 pr-1 text-gray-500">Tot</td>
+                  <td className="pt-1.5 pr-1 text-gray-500"><span className="sm:hidden">Marg.</span><span className="hidden sm:inline">Margine</span></td>
                   {totaliCamera.map((t) => (
                     <td key={t.camera.id} className={`pt-1.5 px-0.5 text-right ${t.margine >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                       <Euro0 v={t.margine} />

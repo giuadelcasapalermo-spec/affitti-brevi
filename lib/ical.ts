@@ -663,6 +663,21 @@ async function collegamenti(ids: string[]) {
   };
 }
 
+/** true se la prenotazione ha qualcosa che non si può buttare: documenti, ricevuta dell'imposta
+ *  o un link di check-in già compilato dall'ospite. Un link solo generato e mai usato (Andrea
+ *  Strati 6→8/11, cancellata su Booking) non blocca: si elimina insieme alla prenotazione. */
+export async function haDatiOspite(id: string): Promise<boolean> {
+  const c = await collegamenti([id]);
+  if (c.doc.has(id) || c.ricevuta.has(id)) return true;
+  const [u] = await sql`SELECT 1 FROM link_alloggiati WHERE prenotazione_id = ${id} AND usato LIMIT 1`;
+  return !!u;
+}
+
+/** Elimina i link di check-in mai usati di una prenotazione che sta per essere cancellata. */
+export async function eliminaLinkNonUsati(id: string): Promise<void> {
+  await sql`DELETE FROM link_alloggiati WHERE prenotazione_id = ${id} AND NOT usato`;
+}
+
 export async function haCollegamenti(id: string): Promise<boolean> {
   const c = await collegamenti([id]);
   return c.doc.has(id) || c.link.has(id) || c.ricevuta.has(id);

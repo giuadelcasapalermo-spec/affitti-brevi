@@ -488,16 +488,6 @@ export default function CalendarioPage() {
   // Pulsanti azione (sync iCal + toggle vista) — riusati in row 1 (mobile) e row 2 (desktop)
   const azioniJSX = (
     <>
-      {impSoggiornoMsg && (
-        <span className="hidden sm:inline text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">{impSoggiornoMsg}</span>
-      )}
-      <button
-        onClick={apriImpSoggiorno}
-        className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
-      >
-        <Receipt size={14} />
-        <span className="hidden sm:inline">Imp. Soggiorno</span>
-      </button>
       {!soloCalendario && (
         <>
           {syncMsg && (
@@ -519,6 +509,16 @@ export default function CalendarioPage() {
         </button>
         </>
       )}
+      {impSoggiornoMsg && (
+        <span className="hidden sm:inline text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">{impSoggiornoMsg}</span>
+      )}
+      <button
+        onClick={apriImpSoggiorno}
+        className="flex items-center gap-1.5 border border-amber-300 bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded text-sm font-medium hover:bg-amber-100 transition-colors"
+      >
+        <Receipt size={14} />
+        <span className="hidden sm:inline">Imp. Soggiorno</span>
+      </button>
       {!soloCalendario && (
         <button
           onClick={() => setVistaCompatta(v => !v)}
@@ -690,32 +690,43 @@ export default function CalendarioPage() {
                 <div className="grid grid-cols-7 mb-0.5">
                   {GIORNI_SETTIMANA.map((g, i) => (
                     <div key={i} className="flex items-center justify-center">
-                      <span className="text-[8px] font-semibold text-gray-400">{g}</span>
+                      <span className="text-[9px] font-semibold text-gray-400">{g}</span>
                     </div>
                   ))}
                 </div>
                 {settimane.map((settimana, si) => (
                   <div key={si} className="grid grid-cols-7">
                     {settimana.map((day, di) => {
-                      if (!day) return <div key={di} className="h-[18px]" />;
-                      const banda = bandaGiorno(day, camera.id);
+                      if (!day) return <div key={di} className="h-[22px]" />;
+                      // Ogni giorno è una notte: occupata = blocco pieno del colore della camera con il
+                      // numero in bianco, continuo per tutto il soggiorno; libera = sfondo bianco e numero
+                      // normale (niente grassetto: richiesta utente 2026-11-03). Il check-in apre il blocco (bordo arrotondato, stacco e puntino
+                      // bianco), l'ultima notte lo chiude; il giorno di check-out, se nessuno arriva, è libero.
+                      const notte = getDayInfo(day, camera.id).pren;
                       const isToday    = isSameDay(day, today);
                       const isSelected = isSameDay(day, giornoSelezionato);
+                      const checkIn = !!notte && isSameDay(day, parseISO(notte.check_in));
+                      const ultimaNotte = !!notte && getDayInfo(addDays(day, 1), camera.id).pren?.id !== notte.id;
+                      const forma = notte
+                        ? `${stile.bar} text-white font-bold
+                           ${checkIn ? 'ml-[2px] rounded-l-full' : di === 0 ? 'rounded-l-sm' : ''}
+                           ${ultimaNotte ? 'mr-[2px] rounded-r-full' : di === 6 ? 'rounded-r-sm' : ''}`
+                        : 'mx-[1px] rounded-full text-gray-900 font-normal group-hover:bg-black/5';
                       return (
                         <div
                           key={di}
+                          title={notte ? (checkIn ? `Check-in: ${notte.ospite_nome}` : notte.ospite_nome) : 'Libero'}
                           onClick={() => setGiornoSelezionato(day)}
                           onDoubleClick={() => !soloCalendario && setNuovaPrenotazione({ cameraId: camera.id, checkIn: format(day, 'yyyy-MM-dd') })}
-                          className="relative flex items-center justify-center py-[1px] cursor-pointer select-none group"
+                          className="relative h-[22px] py-[1px] cursor-pointer select-none group"
                         >
-                          {bandaJSX(banda, stile.bar, 'h-2.5')}
                           <div
-                            className={`relative w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px]
-                              ${banda.pieno ? 'text-white font-semibold' : banda.sinistra || banda.notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff]' : 'text-gray-600 font-medium group-hover:bg-black/5'}
-                              ${isToday    ? 'ring-1 ring-blue-400 ring-offset-0' : ''}
-                              ${isSelected ? 'outline outline-1 outline-gray-400' : ''}
+                            className={`relative h-full flex items-center justify-center text-[10px] ${forma}
+                              ${isToday    ? 'ring-2 ring-blue-500 z-10' : ''}
+                              ${isSelected && !isToday ? 'ring-1 ring-gray-700 z-10' : ''}
                             `}
                           >
+                            {checkIn && <span className="absolute left-[3px] top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-white" />}
                             {format(day, 'd')}
                           </div>
                         </div>
@@ -725,7 +736,7 @@ export default function CalendarioPage() {
                 ))}
                 <div className="flex items-center gap-1 mt-1.5">
                   <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stile.dot}`} />
-                  <span className="text-[9px] font-semibold text-gray-700 truncate">{camera.nome}</span>
+                  <span className="text-[10px] font-semibold text-gray-700 truncate">{camera.nome}</span>
                 </div>
               </div>
             );
@@ -788,7 +799,7 @@ export default function CalendarioPage() {
                       >
                         {bandaJSX(banda, stile.bar, 'h-3.5')}
                         <div
-                          className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-colors
+                          className={`relative w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors
                             ${pieno ? 'text-white font-semibold' : sinistra || notte ? 'text-gray-900 font-bold [text-shadow:0_0_2px_#fff,0_0_3px_#fff,0_0_4px_#fff]' : 'text-gray-700 font-medium group-hover:bg-black/5'}
                             ${isToday    ? 'ring-2 ring-offset-1 ring-blue-400' : ''}
                             ${isSelected ? 'outline outline-2 outline-offset-1 outline-gray-500' : ''}
