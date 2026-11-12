@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import TemaToggle from '@/components/TemaToggle';
 import { Home, CalendarDays, BookOpen, BookMarked, Settings, LogOut, Table2, Building2, ChevronDown, Plus, UserCheck } from 'lucide-react';
 import { useSoloCalendario, clearSoloCalendarioCache } from '@/hooks/useSoloCalendario';
 import { useNomeApp } from '@/hooks/useNomeApp';
@@ -79,7 +80,7 @@ export default function Navbar() {
   return (
     <>
       {/* Desktop navbar */}
-      <nav className="hidden md:block bg-blue-700 text-white shadow-md">
+      <nav className="tema-originale hidden md:block bg-blue-700 text-white shadow-md">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
 
           {/* Logo + nome app + struttura switcher */}
@@ -105,7 +106,7 @@ export default function Navbar() {
             </button>
 
             {dropdownOpen && (
-              <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 min-w-[200px]">
+              <div className="tema-scuro absolute left-0 top-full mt-2 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 min-w-[200px]">
                 {strutture.map(s => (
                   <button
                     key={s.id}
@@ -148,6 +149,7 @@ export default function Navbar() {
                 {label}
               </Link>
             ))}
+            <TemaToggle size={15} className="flex items-center p-1.5 rounded hover:bg-white/10 transition-colors ml-2" />
             <button
               onClick={logout}
               title="Esci"
@@ -161,7 +163,7 @@ export default function Navbar() {
       </nav>
 
       {/* Mobile top bar */}
-      <nav className="md:hidden bg-blue-700 text-white shadow-md pt-[env(safe-area-inset-top)]">
+      <nav className="tema-originale md:hidden bg-blue-700 text-white shadow-md pt-[env(safe-area-inset-top)]">
         <div className="px-4 flex items-center justify-between h-12">
           {/* Logo + switcher mobile */}
           <div className="relative" ref={undefined}>
@@ -186,7 +188,7 @@ export default function Navbar() {
             </button>
 
             {dropdownOpen && (
-              <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 min-w-[180px]">
+              <div className="tema-scuro absolute left-0 top-full mt-2 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 min-w-[180px]">
                 {strutture.map(s => (
                   <button
                     key={s.id}
@@ -232,6 +234,7 @@ export default function Navbar() {
             >
               <Settings size={18} />
             </Link>
+            <TemaToggle size={18} className="p-1.5 rounded hover:bg-white/10" />
             <button onClick={logout} className="p-1.5 rounded hover:bg-white/10" title="Esci">
               <LogOut size={18} />
             </button>

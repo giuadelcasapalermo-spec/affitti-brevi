@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "./tema-scuro.css";
+
+/* Modalità scura: classe .dark su <html> (components/TemaToggle.tsx). I colori si invertono in
+   tema-scuro.css; dark: serve solo per ritocchi puntuali. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: #ffffff;
@@ -38,7 +43,7 @@ body {
     appearance: none;
     min-width: 0;
     max-width: 100%;
-    background-color: white;
+    background-color: var(--color-white);
   }
   input[type="date"]::-webkit-date-and-time-value,
   input[type="time"]::-webkit-date-and-time-value {

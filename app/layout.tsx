@@ -37,13 +37,21 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Tema scuro applicato prima del primo disegno (niente lampo bianco): scelta salvata,
+// altrimenti l'impostazione del dispositivo. Il pulsante è components/TemaToggle.tsx.
+// Le pagine degli ospiti (/registrazione) restano sempre chiare: lì il pulsante non c'è.
+const scriptTema = `try{if(location.pathname.indexOf('/registrazione')!==0){var t=localStorage.getItem('tema');if(t==='scuro'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="it">
+    <html lang="it" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: scriptTema }} />
+      </head>
       <body className={`${geist.className} bg-white min-h-screen`}>
         <RegisterSW />
         <Navbar />
